@@ -1,25 +1,46 @@
 import type { CSSProperties } from 'react';
 
+// Every colour is a CSS custom property defined in index.html, so the whole app
+// re-themes when `data-theme` flips on <html> — no React re-render required.
 export const C = {
-  border: 'hsl(220 13% 91%)',
-  border2: 'hsl(220 13% 93%)',
-  border3: 'hsl(220 13% 95%)',
-  muted: 'hsl(240 4.8% 95.9%)',
-  mutedFg: 'hsl(240 3.8% 46.1%)',
-  fg2: 'hsl(240 5.3% 26.1%)',
-  primary: 'hsl(240 5.9% 10%)',
-  primaryFg: 'hsl(0 0% 98%)',
-  red: 'hsl(0 84.2% 60.2%)',
-  redDark: 'hsl(0 74% 42%)',
-  green: 'hsl(142 76% 36%)',
-  amber: 'hsl(38 92% 50%)',
+  bg: 'var(--bg)',
+  surface: 'var(--surface)',
+  surface2: 'var(--surface2)',
+  border: 'var(--border)',
+  border2: 'var(--border2)',
+  border3: 'var(--border3)',
+  muted: 'var(--muted)',
+  mutedFg: 'var(--muted-fg)',
+  fg: 'var(--fg)',
+  fg2: 'var(--fg2)',
+  primary: 'var(--primary)',
+  primaryFg: 'var(--primary-fg)',
+  accent: 'var(--accent)',
+  accentFg: 'var(--accent-fg)',
+  red: 'var(--red)',
+  redDark: 'var(--red-dark)',
+  green: 'var(--green)',
+  amber: 'var(--amber)',
+  amberFg2: 'var(--amber-fg2)',
+  overlay: 'var(--overlay)',
+  shadow: 'var(--shadow)',
+  shadowLg: 'var(--shadow-lg)',
+};
+
+/** Badge colour triples: [background, foreground, border]. */
+export const tone = {
+  green: ['var(--green-bg)', 'var(--green-fg)', 'var(--green-bd)'] as const,
+  amber: ['var(--amber-bg)', 'var(--amber-fg)', 'var(--amber-bd)'] as const,
+  red: ['var(--red-bg)', 'var(--red-fg)', 'var(--red-bd)'] as const,
+  blue: ['var(--blue-bg)', 'var(--blue-fg)', 'var(--blue-bd)'] as const,
+  neutral: ['var(--neutral-bg)', 'var(--neutral-fg)', 'var(--neutral-bd)'] as const,
 };
 
 export const card: CSSProperties = {
-  background: '#fff',
+  background: C.surface,
   border: '1px solid ' + C.border,
   borderRadius: 12,
-  boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+  boxShadow: C.shadow,
 };
 
 export const input: CSSProperties = {
@@ -27,7 +48,8 @@ export const input: CSSProperties = {
   border: '1px solid ' + C.border,
   borderRadius: 6,
   padding: '0 10px',
-  background: '#fff',
+  background: C.surface,
+  color: C.fg,
   fontSize: 13,
   fontWeight: 400,
 };
@@ -52,14 +74,15 @@ export const btnPrimary: CSSProperties = {
   fontSize: 13,
   fontWeight: 500,
   cursor: 'pointer',
-  boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+  boxShadow: C.shadow,
 };
 
 export const btnOutline: CSSProperties = {
   height: 34,
   padding: '0 14px',
   border: '1px solid ' + C.border,
-  background: '#fff',
+  background: C.surface,
+  color: C.fg,
   borderRadius: 6,
   fontSize: 13,
   fontWeight: 500,
@@ -78,6 +101,9 @@ export const badge = (bg: string, fg: string, bd: string): CSSProperties => ({
   textTransform: 'capitalize',
 });
 
+/** badge() from a `tone` triple. */
+export const toneBadge = (t: readonly [string, string, string]): CSSProperties => badge(t[0], t[1], t[2]);
+
 export const sectionLabel: CSSProperties = {
   fontSize: 11,
   fontWeight: 600,
@@ -88,16 +114,25 @@ export const sectionLabel: CSSProperties = {
 };
 
 export const statusStyles: Record<string, CSSProperties> = {
-  open: badge('hsl(142 76% 96%)', 'hsl(142 76% 26%)', 'hsl(142 50% 80%)'),
-  claimed: badge('hsl(38 92% 95%)', 'hsl(38 92% 25%)', 'hsl(38 80% 75%)'),
-  done: badge('hsl(240 4.8% 95.9%)', 'hsl(240 3.8% 46.1%)', 'hsl(220 13% 88%)'),
+  open: toneBadge(tone.green),
+  claimed: toneBadge(tone.amber),
+  done: toneBadge(tone.neutral),
 };
 
 export const prioStyles: Record<string, CSSProperties> = {
-  Low: badge('hsl(0 0% 99%)', 'hsl(240 3.8% 46.1%)', 'hsl(220 13% 91%)'),
-  Normal: badge('hsl(0 0% 99%)', 'hsl(240 5.3% 26.1%)', 'hsl(220 13% 91%)'),
-  High: badge('hsl(38 92% 95%)', 'hsl(38 92% 25%)', 'hsl(38 80% 75%)'),
-  Urgent: badge('hsl(0 84% 97%)', 'hsl(0 74% 42%)', 'hsl(0 70% 85%)'),
+  Low: badge(C.surface2, C.mutedFg, C.border),
+  Normal: badge(C.surface2, C.fg2, C.border),
+  High: toneBadge(tone.amber),
+  Urgent: toneBadge(tone.red),
+};
+
+export const emptyState: CSSProperties = {
+  background: C.surface,
+  border: '1px dashed ' + C.border,
+  borderRadius: 12,
+  padding: 40,
+  textAlign: 'center',
+  color: C.mutedFg,
 };
 
 export const uid = () => Math.random().toString(36).slice(2, 10);

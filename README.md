@@ -1,33 +1,97 @@
 # Sabertooth Adventurers Guild Tracker
 
-Guild management app for the Keizaal Skyrim RP server: job board (with collection-job entries), barrel storage tracking with location screenshots, septims ledger, and member roster. Any member can edit; changes sync to a shared JSONBin database.
+Guild management app for the Keizaal Skyrim RP server: job board with searchable
+Skyrim item collection lists, barrel storage tracking with location screenshots,
+septims ledger, and member roster. Any member with the guild password can edit;
+changes sync live to a shared database.
 
-React 19 + TypeScript + Vite, managed with pnpm. No UI framework — plain inline-styled components.
+React 19 + TypeScript + Vite on the front end, a Cloudflare Worker with D1
+(database) and R2 (screenshots) on the back end. No UI framework — plain
+inline-styled components. Dark mode by default, light mode optional.
 
-## Run it
+## Features
+
+- **Job board** — post jobs with priority, reward, deadline, faction, and contact.
+  "Posted for" and "Posted by" accept a roster member or any written-in name.
+- **Collection jobs** — build a shopping list by searching a catalogue of Skyrim
+  items (or type a custom one). Members log turn-ins with their name, the item,
+  and the quantity; the job shows a progress bar per item against its target.
+- **Barrels** — track renter, weekly rate (50 septims default), rental window,
+  paid status, and a location screenshot.
+- **Ledger** — income and spending with a running treasury balance.
+- **Roster** — members with jobs claimed, jobs posted, and total items turned in.
+- **Themes** — dark by default; toggle to light in the sidebar. Remembered per browser.
+
+## Run it locally
 
 ```sh
 pnpm install
-pnpm dev        # local dev server
+pnpm dev        # front end on :5173, proxies /api to :8787
+pnpm dev:api    # in a second terminal: the Worker + local D1 + local R2
+pnpm typecheck  # tsc for both the app and the Worker
 pnpm build      # production build to dist/
-pnpm typecheck  # tsc --noEmit
 ```
 
-## Shared database (JSONBin)
+Without `pnpm dev:api` the app still runs — it just stays in local-only mode
+(everything saves to `localStorage`).
 
-Out of the box the app saves to localStorage only. To share one live database with the whole guild:
+For the local Worker to have a database, seed it once:
 
-1. Create a free account at https://jsonbin.io
-2. Create a bin with initial content `{"members":[],"jobs":[],"barrels":[],"ledger":[]}`
-3. Copy the **Bin ID** and your **X-Master-Key** API key
-4. In the app, click the gear icon at the bottom of the sidebar and paste both
+```sh
+pnpm cf:d1:init:local
+```
 
-Everyone using the same Bin ID + key sees the same data. The app pushes on every change (debounced) and pulls every 30 seconds.
+## Cloudflare setup (one time)
 
-Note: JSONBin free bins are capped at ~100KB. Barrel screenshots are stored as base64 inside the record, so keep them small (crop before uploading), or swap the screenshot field for an image-host URL.
+You need a free Cloudflare account. All three services used here — Workers, D1,
+and R2 — have free tiers that comfortably cover a guild.
 
-## Deploy to GitHub Pages
+```sh
+npx wrangler login          # opens a browser to authorise
 
-`vite.config.ts` already sets `base: './'`. Either:
-- push and add a Pages workflow that runs `pnpm build` and publishes `dist/`, or
-- run `pnpm build` locally and publish the `dist/` folder to a `gh-pages` branch.
+pnpm cf:d1:create           # create the D1 database
+                            # -> copy the printed database_id into wrangler.toml
+pnpm cf:d1:init             # create the table in the remote database
+pnpm cf:r2:create           # create the screenshots bucket
+pnpm cf:secret              # set GUILD_PASSWORD — paste the shared password
+```
+
+Commit the `database_id` change, then deploy:
+
+```sh
+pnpm deploy                 # or let the GitHub integration do it (below)
+```
+
+### Deploying from GitHub
+
+In the Cloudflare dashboard, connect this repo under **Workers → Create → Import
+a repository**, then set:
+
+- **Build command:** `pnpm install --frozen-lockfile=false && pnpm build`
+- **Deploy command:** `npx wrangler deploy`
+
+Every push to `main` then builds and deploys automatically. The D1 database, R2
+bucket, and `GUILD_PASSWORD` secret must already exist (steps above) or the
+deploy will fail.
+
+## How syncing works
+
+The whole guild database is one JSON document in a single D1 row, with a version
+counter:
+
+- `GET /api/db` returns `{ db, version }`.
+- `PUT /api/db` sends `{ db, version }` and only succeeds if `version` still
+  matches the server's. If someone else saved first the server replies `409`
+  with its current copy, and the app replays your unsaved edits on top of it and
+  retries. Two people editing at once merge instead of overwriting each other.
+- `POST /api/upload` streams a screenshot into R2 and returns a
+  `/api/img/<uuid>` URL, which is what gets stored on the barrel. Images no
+  longer live inside the database, so there is no practical size cap.
+
+Every endpoint except `/api/img/*` requires `Authorization: Bearer <guild
+password>`, compared in constant time against the `GUILD_PASSWORD` secret.
+Image URLs are unauthenticated (a browser `<img src>` cannot send headers) but
+the keys are random UUIDs, so they are unguessable rather than secret.
+
+The app polls every 30 seconds and pushes edits ~800ms after you stop typing.
+Anyone without the password still gets a fully working local-only tracker.

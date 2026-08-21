@@ -1,6 +1,14 @@
 export type JobStatus = 'open' | 'claimed' | 'done';
 export type LedgerType = 'income' | 'expense';
+export type Theme = 'dark' | 'light';
 
+/** One line on a collection job's shopping list: what to gather, and how many. */
+export interface CollectionTarget {
+  item: string;
+  qty: number;
+}
+
+/** A member's turn-in against a collection job. */
 export interface CollectionEntry {
   by: string;
   item: string;
@@ -24,7 +32,7 @@ export interface Job {
   status: JobStatus;
   claimedBy: string;
   collection: boolean;
-  items: string[];
+  items: CollectionTarget[];
   entries: CollectionEntry[];
 }
 
@@ -36,7 +44,7 @@ export interface Barrel {
   start: string;
   end: string;
   notes: string;
-  img: string; // data URL of location screenshot
+  img: string; // R2 URL (/api/img/<key>), or a legacy data URL
   at: string;
 }
 
@@ -51,8 +59,8 @@ export interface LedgerEntry {
 
 export interface Member {
   id: string;
-  name: string;
   role: string;
+  name: string;
   joined: string;
 }
 
@@ -63,9 +71,9 @@ export interface DB {
   ledger: LedgerEntry[];
 }
 
+/** Credentials for the shared guild database (the Worker's guild password). */
 export interface SyncCfg {
-  binId: string;
-  apiKey: string;
+  password: string;
 }
 
-export type SyncStatus = 'local' | 'syncing' | 'synced' | 'error';
+export type SyncStatus = 'local' | 'syncing' | 'synced' | 'error' | 'denied';
