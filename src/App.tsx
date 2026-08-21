@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, FormEvent, ReactNode } from 'react';
 import type { Barrel, CollectionTarget, DB, Job, JobStatus, LedgerEntry, Member, SyncCfg, SyncStatus, Theme } from './types';
-import { demoDb } from './data';
+import { emptyDb } from './data';
 import { ALL_ITEM_NAMES, searchItems } from './items';
 import { applyTheme, loadTheme } from './theme';
 import { AuthError, ConflictError, collectedByItem, loadCfg, loadLocal, pullDb, pushDb, saveCfg, saveLocal, uploadImage } from './sync';
@@ -38,7 +38,7 @@ const icons = {
 export default function App() {
   const [view, setView] = useState<View>('dash');
   const [q, setQ] = useState('');
-  const [db, setDb] = useState<DB>(() => loadLocal() ?? demoDb());
+  const [db, setDb] = useState<DB>(() => loadLocal() ?? emptyDb());
   const [exp, setExp] = useState<Record<string, boolean>>({});
   const [modal, setModal] = useState<Modal>(null);
   const [sync, setSync] = useState<SyncStatus>('local');
