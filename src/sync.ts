@@ -54,6 +54,15 @@ export function saveLocal(db: DB): void {
   }
 }
 
+/** Drop the offline cache (on sign-out, so the next user sees nothing stale). */
+export function clearLocal(): void {
+  try {
+    localStorage.removeItem(DB_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 const auth = (cfg: SyncCfg) => ({ Authorization: 'Bearer ' + cfg.password });
 
 export async function pullDb(cfg: SyncCfg): Promise<{ db: DB; version: number }> {

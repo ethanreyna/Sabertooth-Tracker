@@ -4,7 +4,7 @@ import type { Barrel, CollectionTarget, DB, Job, JobStatus, LedgerEntry, Member,
 import { emptyDb } from './data';
 import { ALL_ITEM_NAMES, searchItems } from './items';
 import { applyTheme, loadTheme } from './theme';
-import { AuthError, ConflictError, collectedByItem, loadCfg, loadLocal, pullDb, pushDb, saveCfg, saveLocal, uploadImage } from './sync';
+import { AuthError, ConflictError, clearLocal, collectedByItem, loadCfg, loadLocal, pullDb, pushDb, saveCfg, saveLocal, uploadImage } from './sync';
 import {
   C, ago, btnOutline, btnPrimary, card, dstr, emptyState, field, input,
   prioStyles, sectionLabel, select, sep, statusStyles, tone, toneBadge, uid,
@@ -41,10 +41,16 @@ export default function App() {
   const [db, setDb] = useState<DB>(() => loadLocal() ?? emptyDb());
   const [exp, setExp] = useState<Record<string, boolean>>({});
   const [modal, setModal] = useState<Modal>(null);
-  const [sync, setSync] = useState<SyncStatus>('local');
+  const [sync, setSync] = useState<SyncStatus>('syncing');
   const [theme, setTheme] = useState<Theme>(() => loadTheme());
+  const [cfg, setCfg] = useState<SyncCfg | null>(() => loadCfg());
+  const [booted, setBooted] = useState(false);
+  const [offline, setOffline] = useState(false);
 
-  const cfgRef = useRef<SyncCfg | null>(null);
+  const cfgRef = useRef<SyncCfg | null>(cfg);
+  cfgRef.current = cfg;
+  const bootedRef = useRef(booted);
+  bootedRef.current = booted;
   const versionRef = useRef(0);
   const pendingRef = useRef<Array<(d: DB) => void>>([]);
   const inFlightRef = useRef(false);
@@ -94,27 +100,45 @@ export default function App() {
   }, [commit]);
 
   const pull = useCallback(async () => {
-    const cfg = cfgRef.current;
+    const c = cfgRef.current;
     // Don't overwrite local edits that haven't landed yet.
-    if (!cfg || pendingRef.current.length || inFlightRef.current) return;
+    if (!c || pendingRef.current.length || inFlightRef.current) return;
     try {
-      const { db: rec, version } = await pullDb(cfg);
+      const { db: rec, version } = await pullDb(c);
       versionRef.current = version;
       if (JSON.stringify(rec) !== JSON.stringify(dbRef.current)) commit(rec);
+      setOffline(false);
       setSync('synced');
+      setBooted(true);
     } catch (e) {
-      setSync(e instanceof AuthError ? 'denied' : 'error');
+      if (e instanceof AuthError) { setSync('denied'); return; }
+      setSync('error');
+      setOffline(true);
+      // Server unreachable on first load: fall back to the last known copy so
+      // the tracker is readable, clearly flagged as stale.
+      if (!bootedRef.current) {
+        const cached = loadLocal();
+        if (cached) commit(cached);
+        setBooted(true);
+      }
     }
   }, [commit]);
 
+  // Poll only while the tab is visible, and re-sync the moment it regains focus.
   useEffect(() => {
-    cfgRef.current = loadCfg();
-    if (!cfgRef.current) return;
+    if (!cfg) return;
     setSync('syncing');
     void pull();
-    const t = window.setInterval(() => { void pull(); }, 30000);
-    return () => window.clearInterval(t);
-  }, [pull]);
+    const t = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void pull();
+    }, 10000);
+    const onVis = () => { if (document.visibilityState === 'visible') void pull(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [cfg, pull]);
 
   const update = useCallback((fn: (d: DB) => void) => {
     const next = clone(dbRef.current);
@@ -127,27 +151,33 @@ export default function App() {
     pushT.current = window.setTimeout(() => { void flush(); }, 800);
   }, [commit, flush]);
 
-  const connect = useCallback(async (cfg: SyncCfg | null) => {
-    cfgRef.current = cfg;
-    saveCfg(cfg);
-    setModal(null);
-    if (!cfg) { setSync('local'); versionRef.current = 0; return; }
-    setSync('syncing');
-    try {
-      const { db: rec, version } = await pullDb(cfg);
-      versionRef.current = version;
-      // First device to connect seeds the shared database from what it has.
-      const isEmpty = !rec.jobs.length && !rec.members.length && !rec.barrels.length && !rec.ledger.length;
-      if (isEmpty) {
-        versionRef.current = await pushDb(cfg, dbRef.current, version);
-      } else {
-        commit(rec);
-      }
-      setSync('synced');
-    } catch (e) {
-      setSync(e instanceof AuthError ? 'denied' : 'error');
-    }
+  // Verifies the password against the server before letting anyone in. The
+  // server's copy always wins — nothing local is ever uploaded on sign-in.
+  const login = useCallback(async (password: string) => {
+    const c: SyncCfg = { password };
+    const { db: rec, version } = await pullDb(c);
+    versionRef.current = version;
+    pendingRef.current = [];
+    commit(rec);
+    saveCfg(c);
+    setCfg(c);
+    setOffline(false);
+    setBooted(true);
+    setSync('synced');
   }, [commit]);
+
+  const logout = useCallback(() => {
+    window.clearTimeout(pushT.current);
+    saveCfg(null);
+    clearLocal();
+    pendingRef.current = [];
+    versionRef.current = 0;
+    setCfg(null);
+    setBooted(false);
+    setDb(emptyDb());
+    setModal(null);
+    setSync('syncing');
+  }, []);
 
   const memberNames = db.members.map((m) => m.name);
   const income = db.ledger.filter((l) => l.type === 'income').reduce((s, l) => s + Number(l.amount || 0), 0);
@@ -161,10 +191,10 @@ export default function App() {
     roster: { label: 'Add member', modal: 'member' },
   };
   const syncMap: Record<SyncStatus, [string, string]> = {
-    local: [C.mutedFg, 'Saved on this device'],
+    local: [C.mutedFg, 'Not connected'],
     syncing: [C.amber, 'Syncing…'],
     synced: [C.green, 'Synced to guild database'],
-    error: [C.red, 'Sync error — retrying'],
+    error: [C.red, offline ? 'Offline — showing last synced copy' : 'Sync error — retrying'],
     denied: [C.red, 'Wrong guild password'],
   };
 
@@ -182,6 +212,11 @@ export default function App() {
       {icon}{label}
     </a>
   );
+
+  // Nothing is usable without the guild password: the tracker is the shared
+  // database, not a local notebook that might sync later.
+  if (!cfg) return <Login onLogin={login} theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />;
+  if (!booted) return <Splash />;
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontSize: 13, lineHeight: 1.45 }}>
@@ -255,11 +290,96 @@ export default function App() {
           memberNames={memberNames}
           update={update}
           setView={setView}
-          cfg={cfgRef.current}
+          cfg={cfg}
           sync={sync}
-          onConnect={connect}
+          offline={offline}
+          onLogout={logout}
         />
       )}
+    </div>
+  );
+}
+
+function Splash() {
+  return (
+    <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.mutedFg, fontSize: 13 }}>
+      Loading the guild database…
+    </div>
+  );
+}
+
+/** The password gate. Nothing renders behind this until the server says yes. */
+function Login({ onLogin, theme, toggleTheme }: {
+  onLogin: (password: string) => Promise<void>;
+  theme: Theme;
+  toggleTheme: () => void;
+}) {
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!password.trim()) return;
+    setBusy(true);
+    setErr('');
+    try {
+      await onLogin(password.trim());
+    } catch (e2) {
+      setErr(e2 instanceof AuthError
+        ? 'That password was rejected. Check it with your guildmaster.'
+        : 'Could not reach the guild server. Check your connection and try again.');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: C.bg }}>
+      <div style={{ ...card, width: 380, maxWidth: '100%', padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 32, height: 32, flex: 'none', borderRadius: 7, background: C.accent, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+            {icons.shield}
+          </div>
+          <div style={{ lineHeight: 1.25, flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: C.mutedFg, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Keizaal</div>
+            <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em' }}>Sabertooth Adventurers</div>
+          </div>
+          <button
+            type="button" onClick={toggleTheme}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            style={{ width: 28, height: 28, flex: 'none', background: 'none', border: 0, borderRadius: 6, color: C.mutedFg, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            {theme === 'dark' ? icons.sun : icons.moon}
+          </button>
+        </div>
+
+        <div style={{ fontSize: 12, color: C.mutedFg, lineHeight: 1.5 }}>
+          Enter the guild password to open the shared job board, barrel register,
+          and ledger. Everything you change is saved to the guild database and
+          shows up for everyone else.
+        </div>
+
+        {err && (
+          <div style={{ padding: '8px 10px', borderRadius: 6, background: tone.red[0], color: tone.red[1], border: '1px solid ' + tone.red[2], fontSize: 12 }}>
+            {err}
+          </div>
+        )}
+
+        <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <label style={field}>
+            Guild password
+            <input
+              type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+              placeholder="Ask your guildmaster" autoComplete="current-password" autoFocus
+              style={{ ...input, width: '100%', boxSizing: 'border-box' }}
+            />
+          </label>
+          <button type="submit" disabled={busy || !password.trim()} style={{ ...btnPrimary, opacity: busy || !password.trim() ? 0.6 : 1 }}>
+            {busy ? 'Checking…' : 'Enter the guild hall'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
@@ -747,10 +867,10 @@ function ItemPicker({ targets, setTargets }: {
   );
 }
 
-function Modals({ modal, close, memberNames, update, setView, cfg, sync, onConnect }: {
+function Modals({ modal, close, memberNames, update, setView, cfg, sync, offline, onLogout }: {
   modal: Exclude<Modal, null>; close: () => void; memberNames: string[];
   update: (fn: (d: DB) => void) => void; setView: (v: View) => void;
-  cfg: SyncCfg | null; sync: SyncStatus; onConnect: (cfg: SyncCfg | null) => void;
+  cfg: SyncCfg | null; sync: SyncStatus; offline: boolean; onLogout: () => void;
 }) {
   const [collection, setCollection] = useState(false);
   const [targets, setTargets] = useState<CollectionTarget[]>([]);
@@ -846,13 +966,6 @@ function Modals({ modal, close, memberNames, update, setView, cfg, sync, onConne
     const m: Member = { id: uid(), name: String(f.get('name')).trim(), role: String(f.get('role') || 'Member'), joined: new Date().toISOString() };
     close();
     update((d) => { d.members.push(m); });
-  };
-
-  const submitSync = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    const password = String(f.get('password') || '').trim();
-    onConnect(password ? { password } : null);
   };
 
   return (
@@ -964,36 +1077,43 @@ function Modals({ modal, close, memberNames, update, setView, cfg, sync, onConne
         )}
 
         {modal === 'sync' && (
-          <form onSubmit={submitSync} style={formStyle}>
+          <div style={formStyle}>
             <div style={{ fontSize: 12, color: C.mutedFg, lineHeight: 1.5 }}>
-              Changes save to this browser automatically. Enter the guild password to share one live
-              database with everyone — the app pulls updates every 30 seconds and pushes your edits
-              as you make them. Ask the guildmaster for the password.
+              Every change you make is written to the guild database straight away, and the app
+              re-reads it every 10 seconds while this tab is open — so everyone on the roster sees
+              the same board and can edit it. Nothing is kept only on this computer.
             </div>
-            {sync === 'denied' && (
-              <div style={{ padding: '8px 10px', borderRadius: 6, background: tone.red[0], color: tone.red[1], border: '1px solid ' + tone.red[2], fontSize: 12 }}>
-                That password was rejected. Check it and try again.
-              </div>
-            )}
-            {sync === 'synced' && cfg && (
+
+            {sync === 'synced' && (
               <div style={{ padding: '8px 10px', borderRadius: 6, background: tone.green[0], color: tone.green[1], border: '1px solid ' + tone.green[2], fontSize: 12 }}>
-                Connected to the guild database.
+                Connected — your edits are live for the whole guild.
               </div>
             )}
-            <label style={field}>
-              Guild password
-              <input name="password" type="password" defaultValue={cfg?.password || ''} placeholder="Shared guild password" autoComplete="current-password" style={input} />
-            </label>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid ' + C.border, margin: '4px -18px 0', padding: '12px 18px 0' }}>
-              {cfg && (
-                <button type="button" onClick={() => onConnect(null)} style={{ ...btnOutline, marginRight: 'auto', color: C.red }}>
-                  Disconnect
-                </button>
-              )}
-              <button type="button" onClick={close} style={btnOutline}>Cancel</button>
-              <button type="submit" style={btnPrimary}>Save and connect</button>
+            {sync === 'syncing' && (
+              <div style={{ padding: '8px 10px', borderRadius: 6, background: tone.amber[0], color: tone.amber[1], border: '1px solid ' + tone.amber[2], fontSize: 12 }}>
+                Saving to the guild database…
+              </div>
+            )}
+            {sync === 'error' && (
+              <div style={{ padding: '8px 10px', borderRadius: 6, background: tone.red[0], color: tone.red[1], border: '1px solid ' + tone.red[2], fontSize: 12 }}>
+                {offline
+                  ? 'Can’t reach the server. You’re looking at the last synced copy — changes made now may not stick.'
+                  : 'The last save failed. The app keeps retrying automatically.'}
+              </div>
+            )}
+
+            <div style={{ fontSize: 12, color: C.mutedFg, lineHeight: 1.5 }}>
+              Signing out clears this browser’s copy and returns you to the password screen. It does
+              not delete anything from the guild database.
             </div>
-          </form>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid ' + C.border, margin: '4px -18px 0', padding: '12px 18px 0' }}>
+              <button type="button" onClick={onLogout} style={{ ...btnOutline, marginRight: 'auto', color: C.red }}>
+                Sign out
+              </button>
+              <button type="button" onClick={close} style={btnPrimary}>Done</button>
+            </div>
+          </div>
         )}
       </div>
     </div>

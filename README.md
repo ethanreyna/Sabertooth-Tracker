@@ -21,6 +21,8 @@ inline-styled components. Dark mode by default, light mode optional.
 - **Ledger** — income and spending with a running treasury balance.
 - **Roster** — members with jobs claimed, jobs posted, and total items turned in.
 - **Themes** — dark by default; toggle to light in the sidebar. Remembered per browser.
+- **Shared by default** — one guild password opens the shared database for
+  everyone; edits propagate to other members within ~10 seconds.
 
 ## Run it locally
 
@@ -93,5 +95,13 @@ password>`, compared in constant time against the `GUILD_PASSWORD` secret.
 Image URLs are unauthenticated (a browser `<img src>` cannot send headers) but
 the keys are random UUIDs, so they are unguessable rather than secret.
 
-The app polls every 30 seconds and pushes edits ~800ms after you stop typing.
-Anyone without the password still gets a fully working local-only tracker.
+The app re-reads the server every 10 seconds while the tab is visible (and
+immediately when you switch back to it), and pushes edits ~800ms after you stop
+typing.
+
+**The server is the source of truth.** The password screen gates the whole app —
+there is no local-only mode, because a guild tracker whose edits silently go
+nowhere is worse than no tracker. On sign-in the server's copy always wins;
+nothing from your browser is ever uploaded to seed it. `localStorage` holds only
+your password and a read-only cache of the last synced state, shown with an
+"Offline" warning if the server can't be reached, and cleared on sign-out.
