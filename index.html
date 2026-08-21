@@ -4,125 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sabertooth Adventurers Guild</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <!-- Set the theme before first paint so there is no flash of the wrong one.
-         Dark is the default; light is opt-in and remembered per browser. -->
+    <!-- Apply the theme before first paint so there is no flash of the wrong
+         one. Dark is the default; light is opt-in and remembered per browser. -->
     <script>
       try {
-        var t = localStorage.getItem('sabertooth-theme');
-        if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
-      } catch (e) {}
+        if (localStorage.getItem('sabertooth-theme') !== 'light') {
+          document.documentElement.classList.add('dark');
+        }
+      } catch (e) {
+        document.documentElement.classList.add('dark');
+      }
     </script>
-    <style>
-      /* Dark is the default theme. */
-      :root {
-        --bg: hsl(240 10% 7%);
-        --surface: hsl(240 8% 11%);
-        --surface2: hsl(240 8% 13%);
-        --border: hsl(240 6% 21%);
-        --border2: hsl(240 6% 18%);
-        --border3: hsl(240 6% 16%);
-        --muted: hsl(240 9% 9%);
-        --muted-fg: hsl(240 5% 58%);
-        --fg: hsl(0 0% 95%);
-        --fg2: hsl(240 6% 78%);
-        --primary: hsl(0 0% 93%);
-        --primary-fg: hsl(240 8% 10%);
-        --accent: hsl(240 6% 24%);
-        --accent-fg: hsl(0 0% 98%);
-        --focus: hsl(0 0% 90% / 0.22);
-
-        --red: hsl(0 72% 58%);
-        --red-dark: hsl(0 78% 68%);
-        --green: hsl(142 60% 48%);
-        --amber: hsl(38 92% 56%);
-
-        --green-bg: hsl(142 45% 14%);
-        --green-fg: hsl(142 60% 72%);
-        --green-bd: hsl(142 35% 26%);
-        --amber-bg: hsl(38 60% 15%);
-        --amber-fg: hsl(38 90% 68%);
-        --amber-bd: hsl(38 50% 28%);
-        --amber-fg2: hsl(38 90% 62%);
-        --red-bg: hsl(0 50% 15%);
-        --red-fg: hsl(0 80% 74%);
-        --red-bd: hsl(0 40% 30%);
-        --blue-bg: hsl(199 60% 14%);
-        --blue-fg: hsl(199 80% 70%);
-        --blue-bd: hsl(199 45% 28%);
-        --neutral-bg: hsl(240 6% 17%);
-        --neutral-fg: hsl(240 5% 65%);
-        --neutral-bd: hsl(240 6% 25%);
-
-        --overlay: rgb(0 0 0 / 0.6);
-        --shadow: 0 1px 2px 0 rgb(0 0 0 / 0.4);
-        --shadow-lg: 0 10px 24px -6px rgb(0 0 0 / 0.6);
-      }
-
-      :root[data-theme='light'] {
-        --bg: hsl(240 4.8% 95.9%);
-        --surface: hsl(0 0% 100%);
-        --surface2: hsl(0 0% 99%);
-        --border: hsl(220 13% 91%);
-        --border2: hsl(220 13% 93%);
-        --border3: hsl(220 13% 95%);
-        --muted: hsl(240 4.8% 95.9%);
-        --muted-fg: hsl(240 3.8% 46.1%);
-        --fg: hsl(240 10% 3.9%);
-        --fg2: hsl(240 5.3% 26.1%);
-        --primary: hsl(240 5.9% 10%);
-        --primary-fg: hsl(0 0% 98%);
-        --accent: hsl(240 5.9% 10%);
-        --accent-fg: hsl(0 0% 98%);
-        --focus: hsl(240 5.9% 10% / 0.12);
-
-        --red: hsl(0 84.2% 60.2%);
-        --red-dark: hsl(0 74% 42%);
-        --green: hsl(142 76% 36%);
-        --amber: hsl(38 92% 50%);
-
-        --green-bg: hsl(142 76% 96%);
-        --green-fg: hsl(142 76% 26%);
-        --green-bd: hsl(142 50% 80%);
-        --amber-bg: hsl(38 92% 95%);
-        --amber-fg: hsl(38 92% 25%);
-        --amber-bd: hsl(38 80% 75%);
-        --amber-fg2: hsl(38 92% 35%);
-        --red-bg: hsl(0 84% 97%);
-        --red-fg: hsl(0 74% 42%);
-        --red-bd: hsl(0 70% 85%);
-        --blue-bg: hsl(199 89% 96%);
-        --blue-fg: hsl(199 89% 30%);
-        --blue-bd: hsl(199 89% 85%);
-        --neutral-bg: hsl(240 4.8% 95.9%);
-        --neutral-fg: hsl(240 3.8% 46.1%);
-        --neutral-bd: hsl(220 13% 88%);
-
-        --overlay: rgb(0 0 0 / 0.35);
-        --shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-        --shadow-lg: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-      }
-
-      body {
-        margin: 0;
-        font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
-        -webkit-font-smoothing: antialiased;
-        background: var(--bg);
-        color: var(--fg);
-      }
-      a { color: var(--primary); text-decoration: none; }
-      a:hover { color: var(--muted-fg); }
-      input, select, textarea, button { font: inherit; color: inherit; }
-      input:focus, select:focus, textarea:focus { outline: 3px solid var(--focus); }
-      ::placeholder { color: var(--muted-fg); }
-      /* Dark-theme form controls: keep native pickers legible. */
-      :root:not([data-theme='light']) input[type='date'],
-      :root:not([data-theme='light']) input[type='file'],
-      :root:not([data-theme='light']) select { color-scheme: dark; }
-      input[type='number'] { -moz-appearance: textfield; }
-    </style>
   </head>
   <body>
     <div id="root"></div>

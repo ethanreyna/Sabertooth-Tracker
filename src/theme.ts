@@ -11,10 +11,9 @@ export function loadTheme(): Theme {
   }
 }
 
+/** shadcn keys its dark palette off a `dark` class on <html>. */
 export function applyTheme(t: Theme): void {
-  const root = document.documentElement;
-  if (t === 'light') root.setAttribute('data-theme', 'light');
-  else root.removeAttribute('data-theme');
+  document.documentElement.classList.toggle('dark', t === 'dark');
   try {
     localStorage.setItem(KEY, t);
   } catch {
