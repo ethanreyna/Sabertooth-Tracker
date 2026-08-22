@@ -1,6 +1,13 @@
-name = "sabertooth-tracker"
+name = "sabretooth-tracker"
 main = "worker/index.ts"
 compatibility_date = "2025-09-01"
+
+# Served from the guild's own domain. Wrangler creates and manages the DNS
+# record for this hostname on deploy. The <name>.<account>.workers.dev URL stays
+# enabled as a fallback.
+[[routes]]
+pattern = "sabretooth-tracker.elthan.net"
+custom_domain = true
 
 # Serve the Vite build. API paths hit the Worker first; everything else
 # falls back to index.html so the SPA handles its own routing.
@@ -20,6 +27,12 @@ database_id = "eacd0c6a-5091-47f4-a8be-145a9109c047"
 [[r2_buckets]]
 binding = "IMAGES"
 bucket_name = "sabertooth-images"
+
+# Market price list, pulled from a link-shared Google Sheet via /api/prices.
+# PRICES_SHEET_GIDS is a comma-separated list of tab gids; empty = first tab.
+[vars]
+PRICES_SHEET_ID = "1i5_O_jqz2wPBBNUzjCk0gwMRBIdVdnbIc0BG1S-KMWQ"
+PRICES_SHEET_GIDS = ""
 
 # GUILD_PASSWORD is a secret, never committed. Set it with:
 #   pnpm cf:secret

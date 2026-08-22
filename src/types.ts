@@ -114,6 +114,16 @@ export interface DB {
   ledger: LedgerEntry[];
 }
 
+/** One row of the market price list, mirrored from the guild's Google Sheet.
+ *  Values stay strings because the sheet uses "N/A" and "-" alongside numbers. */
+export interface Price {
+  category: string;
+  item: string;
+  make: string;
+  unit: string;
+  sell: string;
+}
+
 /** How this browser is talking to the guild database. A guest session carries
  *  no password and is served anonymously, read-only. */
 export interface SyncCfg {

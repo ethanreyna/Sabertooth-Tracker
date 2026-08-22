@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Coins, LayoutDashboard, Moon, Package, Settings, Shield, ShieldHalf, Skull, Sun, Users, Briefcase,
+  Coins, LayoutDashboard, Moon, Package, Scale, Settings, Shield, ShieldHalf, Skull, Sun, Users, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,8 @@ import type { ModalKind } from '@/components/modals';
 import { Dashboard } from '@/views/dashboard';
 import { Jobs } from '@/views/jobs';
 import { Storage } from '@/views/storage';
-import { Ledger } from '@/views/ledger';
+import { Ledger as Bank } from '@/views/ledger';
+import { Prices } from '@/views/prices';
 import { Roster } from '@/views/roster';
 import { Roles } from '@/views/roles';
 import { Dungeons } from '@/views/dungeons';
@@ -23,7 +24,7 @@ import {
 import { cn } from '@/lib/utils';
 import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
-type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'ledger' | 'roster' | 'roles';
+type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'bank' | 'ledger' | 'roster' | 'roles';
 
 /** What a read-only guest is allowed to see. */
 const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'roster'];
@@ -35,21 +36,22 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'jobs', label: 'Jobs', icon: <Briefcase /> },
   { id: 'storage', label: 'Storage', icon: <Package /> },
   { id: 'dungeons', label: 'Dungeons', icon: <Skull /> },
-  { id: 'ledger', label: 'Ledger', icon: <Coins /> },
+  { id: 'bank', label: 'Bank', icon: <Coins /> },
+  { id: 'ledger', label: 'Ledger', icon: <Scale /> },
   { id: 'roster', label: 'Roster', icon: <Users /> },
   { id: 'roles', label: 'Roles', icon: <ShieldHalf /> },
 ];
 
 const TITLES: Record<View, string> = {
-  dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', ledger: 'Ledger',
-  roster: 'Roster', roles: 'Roles',
+  dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons',
+  bank: 'Bank', ledger: 'Ledger', roster: 'Roster', roles: 'Roles',
 };
 
 const ACTIONS: Partial<Record<View, { label: string; modal: ModalKind }>> = {
   jobs: { label: 'New job', modal: 'job' },
   storage: { label: 'New storage', modal: 'barrel' },
   dungeons: { label: 'New dungeon', modal: 'dungeon' },
-  ledger: { label: 'New entry', modal: 'ledger' },
+  bank: { label: 'New entry', modal: 'ledger' },
   roster: { label: 'Add member', modal: 'member' },
   roles: { label: 'New role', modal: 'role' },
 };
@@ -358,7 +360,8 @@ export default function App() {
               onEdit={(id) => { setEditDungeonId(id); setModal('dungeon'); }}
             />
           )}
-          {view === 'ledger' && <Ledger db={db} income={income} spend={spend} />}
+          {view === 'bank' && <Bank db={db} income={income} spend={spend} />}
+          {view === 'ledger' && <Prices />}
           {view === 'roster' && <Roster db={db} update={update} readOnly={readOnly} />}
           {view === 'roles' && (
             <Roles

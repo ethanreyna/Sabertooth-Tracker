@@ -1,4 +1,4 @@
-import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, MemberEntry, Role, SyncCfg } from './types';
+import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, MemberEntry, Price, Role, SyncCfg } from './types';
 
 const CFG_KEY = 'sabretooth-auth';
 const LEGACY_CFG_KEY = 'sabertooth-auth'; // pre-rename; read once so nobody is logged out
@@ -108,6 +108,45 @@ export async function pushDb(cfg: SyncCfg, db: DB, version: number): Promise<num
   if (!r.ok) throw new Error('push failed: ' + r.status);
   const j = await r.json();
   return Number(j.version || 0);
+}
+
+const PRICES_KEY = 'sabretooth-prices';
+
+/** Last successful price pull, so the list renders instantly and survives offline. */
+export function loadPrices(): { prices: Price[]; syncedAt: string } | null {
+  try {
+    const c = JSON.parse(localStorage.getItem(PRICES_KEY) || 'null');
+    return c && Array.isArray(c.prices) ? { prices: c.prices, syncedAt: s(c.syncedAt) } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pulls the market price list. The Worker proxies the Google Sheet, so this
+ * works despite Google sending no CORS headers. `force` bypasses the edge cache.
+ */
+export async function fetchPrices(cfg: SyncCfg, force = false): Promise<{ prices: Price[]; syncedAt: string }> {
+  const r = await fetch('/api/prices' + (force ? '?refresh=1' : ''), { headers: auth(cfg) });
+  if (r.status === 401) throw new AuthError();
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(s(j.error) || 'Could not load prices (' + r.status + ').');
+
+  const prices: Price[] = arr(j.prices).map((p) => {
+    const x = (p || {}) as Record<string, unknown>;
+    return {
+      category: s(x.category), item: s(x.item),
+      make: s(x.make), unit: s(x.unit), sell: s(x.sell),
+    };
+  }).filter((p) => p.item);
+
+  const out = { prices, syncedAt: s(j.syncedAt) || new Date().toISOString() };
+  try {
+    localStorage.setItem(PRICES_KEY, JSON.stringify(out));
+  } catch {
+    /* quota — the list just won't be cached */
+  }
+  return out;
 }
 
 /** Uploads a screenshot to R2 and returns the URL to store on the barrel. */

@@ -16,6 +16,8 @@ interface Env {
   IMAGES: R2Bucket;
   ASSETS: Fetcher;
   GUILD_PASSWORD: string;
+  PRICES_SHEET_ID?: string;
+  PRICES_SHEET_GIDS?: string;
 }
 
 type Role = 'member' | 'guest';
@@ -61,6 +63,125 @@ function redactForGuest(db: unknown): unknown {
   const out = { ...(db as Record<string, unknown>) };
   for (const k of GUEST_HIDDEN) out[k] = [];
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Market prices, proxied from a link-shared Google Sheet.
+//
+// The browser can't fetch the sheet directly (no CORS headers from Google), so
+// the Worker does it and hands back JSON. Cached briefly so a room full of
+// members clicking Refresh doesn't hammer Google.
+// ---------------------------------------------------------------------------
+
+const PRICES_TTL_SECONDS = 300;
+
+/** Minimal RFC4180 CSV parser: handles quoted fields, escaped quotes, CRLF. */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let quoted = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { cell += '"'; i++; } else quoted = false;
+      } else cell += c;
+      continue;
+    }
+    if (c === '"') { quoted = true; continue; }
+    if (c === ',') { row.push(cell); cell = ''; continue; }
+    if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell); cell = '';
+      rows.push(row); row = [];
+      continue;
+    }
+    cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+
+interface PriceRow {
+  category: string;
+  item: string;
+  make: string;
+  unit: string;
+  sell: string;
+}
+
+/**
+ * The sheet is laid out as repeating blocks: a header row naming the category
+ * and the columns ("Ore | Make Price | Price of 1 | Sell"), then item rows,
+ * then a blank spacer. Column positions are read off each header row rather
+ * than hardcoded, so inserting a column doesn't break the parse.
+ */
+function parsePriceSheet(csv: string): PriceRow[] {
+  const out: PriceRow[] = [];
+  let category = '';
+  let nameCol = -1;
+  let makeCol = -1;
+  let unitCol = -1;
+  let sellCol = -1;
+
+  for (const cells of parseCsv(csv)) {
+    const lower = cells.map((c) => c.trim().toLowerCase());
+    const headerAt = lower.findIndex((c) => c === 'make price');
+
+    if (headerAt >= 0) {
+      makeCol = headerAt;
+      unitCol = lower.findIndex((c) => c.startsWith('price of'));
+      sellCol = lower.findIndex((c) => c === 'sell');
+      // The category label sits in the first non-empty cell left of the prices.
+      nameCol = lower.findIndex((c, i) => i < headerAt && c !== '');
+      category = nameCol >= 0 ? cells[nameCol].trim() : '';
+      continue;
+    }
+
+    if (nameCol < 0) continue; // nothing useful before the first header
+    const item = (cells[nameCol] || '').trim().replace(/\s+/g, ' ');
+    if (!item) continue; // blank spacer row
+
+    const at = (i: number) => (i >= 0 ? (cells[i] || '').trim() : '');
+    out.push({ category, item, make: at(makeCol), unit: at(unitCol), sell: at(sellCol) });
+  }
+  return out;
+}
+
+async function handlePrices(env: Env, url: URL): Promise<Response> {
+  const id = env.PRICES_SHEET_ID;
+  if (!id) return json({ error: 'no sheet configured', prices: [] }, 501);
+
+  const gids = (env.PRICES_SHEET_GIDS || '').split(',').map((g) => g.trim()).filter(Boolean);
+  const targets = gids.length ? gids : [''];
+  const bypass = url.searchParams.get('refresh') === '1';
+
+  const prices: PriceRow[] = [];
+  for (const gid of targets) {
+    const src = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv${gid ? `&gid=${gid}` : ''}`;
+    const res = await fetch(src, {
+      cf: { cacheTtl: bypass ? 0 : PRICES_TTL_SECONDS, cacheEverything: true },
+      headers: { 'User-Agent': 'sabretooth-tracker' },
+    });
+    if (!res.ok) {
+      return json({
+        error: res.status === 401 || res.status === 403
+          ? 'The sheet is not shared publicly. Set link sharing to "Anyone with the link can view".'
+          : `Google returned ${res.status}.`,
+        prices: [],
+      }, 502);
+    }
+    prices.push(...parsePriceSheet(await res.text()));
+  }
+
+  return new Response(JSON.stringify({ prices, syncedAt: new Date().toISOString() }), {
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': bypass ? 'no-store' : `public, max-age=${PRICES_TTL_SECONDS}`,
+    },
+  });
 }
 
 let schemaReady: Promise<unknown> | null = null;
@@ -122,6 +243,11 @@ async function handleApi(req: Request, env: Env, url: URL): Promise<Response> {
   // Guests get reads only. Enforced here, not just hidden in the UI.
   if (role !== 'member' && req.method !== 'GET') {
     return json({ error: 'read-only', role }, 403);
+  }
+
+  // Read-only proxy to a link-shared sheet, so any signed-in role may call it.
+  if (url.pathname === '/api/prices' && req.method === 'GET') {
+    return handlePrices(env, url);
   }
 
   if (url.pathname === '/api/db') {
