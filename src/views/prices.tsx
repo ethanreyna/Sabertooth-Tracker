@@ -29,10 +29,11 @@ function ValueCell({ value }: { value: string }) {
 /** One block of rows sharing a category, with columns derived from the rows. */
 function PriceTable({ rows }: { rows: Price[] }) {
   // Columns vary per tab, so take the union of labels in first-seen order.
+  // `values` is guarded because a row can also arrive from an older cache.
   const labels = useMemo(() => {
     const seen: string[] = [];
     for (const r of rows) {
-      for (const k of Object.keys(r.values)) if (!seen.includes(k)) seen.push(k);
+      for (const k of Object.keys(r.values ?? {})) if (!seen.includes(k)) seen.push(k);
     }
     return seen;
   }, [rows]);
@@ -50,7 +51,7 @@ function PriceTable({ rows }: { rows: Price[] }) {
           {rows.map((r, i) => (
             <TableRow key={`${r.tab}-${r.category}-${r.item}-${i}`}>
               <TableCell className="font-medium">{r.item.toLowerCase()}</TableCell>
-              {labels.map((l) => <ValueCell key={l} value={r.values[l] ?? ''} />)}
+              {labels.map((l) => <ValueCell key={l} value={r.values?.[l] ?? ''} />)}
             </TableRow>
           ))}
         </TableBody>
@@ -103,7 +104,7 @@ export function Prices() {
     const terms = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const match = (p: Price) => {
       if (!terms.length) return true;
-      const hay = `${p.item} ${p.category} ${p.tab} ${Object.entries(p.values).flat().join(' ')}`.toLowerCase();
+      const hay = `${p.item} ${p.category} ${p.tab} ${Object.entries(p.values ?? {}).flat().join(' ')}`.toLowerCase();
       return terms.every((t) => hay.includes(t));
     };
 

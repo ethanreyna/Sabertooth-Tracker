@@ -110,13 +110,36 @@ export async function pushDb(cfg: SyncCfg, db: DB, version: number): Promise<num
   return Number(j.version || 0);
 }
 
-const PRICES_KEY = 'sabretooth-prices';
+// Bumped when the cached shape changes: rows used to be {make, unit, sell} and
+// are now {values}, so an old cache would hand the table rows with no `values`
+// at all. A versioned key retires it instead of crashing on it.
+const PRICES_KEY = 'sabretooth-prices-v2';
+const LEGACY_PRICES_KEYS = ['sabretooth-prices'];
+
+/** Coerces one row from cache or the wire, whatever shape it arrived in. */
+function normPrice(raw: unknown): Price | null {
+  const x = (raw || {}) as Record<string, unknown>;
+  const item = s(x.item).trim();
+  if (!item) return null;
+
+  const values: Record<string, string> = {};
+  const bag = x.values && typeof x.values === 'object' ? (x.values as Record<string, unknown>) : {};
+  for (const [k, v] of Object.entries(bag)) {
+    const text = s(v).trim();
+    if (k && text) values[k] = text;
+  }
+
+  return { tab: s(x.tab), category: s(x.category), item, values };
+}
 
 /** Last successful price pull, so the list renders instantly and survives offline. */
 export function loadPrices(): { prices: Price[]; syncedAt: string } | null {
   try {
+    for (const k of LEGACY_PRICES_KEYS) localStorage.removeItem(k);
     const c = JSON.parse(localStorage.getItem(PRICES_KEY) || 'null');
-    return c && Array.isArray(c.prices) ? { prices: c.prices, syncedAt: s(c.syncedAt) } : null;
+    if (!c || !Array.isArray(c.prices)) return null;
+    const prices = c.prices.map(normPrice).filter((p: Price | null): p is Price => p !== null);
+    return prices.length ? { prices, syncedAt: s(c.syncedAt) } : null;
   } catch {
     return null;
   }
@@ -132,16 +155,9 @@ export async function fetchPrices(cfg: SyncCfg, force = false): Promise<{ prices
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(s(j.error) || 'Could not load prices (' + r.status + ').');
 
-  const prices: Price[] = arr(j.prices).map((p) => {
-    const x = (p || {}) as Record<string, unknown>;
-    const raw = (x.values && typeof x.values === 'object' ? x.values : {}) as Record<string, unknown>;
-    const values: Record<string, string> = {};
-    for (const [k, v] of Object.entries(raw)) {
-      const text = s(v);
-      if (text) values[k] = text;
-    }
-    return { tab: s(x.tab), category: s(x.category), item: s(x.item), values };
-  }).filter((p) => p.item);
+  const prices: Price[] = arr(j.prices)
+    .map(normPrice)
+    .filter((p): p is Price => p !== null);
 
   const out = { prices, syncedAt: s(j.syncedAt) || new Date().toISOString() };
   try {
