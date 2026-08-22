@@ -26,8 +26,10 @@ import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
 type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'bank' | 'ledger' | 'roster' | 'roles';
 
-/** What a read-only guest is allowed to see. */
-const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'roster'];
+/** What a read-only guest is allowed to see. `ledger` is the market price list,
+ *  which comes from the public sheet; `bank` (the guild's septims) stays hidden,
+ *  and the Worker strips those transactions from a guest response entirely. */
+const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'ledger', 'roster'];
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
