@@ -1,4 +1,4 @@
-import type { Barrel, CollectionEntry, CollectionTarget, DB, Job, LedgerEntry, Member, SyncCfg } from './types';
+import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Job, LedgerEntry, Member, MemberEntry, Role, SyncCfg } from './types';
 
 const CFG_KEY = 'sabertooth-auth';
 const DB_KEY = 'keizaal-db'; // unchanged so existing local data survives the upgrade
@@ -16,6 +16,14 @@ export class AuthError extends Error {
   constructor() {
     super('unauthorized');
     this.name = 'AuthError';
+  }
+}
+
+/** Signed in as a guest, which the server allows to read but not write. */
+export class ReadOnlyError extends Error {
+  constructor() {
+    super('read-only');
+    this.name = 'ReadOnlyError';
   }
 }
 
@@ -65,12 +73,16 @@ export function clearLocal(): void {
 
 const auth = (cfg: SyncCfg) => ({ Authorization: 'Bearer ' + cfg.password });
 
-export async function pullDb(cfg: SyncCfg): Promise<{ db: DB; version: number }> {
+export async function pullDb(cfg: SyncCfg): Promise<{ db: DB; version: number; role: AccessRole }> {
   const r = await fetch('/api/db', { headers: auth(cfg) });
   if (r.status === 401) throw new AuthError();
   if (!r.ok) throw new Error('pull failed: ' + r.status);
   const j = await r.json();
-  return { db: normalizeDb(j.db), version: Number(j.version || 0) };
+  return {
+    db: normalizeDb(j.db),
+    version: Number(j.version || 0),
+    role: j.role === 'guest' ? 'guest' : 'member',
+  };
 }
 
 /** Returns the new version. Throws ConflictError if `version` is stale. */
@@ -81,6 +93,7 @@ export async function pushDb(cfg: SyncCfg, db: DB, version: number): Promise<num
     body: JSON.stringify({ db, version }),
   });
   if (r.status === 401) throw new AuthError();
+  if (r.status === 403) throw new ReadOnlyError();
   if (r.status === 409) {
     const j = await r.json();
     throw new ConflictError(normalizeDb(j.db), Number(j.version || 0));
@@ -98,6 +111,7 @@ export async function uploadImage(cfg: SyncCfg, file: File): Promise<string> {
     body: file,
   });
   if (r.status === 401) throw new AuthError();
+  if (r.status === 403) throw new ReadOnlyError();
   if (!r.ok) throw new Error('upload failed: ' + r.status);
   const j = await r.json();
   return String(j.url || '');
@@ -140,6 +154,7 @@ function normJob(raw: unknown): Job {
     tag: s(o.tag, 'Other'),
     priority: s(o.priority, 'Normal'),
     reward: n(o.reward),
+    itemRewards: arr(o.itemRewards).map(parseTarget).filter((t): t is CollectionTarget => t !== null),
     description: s(o.description),
     postedBy: s(o.postedBy),
     postedAt: s(o.postedAt),
@@ -160,14 +175,36 @@ export function normalizeDb(raw: unknown): DB {
   return {
     members: arr(o.members).map((m): Member => {
       const x = (m || {}) as Record<string, unknown>;
-      return { id: s(x.id) || Math.random().toString(36).slice(2, 10), name: s(x.name), role: s(x.role, 'Member'), joined: s(x.joined) };
+      return {
+        id: s(x.id) || Math.random().toString(36).slice(2, 10),
+        name: s(x.name),
+        role: s(x.role, 'Member'),
+        joined: s(x.joined),
+        log: arr(x.log).map((l): MemberEntry => {
+          const y = (l || {}) as Record<string, unknown>;
+          return {
+            id: s(y.id) || Math.random().toString(36).slice(2, 10),
+            kind: s(y.kind) === 'note' ? 'note' : 'credit',
+            text: s(y.text), jobId: s(y.jobId), by: s(y.by), at: s(y.at),
+          };
+        }),
+      };
     }).filter((m) => m.name),
+    roles: arr(o.roles).map((r): Role => {
+      const x = (r || {}) as Record<string, unknown>;
+      return {
+        id: s(x.id) || Math.random().toString(36).slice(2, 10),
+        name: s(x.name), desc: s(x.desc),
+        advanceAfter: Math.max(0, n(x.advanceAfter)),
+        advanceTo: s(x.advanceTo),
+      };
+    }).filter((r) => r.name),
     jobs: arr(o.jobs).map(normJob),
     barrels: arr(o.barrels).map((b): Barrel => {
       const x = (b || {}) as Record<string, unknown>;
       return {
         id: s(x.id) || Math.random().toString(36).slice(2, 10),
-        owner: s(x.owner), paid: !!x.paid, rate: n(x.rate, 50),
+        owner: s(x.owner), guildMember: x.guildMember !== false, paid: !!x.paid, rate: n(x.rate, 50),
         start: s(x.start), end: s(x.end), notes: s(x.notes), img: s(x.img), at: s(x.at),
       };
     }),

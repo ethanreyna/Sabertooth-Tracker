@@ -15,7 +15,8 @@
     "cf:d1:init": "wrangler d1 execute sabertooth --remote --file=./schema.sql",
     "cf:d1:init:local": "wrangler d1 execute sabertooth --local --file=./schema.sql",
     "cf:r2:create": "wrangler r2 bucket create sabertooth-images",
-    "cf:secret": "wrangler secret put GUILD_PASSWORD"
+    "cf:secret": "wrangler secret put GUILD_PASSWORD",
+    "cf:secret:guest": "wrangler secret put GUEST_PASSWORD"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

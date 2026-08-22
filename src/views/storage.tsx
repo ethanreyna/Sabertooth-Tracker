@@ -6,22 +6,26 @@ import { dstr, sep } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { DB } from '@/types';
 
-export function Barrels({ db, update }: { db: DB; update: (fn: (d: DB) => void) => void }) {
+export function Storage({ db, update, readOnly }: {
+  db: DB; update: (fn: (d: DB) => void) => void; readOnly: boolean;
+}) {
   const now = Date.now();
-  const barrels = db.barrels.slice().sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+  const units = db.barrels.slice().sort((a, b) => (b.at || '').localeCompare(a.at || ''));
 
-  if (barrels.length === 0) return <EmptyState>No barrels tracked yet. Add one with New barrel.</EmptyState>;
+  if (units.length === 0) {
+    return <EmptyState>{readOnly ? 'No storage tracked yet.' : 'No storage tracked yet. Add one with New storage.'}</EmptyState>;
+  }
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-      {barrels.map((b) => {
+      {units.map((b) => {
         const left = b.end ? Math.ceil((new Date(b.end).getTime() - now) / 864e5) : null;
         const expired = left !== null && left < 0;
 
         return (
           <Card key={b.id} className="flex flex-col overflow-hidden py-0">
             {b.img ? (
-              <img src={b.img} alt="Barrel location" loading="lazy" className="h-36 w-full border-b object-cover" />
+              <img src={b.img} alt="Storage location" loading="lazy" className="h-36 w-full border-b object-cover" />
             ) : (
               <div className="flex h-36 flex-col items-center justify-center gap-1.5 border-b bg-muted/40 text-muted-foreground">
                 <ImageIcon className="size-6" />
@@ -32,12 +36,23 @@ export function Barrels({ db, update }: { db: DB; update: (fn: (d: DB) => void) 
             <div className="flex flex-1 flex-col gap-2 p-3.5">
               <div className="flex items-center gap-2">
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold">{b.owner}</span>
-                <button
-                  type="button"
-                  onClick={() => update((d) => { const t = d.barrels.find((x) => x.id === b.id); if (t) t.paid = !t.paid; })}
-                >
+                {readOnly ? (
                   <TonedBadge tone={b.paid ? 'green' : 'amber'}>{b.paid ? 'Paid' : 'Unpaid'}</TonedBadge>
-                </button>
+                ) : (
+                  <button
+                    type="button"
+                    aria-label={b.paid ? 'Mark unpaid' : 'Mark paid'}
+                    onClick={() => update((d) => { const t = d.barrels.find((x) => x.id === b.id); if (t) t.paid = !t.paid; })}
+                  >
+                    <TonedBadge tone={b.paid ? 'green' : 'amber'}>{b.paid ? 'Paid' : 'Unpaid'}</TonedBadge>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                <TonedBadge tone={b.guildMember ? 'blue' : 'neutral'}>
+                  {b.guildMember ? 'Guild member storage' : 'Non-member'}
+                </TonedBadge>
               </div>
 
               <p className="text-xs text-muted-foreground">
@@ -54,16 +69,18 @@ export function Barrels({ db, update }: { db: DB; update: (fn: (d: DB) => void) 
                 )}>
                   {expired ? `Expired ${Math.abs(left!)}d ago` : left === null ? '' : `${left} days left`}
                 </span>
-                <Button
-                  variant="ghost" size="xs" className="ml-auto text-destructive"
-                  onClick={() => {
-                    if (confirm('Remove this barrel?')) {
-                      update((d) => { d.barrels = d.barrels.filter((x) => x.id !== b.id); });
-                    }
-                  }}
-                >
-                  Remove
-                </Button>
+                {!readOnly && (
+                  <Button
+                    variant="ghost" size="xs" className="ml-auto text-destructive"
+                    onClick={() => {
+                      if (confirm('Remove this storage entry?')) {
+                        update((d) => { d.barrels = d.barrels.filter((x) => x.id !== b.id); });
+                      }
+                    }}
+                  >
+                    Remove
+                  </Button>
+                )}
               </div>
             </div>
           </Card>

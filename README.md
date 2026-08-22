@@ -17,15 +17,25 @@ formatting helpers.
 
 ## Features
 
-- **Job board** — post jobs with priority, reward, deadline, faction, and contact.
-  "Posted for" and "Posted by" accept a roster member or any written-in name.
-- **Collection jobs** — build a shopping list by searching a catalogue of Skyrim
-  items (or type a custom one). Members log turn-ins with their name, the item,
-  and the quantity; the job shows a progress bar per item against its target.
-- **Barrels** — track renter, weekly rate (50 septims default), rental window,
-  paid status, and a location screenshot.
+- **Job board** — post and edit jobs with priority, faction, contact, and a time
+  limit set either as a date or as a span from now ("2 weeks"). "Posted for" and
+  "Posted by" accept a roster member or any written-in name.
+- **Rewards** — septims, items, or both. Item rewards come from the same Skyrim
+  catalogue as collection targets.
+- **Collection jobs** — build a shopping list by searching the catalogue (or type
+  a custom item). Members log turn-ins; the job shows a progress bar per item.
+  Jobs tagged *Resource collection* switch this on automatically.
+- **Septim splits** — a collection job's septim reward is divided by contribution
+  after a 25% guild cut. See *Reward splits* below.
+- **Storage** — track owner, whether they're a guild member, weekly rate (50
+  septims default), rental window, paid status, and a location screenshot.
 - **Ledger** — income and spending with a running treasury balance.
-- **Roster** — members with jobs claimed, jobs posted, and total items turned in.
+- **Roles** — define guild ranks, each optionally with a progression track
+  ("Initiate advances to Saberblooded after 3 completions").
+- **Roster** — assign roles, log completions and notes against a member, and
+  watch their progress toward the next rank. Promote in one click when ready.
+- **Guest mode** — an optional second password grants a read-only view of jobs,
+  storage, and the roster.
 - **Themes** — dark by default; toggle to light in the sidebar. Remembered per browser.
 - **Shared by default** — one guild password opens the shared database for
   everyone; edits propagate to other members within ~10 seconds.
@@ -62,7 +72,13 @@ pnpm cf:d1:create           # create the D1 database
 pnpm cf:d1:init             # create the table in the remote database
 pnpm cf:r2:create           # create the screenshots bucket
 pnpm cf:secret              # set GUILD_PASSWORD — paste the shared password
+pnpm cf:secret:guest        # optional: GUEST_PASSWORD for read-only access
 ```
+
+`GUEST_PASSWORD` is optional. Leave it unset and there is no guest access at all;
+set it and anyone holding it can read jobs, storage, and the roster but cannot
+write. The Worker enforces this — a guest's write attempt is rejected with `403`
+regardless of what the UI offers.
 
 Commit the `database_id` change, then deploy:
 
@@ -81,6 +97,20 @@ a repository**, then set:
 Every push to `main` then builds and deploys automatically. The D1 database, R2
 bucket, and `GUILD_PASSWORD` secret must already exist (steps above) or the
 deploy will fail.
+
+## Reward splits
+
+A collection job's septim reward is divided like this:
+
+- The guild keeps **25%**, so the player pool is **75%** of the reward.
+- A member who delivers **10% of what the job asked for** earns **10% of that
+  pool**. So a finished job pays out the whole pool; a half-finished one pays
+  half, and the rest stays unearned rather than being shared out early.
+- Credit is **capped per item at the requested quantity** and awarded **oldest
+  turn-in first**, so nobody is paid for surplus the job never asked for. Items
+  that weren't requested at all earn nothing. Both show as *surplus*.
+
+The maths lives in `src/lib/payout.ts` if you want to change the cut.
 
 ## How syncing works
 

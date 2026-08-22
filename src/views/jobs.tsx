@@ -1,15 +1,17 @@
 import type { FormEvent } from 'react';
-import { ChevronDown, X } from 'lucide-react';
+import { ChevronDown, Pencil, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CollectionProgress } from '@/components/collection-progress';
+import { PayoutSplit } from '@/components/payout-split';
 import { EmptyState, PriorityBadge, StatusBadge, TonedBadge } from '@/components/bits';
 import { ALL_ITEM_NAMES } from '@/items';
 import { collectedByItem } from '@/sync';
 import { ago, dstr, sep } from '@/lib/format';
+import { untilLabel } from '@/lib/deadline';
 import { cn } from '@/lib/utils';
 import type { DB, JobStatus } from '@/types';
 
@@ -17,10 +19,11 @@ const SectionLabel = ({ children }: { children: React.ReactNode }) => (
   <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{children}</p>
 );
 
-export function Jobs({ db, q, exp, setExp, memberNames, update }: {
+export function Jobs({ db, q, exp, setExp, memberNames, update, readOnly, onEdit }: {
   db: DB; q: string; exp: Record<string, boolean>;
   setExp: (fn: (s: Record<string, boolean>) => Record<string, boolean>) => void;
   memberNames: string[]; update: (fn: (d: DB) => void) => void;
+  readOnly: boolean; onEdit: (jobId: string) => void;
 }) {
   const ql = q.toLowerCase();
   const jobs = db.jobs
@@ -45,7 +48,9 @@ export function Jobs({ db, q, exp, setExp, memberNames, update }: {
     update((d) => { const t = d.jobs.find((x) => x.id === jobId); if (t) t.entries.push(entry); });
   };
 
-  if (jobs.length === 0) return <EmptyState>No jobs match. Post one with New job.</EmptyState>;
+  if (jobs.length === 0) {
+    return <EmptyState>{readOnly ? 'No jobs to show.' : 'No jobs match. Post one with New job.'}</EmptyState>;
+  }
 
   return (
     <div className="space-y-2.5">
@@ -53,6 +58,7 @@ export function Jobs({ db, q, exp, setExp, memberNames, update }: {
         const collected = collectedByItem(j);
         const met = j.items.filter((t) => t.qty > 0 && (collected.get(t.item.trim().toLowerCase()) || 0) >= t.qty).length;
         const isOpen = !!exp[j.id];
+        const due = untilLabel(j.deadline);
 
         return (
           <Card key={j.id} className="overflow-hidden py-0">
@@ -76,11 +82,29 @@ export function Jobs({ db, q, exp, setExp, memberNames, update }: {
                 <p className="mt-1 text-xs text-muted-foreground">
                   For {j.client || 'unspecified'} · posted by {j.postedBy || 'unknown'} · {ago(j.postedAt)}
                   {j.deadline ? ` · due ${dstr(j.deadline)}` : ''}
+                  {due && j.status !== 'done' && (
+                    <span className={cn(
+                      'ml-1 font-medium',
+                      due.overdue ? 'text-red-600 dark:text-red-400'
+                        : due.soon ? 'text-amber-600 dark:text-amber-400' : '',
+                    )}>
+                      ({due.text})
+                    </span>
+                  )}
                 </p>
               </div>
               <div className="shrink-0 text-right">
-                <p className="text-sm font-semibold tabular-nums">{sep(j.reward)} s</p>
-                <p className="text-[11px] text-muted-foreground">reward</p>
+                {j.reward > 0 && <p className="text-sm font-semibold tabular-nums">{sep(j.reward)} s</p>}
+                {j.itemRewards.length > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {j.reward > 0 ? '+ ' : ''}{j.itemRewards.length} item{j.itemRewards.length === 1 ? '' : 's'}
+                  </p>
+                )}
+                {j.reward > 0 ? (
+                  <p className="text-[11px] text-muted-foreground">reward</p>
+                ) : j.itemRewards.length === 0 && (
+                  <p className="text-[11px] text-muted-foreground">no reward</p>
+                )}
               </div>
               <StatusBadge status={j.status} />
               <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', isOpen && 'rotate-180')} />
@@ -105,12 +129,33 @@ export function Jobs({ db, q, exp, setExp, memberNames, update }: {
                     </div>
                   </div>
 
+                  {(j.reward > 0 || j.itemRewards.length > 0) && (
+                    <div>
+                      <SectionLabel>Reward</SectionLabel>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {j.reward > 0 && <TonedBadge tone="amber">{sep(j.reward)} septims</TonedBadge>}
+                        {j.itemRewards.map((r) => (
+                          <TonedBadge key={r.item} tone="blue">
+                            {r.qty > 1 ? `${r.qty}× ` : ''}{r.item}
+                          </TonedBadge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {j.collection && (
                     <>
                       <div>
                         <SectionLabel>Collection progress</SectionLabel>
                         <CollectionProgress job={j} />
                       </div>
+
+                      {j.reward > 0 && (
+                        <div>
+                          <SectionLabel>Septim split</SectionLabel>
+                          <PayoutSplit job={j} />
+                        </div>
+                      )}
 
                       <div>
                         <SectionLabel>Turn-ins ({j.entries.length})</SectionLabel>
@@ -122,20 +167,26 @@ export function Jobs({ db, q, exp, setExp, memberNames, update }: {
                                 <span className="shrink-0 font-medium">{en.by}</span>
                                 <span className="min-w-0 flex-1 truncate">{en.qty}× {en.item}</span>
                                 <span className="shrink-0 text-xs text-muted-foreground">{dstr(en.at)}</span>
-                                <Button
-                                  variant="ghost" size="icon-xs" aria-label="Remove turn-in"
-                                  onClick={() => update((d) => {
-                                    const t = d.jobs.find((x) => x.id === j.id);
-                                    if (t) t.entries.splice(idx, 1);
-                                  })}
-                                >
-                                  <X />
-                                </Button>
+                                {!readOnly && (
+                                  <Button
+                                    variant="ghost" size="icon-xs" aria-label="Remove turn-in"
+                                    onClick={() => update((d) => {
+                                      const t = d.jobs.find((x) => x.id === j.id);
+                                      if (t) t.entries.splice(idx, 1);
+                                    })}
+                                  >
+                                    <X />
+                                  </Button>
+                                )}
                               </div>
                             );
                           })}
+                          {j.entries.length === 0 && (
+                            <p className="text-sm text-muted-foreground">No turn-ins yet.</p>
+                          )}
                         </div>
 
+                        {!readOnly && (
                         <form onSubmit={addEntry} className="mt-2 flex flex-wrap items-end gap-2">
                           <input type="hidden" name="jobId" value={j.id} />
                           <Input
@@ -156,6 +207,7 @@ export function Jobs({ db, q, exp, setExp, memberNames, update }: {
                           <Input name="qty" type="number" min={1} defaultValue={1} className="h-8 w-20" />
                           <Button type="submit" size="sm">Add turn-in</Button>
                         </form>
+                        )}
                       </div>
                     </>
                   )}
@@ -169,6 +221,19 @@ export function Jobs({ db, q, exp, setExp, memberNames, update }: {
                 </div>
 
                 <div className="flex flex-col gap-3">
+                  {readOnly ? (
+                    <>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Status</Label>
+                        <p className="text-sm capitalize">{j.status}</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Claimed by</Label>
+                        <p className="text-sm">{j.claimedBy || 'Unassigned'}</p>
+                      </div>
+                    </>
+                  ) : (
+                  <>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Status</Label>
                     <Select
@@ -213,8 +278,13 @@ export function Jobs({ db, q, exp, setExp, memberNames, update }: {
                     </Select>
                   </div>
 
+                  <Button variant="outline" size="sm" className="mt-auto" onClick={() => onEdit(j.id)}>
+                    <Pencil />
+                    Edit job
+                  </Button>
+
                   <Button
-                    variant="destructive" size="sm" className="mt-auto"
+                    variant="destructive" size="sm"
                     onClick={() => {
                       if (confirm('Delete this job?')) {
                         update((d) => { d.jobs = d.jobs.filter((x) => x.id !== j.id); });
@@ -223,6 +293,8 @@ export function Jobs({ db, q, exp, setExp, memberNames, update }: {
                   >
                     Delete job
                   </Button>
+                  </>
+                  )}
                 </div>
               </div>
             )}

@@ -55,8 +55,9 @@ export function Login({ onLogin, theme, toggleTheme }: {
           </div>
 
           <p className="text-sm text-muted-foreground">
-            Enter the guild password to open the shared job board, barrel register, and ledger.
+            Enter the guild password to open the shared job board, storage register, and ledger.
             Everything you change is saved to the guild database and shows up for everyone else.
+            A guest password, if your guildmaster has set one, gives a read-only view.
           </p>
 
           {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}

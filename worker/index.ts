@@ -16,7 +16,11 @@ interface Env {
   IMAGES: R2Bucket;
   ASSETS: Fetcher;
   GUILD_PASSWORD: string;
+  /** Optional. When set, grants read-only access. Unset = no guest access. */
+  GUEST_PASSWORD?: string;
 }
+
+type Role = 'member' | 'guest';
 
 const EMPTY_DB = { members: [], jobs: [], barrels: [], ledger: [] };
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -36,10 +40,15 @@ function secretEquals(a: string, b: string): boolean {
   return crypto.subtle.timingSafeEqual(ea, eb);
 }
 
-function authorized(req: Request, env: Env): boolean {
-  if (!env.GUILD_PASSWORD) return false; // secret not configured -> deny, never allow-all
+/** Members can write; guests can only read. Null means no valid password. */
+function authRole(req: Request, env: Env): Role | null {
   const m = /^Bearer\s+(.+)$/i.exec(req.headers.get('Authorization') || '');
-  return !!m && secretEquals(m[1], env.GUILD_PASSWORD);
+  if (!m) return null;
+  const given = m[1];
+  // Never allow-all: an unset GUILD_PASSWORD denies rather than admits.
+  if (env.GUILD_PASSWORD && secretEquals(given, env.GUILD_PASSWORD)) return 'member';
+  if (env.GUEST_PASSWORD && secretEquals(given, env.GUEST_PASSWORD)) return 'guest';
+  return null;
 }
 
 let schemaReady: Promise<unknown> | null = null;
@@ -93,15 +102,21 @@ async function handleApi(req: Request, env: Env, url: URL): Promise<Response> {
     });
   }
 
-  if (!authorized(req, env)) {
+  const role = authRole(req, env);
+  if (!role) {
     return json({ error: 'unauthorized' }, 401);
+  }
+
+  // Guests get reads only. Enforced here, not just hidden in the UI.
+  if (role !== 'member' && req.method !== 'GET') {
+    return json({ error: 'read-only', role }, 403);
   }
 
   if (url.pathname === '/api/db') {
     await ensureSchema(env);
 
     if (req.method === 'GET') {
-      return json(await readDoc(env));
+      return json({ ...(await readDoc(env)), role });
     }
 
     if (req.method === 'PUT') {

@@ -12,56 +12,141 @@ import { Field, NameField } from '@/components/bits';
 import { ItemPicker } from '@/components/item-picker';
 import { uploadImage } from '@/sync';
 import { uid } from '@/lib/format';
-import type { Barrel, CollectionTarget, DB, Job, LedgerEntry, Member, SyncCfg, SyncStatus } from '@/types';
+import { DURATION_UNITS, fromNow } from '@/lib/deadline';
+import type { DurationUnit } from '@/lib/deadline';
+import type { Barrel, CollectionTarget, DB, Job, LedgerEntry, Member, Role, SyncCfg, SyncStatus } from '@/types';
 
-export type ModalKind = 'job' | 'barrel' | 'ledger' | 'member' | 'sync';
+export type ModalKind = 'job' | 'barrel' | 'ledger' | 'member' | 'role' | 'sync';
 
-const TAGS = ['Resource collection', 'Kill', 'Arrest', 'Guard', 'Escort', 'Delivery', 'Other'];
+const NO_ROLE = '__none';
+const COLLECTION_TAG = 'Resource collection';
+const TAGS = [COLLECTION_TAG, 'Kill', 'Arrest', 'Guard', 'Escort', 'Delivery', 'Other'];
 const PRIORITIES = ['Normal', 'Low', 'High', 'Urgent'];
 
-export function Modals({ modal, close, memberNames, update, setJobsView, cfg, sync, offline, onLogout }: {
-  modal: ModalKind; close: () => void; memberNames: string[];
+/** yyyy-mm-dd for a date input, in local time. */
+const toDateInput = (iso: string) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+export function Modals({ modal, close, roles, memberNames, editRole, editJob, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
+  modal: ModalKind; close: () => void; roles: Role[]; memberNames: string[];
+  editRole: Role | null; editJob: Job | null;
   update: (fn: (d: DB) => void) => void; setJobsView: () => void;
-  cfg: SyncCfg | null; sync: SyncStatus; offline: boolean; onLogout: () => void;
+  cfg: SyncCfg | null; sync: SyncStatus; offline: boolean; readOnly: boolean; onLogout: () => void;
 }) {
-  const [collection, setCollection] = useState(false);
+  const [tag, setTag] = useState(editJob?.tag ?? TAGS[0]);
+  // Resource-collection jobs are collection jobs by definition, so the box is
+  // on by default for that tag. Still overridable for the odd exception.
+  const [collection, setCollection] = useState(editJob ? editJob.collection : TAGS[0] === COLLECTION_TAG);
   const [paid, setPaid] = useState(false);
-  const [targets, setTargets] = useState<CollectionTarget[]>([]);
-  const [tag, setTag] = useState(TAGS[0]);
-  const [priority, setPriority] = useState(PRIORITIES[0]);
+  const [guildMember, setGuildMember] = useState(true);
+  const [targets, setTargets] = useState<CollectionTarget[]>(editJob?.items ?? []);
+  const [itemRewards, setItemRewards] = useState<CollectionTarget[]>(editJob?.itemRewards ?? []);
+  const [priority, setPriority] = useState(editJob?.priority ?? PRIORITIES[0]);
+  const [deadlineMode, setDeadlineMode] = useState<'none' | 'date' | 'in'>(editJob?.deadline ? 'date' : 'none');
+  const [durationAmount, setDurationAmount] = useState(1);
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>('weeks');
   const [ledgerType, setLedgerType] = useState<LedgerEntry['type']>('income');
+  const [memberRole, setMemberRole] = useState(roles[0]?.name ?? NO_ROLE);
+  const [advanceRole, setAdvanceRole] = useState(editRole?.advanceTo || NO_ROLE);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
+  const pickTag = (v: string | null) => {
+    const next = v ?? TAGS[0];
+    setTag(next);
+    if (next === COLLECTION_TAG) setCollection(true);
+  };
+
   const titles: Record<ModalKind, string> = {
-    job: 'Post a job',
-    barrel: 'Track a barrel',
+    job: editJob ? 'Edit job' : 'Post a job',
+    barrel: 'Track storage',
     ledger: 'Record a ledger entry',
     member: 'Add a member',
+    role: editRole ? 'Edit role' : 'Create a role',
     sync: 'Guild database',
   };
 
   const submitJob = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
-    const job: Job = {
-      id: uid(),
+
+    let deadline = '';
+    if (deadlineMode === 'date' && f.get('deadline')) {
+      deadline = new Date(String(f.get('deadline'))).toISOString();
+    } else if (deadlineMode === 'in') {
+      deadline = fromNow(durationAmount, durationUnit);
+    }
+
+    const fields = {
       name: String(f.get('name')),
       client: String(f.get('client') || '').trim(),
       contact: String(f.get('contact') || '').trim(),
       faction: String(f.get('faction') || '').trim(),
       tag, priority,
       reward: Number(f.get('reward') || 0),
+      itemRewards,
       description: String(f.get('description') || ''),
       postedBy: String(f.get('postedBy') || '').trim(),
-      postedAt: new Date().toISOString(),
-      deadline: f.get('deadline') ? new Date(String(f.get('deadline'))).toISOString() : '',
-      status: 'open', claimedBy: '',
-      collection, items: targets, entries: [],
+      deadline,
+      collection,
+      items: targets,
     };
+
     close();
+
+    if (editJob) {
+      // Leave status, claimedBy, postedAt and the turn-in log alone — editing
+      // the posting shouldn't rewrite what members have already delivered.
+      update((d) => {
+        const t = d.jobs.find((x) => x.id === editJob.id);
+        if (t) Object.assign(t, fields);
+      });
+      return;
+    }
+
+    const job: Job = {
+      id: uid(),
+      ...fields,
+      postedAt: new Date().toISOString(),
+      status: 'open', claimedBy: '',
+      entries: [],
+    };
     setJobsView();
     update((d) => { d.jobs.push(job); });
+  };
+
+  const submitRole = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const name = String(f.get('name') || '').trim();
+    const desc = String(f.get('desc') || '').trim();
+    if (!name) return;
+
+    const clash = roles.some((r) => r.id !== editRole?.id && r.name.toLowerCase() === name.toLowerCase());
+    if (clash) { setErr(`There is already a role called “${name}”.`); return; }
+
+    const advanceTo = advanceRole === NO_ROLE ? '' : advanceRole;
+    const advanceAfter = advanceTo ? Math.max(1, Number(f.get('advanceAfter') || 1)) : 0;
+
+    close();
+    update((d) => {
+      if (!editRole) { d.roles.push({ id: uid(), name, desc, advanceAfter, advanceTo }); return; }
+      const t = d.roles.find((r) => r.id === editRole.id);
+      if (!t) return;
+      const oldName = t.name;
+      t.name = name;
+      t.desc = desc;
+      t.advanceAfter = advanceAfter;
+      t.advanceTo = advanceTo;
+      // Roles are held by name on the member record, so a rename has to follow.
+      if (oldName !== name) {
+        for (const m of d.members) if (m.role === oldName) m.role = name;
+      }
+    });
   };
 
   const submitBarrel = async (e: FormEvent<HTMLFormElement>) => {
@@ -86,6 +171,7 @@ export function Modals({ modal, close, memberNames, update, setJobsView, cfg, sy
     const b: Barrel = {
       id: uid(),
       owner: String(f.get('owner') || '').trim(),
+      guildMember,
       paid,
       rate: Number(f.get('rate') || 50),
       start: f.get('start') ? new Date(String(f.get('start'))).toISOString() : '',
@@ -117,8 +203,9 @@ export function Modals({ modal, close, memberNames, update, setJobsView, cfg, sy
     const m: Member = {
       id: uid(),
       name: String(f.get('name')).trim(),
-      role: String(f.get('role') || 'Member'),
+      role: memberRole === NO_ROLE ? '' : memberRole,
       joined: new Date().toISOString(),
+      log: [],
     };
     close();
     update((d) => { d.members.push(m); });
@@ -149,32 +236,32 @@ export function Modals({ modal, close, memberNames, update, setJobsView, cfg, sy
         {modal === 'job' && (
           <form onSubmit={submitJob} className="space-y-4">
             <Field label="Job name" htmlFor="job-name">
-              <Input id="job-name" name="name" required placeholder="e.g. Clear the Valtheim towers" />
+              <Input id="job-name" name="name" required defaultValue={editJob?.name ?? ""} placeholder="e.g. Clear the Valtheim towers" />
             </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Posted for (client)" htmlFor="job-client">
                 <NameField id="job-client" name="client" listId="dl-clients" options={memberNames} required
-                  placeholder="Pick a member or write anyone in" />
+                  defaultValue={editJob?.client ?? ""} placeholder="Pick a member or write anyone in" />
               </Field>
               <Field label="Posted by" htmlFor="job-poster">
                 <NameField id="job-poster" name="postedBy" listId="dl-posters" options={memberNames} required
-                  defaultValue={memberNames[0] || ''} placeholder="Pick a member or write in" />
+                  defaultValue={editJob?.postedBy ?? (memberNames[0] || '')} placeholder="Pick a member or write in" />
               </Field>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Contact / where found" htmlFor="job-contact">
-                <Input id="job-contact" name="contact" placeholder="e.g. Bannered Mare, evenings" />
+                <Input id="job-contact" name="contact" defaultValue={editJob?.contact ?? ""} placeholder="e.g. Bannered Mare, evenings" />
               </Field>
               <Field label="Faction association" htmlFor="job-faction">
-                <Input id="job-faction" name="faction" placeholder="e.g. Companions (optional)" />
+                <Input id="job-faction" name="faction" defaultValue={editJob?.faction ?? ""} placeholder="e.g. Companions (optional)" />
               </Field>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Job tag">
-                <Select value={tag} onValueChange={(v) => setTag(v ?? TAGS[0])}>
+                <Select value={tag} onValueChange={pickTag}>
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {TAGS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
@@ -189,18 +276,62 @@ export function Modals({ modal, close, memberNames, update, setJobsView, cfg, sy
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="Reward (septims)" htmlFor="job-reward">
-                <Input id="job-reward" name="reward" type="number" min={0} placeholder="500" />
-              </Field>
             </div>
 
             <Field label="Description" htmlFor="job-desc">
-              <Textarea id="job-desc" name="description" rows={3} placeholder="What the client needs done" />
+              <Textarea id="job-desc" name="description" rows={3} defaultValue={editJob?.description ?? ""} placeholder="What the client needs done" />
             </Field>
 
-            <Field label="Time limit (optional)" htmlFor="job-deadline">
-              <Input id="job-deadline" name="deadline" type="date" />
-            </Field>
+            {/* Reward: septims, items, or both. */}
+            <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Reward
+              </p>
+              <Field label="Septims" htmlFor="job-reward">
+                <Input id="job-reward" name="reward" type="number" min={0} defaultValue={editJob?.reward ? String(editJob.reward) : ""} placeholder="500" />
+              </Field>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Item rewards</Label>
+                <ItemPicker targets={itemRewards} setTargets={setItemRewards} label="Search items to offer…" />
+              </div>
+            </div>
+
+            {/* Time limit: a fixed date, or a span from now. */}
+            <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Time limit
+              </p>
+              <Select value={deadlineMode} onValueChange={(v) => setDeadlineMode((v as typeof deadlineMode) || 'none')}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No time limit</SelectItem>
+                  <SelectItem value="in">A set time from now</SelectItem>
+                  <SelectItem value="date">By a specific date</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {deadlineMode === 'date' && (
+                <Input id="job-deadline" name="deadline" type="date" required defaultValue={toDateInput(editJob?.deadline ?? "")} />
+              )}
+
+              {deadlineMode === 'in' && (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number" min={1} value={durationAmount}
+                    aria-label="Amount of time"
+                    className="w-24"
+                    onChange={(e) => setDurationAmount(Math.max(1, Number(e.target.value || 1)))}
+                  />
+                  <Select value={durationUnit} onValueChange={(v) => setDurationUnit((v as DurationUnit) || 'weeks')}>
+                    <SelectTrigger className="flex-1" aria-label="Unit of time"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {DURATION_UNITS.map((u) => <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <span className="shrink-0 text-xs text-muted-foreground">from now</span>
+                </div>
+              )}
+            </div>
 
             <Label className="flex items-center gap-2.5 text-sm font-normal">
               <Checkbox checked={collection} onCheckedChange={(v) => setCollection(v === true)} />
@@ -213,6 +344,10 @@ export function Modals({ modal, close, memberNames, update, setJobsView, cfg, sy
                   Items to collect
                 </p>
                 <ItemPicker targets={targets} setTargets={setTargets} />
+                <p className="text-xs text-muted-foreground">
+                  Any septim reward is split by how much of these totals each member delivers, after
+                  the guild’s 25% cut.
+                </p>
               </div>
             )}
 
@@ -249,12 +384,18 @@ export function Modals({ modal, close, memberNames, update, setJobsView, cfg, sy
               <Input id="barrel-shot" name="shot" type="file" accept="image/*" className="cursor-pointer" />
             </Field>
 
-            <Label className="flex items-center gap-2.5 text-sm font-normal">
-              <Checkbox checked={paid} onCheckedChange={(v) => setPaid(v === true)} />
-              Paid
-            </Label>
+            <div className="space-y-2.5">
+              <Label className="flex items-center gap-2.5 text-sm font-normal">
+                <Checkbox checked={guildMember} onCheckedChange={(v) => setGuildMember(v === true)} />
+                Guild member storage
+              </Label>
+              <Label className="flex items-center gap-2.5 text-sm font-normal">
+                <Checkbox checked={paid} onCheckedChange={(v) => setPaid(v === true)} />
+                Paid
+              </Label>
+            </div>
 
-            {footer('Add barrel')}
+            {footer('Add storage')}
           </form>
         )}
 
@@ -293,10 +434,76 @@ export function Modals({ modal, close, memberNames, update, setJobsView, cfg, sy
             <Field label="Name" htmlFor="member-name">
               <Input id="member-name" name="name" required placeholder="e.g. Lydia of Whiterun" />
             </Field>
-            <Field label="Role" htmlFor="member-role">
-              <Input id="member-role" name="role" defaultValue="Member" />
+            <Field label="Role">
+              <Select value={memberRole} onValueChange={(v) => setMemberRole(v || NO_ROLE)}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_ROLE}>No role</SelectItem>
+                  {roles.map((r) => <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </Field>
+            {roles.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No roles exist yet — create them under Roles, then assign them here or on the roster.
+              </p>
+            )}
             {footer('Add member')}
+          </form>
+        )}
+
+        {modal === 'role' && (
+          <form onSubmit={submitRole} className="space-y-4">
+            <Field label="Role name" htmlFor="role-name">
+              <Input
+                id="role-name" name="name" required autoFocus
+                defaultValue={editRole?.name ?? ''} placeholder="e.g. Quartermaster"
+              />
+            </Field>
+            <Field label="What this role does (optional)" htmlFor="role-desc">
+              <Textarea
+                id="role-desc" name="desc" rows={2}
+                defaultValue={editRole?.desc ?? ''}
+                placeholder="e.g. Keeps the stores and logs turn-ins"
+              />
+            </Field>
+            {/* Progression track: how a member graduates out of this role.
+                This is what models blooding — Initiate, 3 credits, Saberblooded. */}
+            <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Progression (optional)
+              </p>
+              <Field label="Advances to">
+                <Select value={advanceRole} onValueChange={(v) => setAdvanceRole(v || NO_ROLE)}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_ROLE}>No progression</SelectItem>
+                    {roles
+                      .filter((r) => r.id !== editRole?.id)
+                      .map((r) => <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
+              {advanceRole !== NO_ROLE && (
+                <Field label="Completions required" htmlFor="role-after">
+                  <Input
+                    id="role-after" name="advanceAfter" type="number" min={1}
+                    defaultValue={editRole?.advanceAfter || 3}
+                  />
+                </Field>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Members in this role get a progress bar on the roster, and can be promoted once they
+                hit the number of logged completions.
+              </p>
+            </div>
+
+            {editRole && (
+              <p className="text-xs text-muted-foreground">
+                Renaming this role updates everyone currently holding it.
+              </p>
+            )}
+            {footer(editRole ? 'Save role' : 'Create role')}
           </form>
         )}
 
@@ -318,6 +525,15 @@ export function Modals({ modal, close, memberNames, update, setJobsView, cfg, sy
                   {offline
                     ? 'Can’t reach the server. You’re looking at the last synced copy — changes made now may not stick.'
                     : 'The last save failed. The app keeps retrying automatically.'}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {readOnly && (
+              <Alert className="border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-400">
+                <AlertDescription>
+                  You’re signed in with the guest password — you can read the board but not change it.
+                  Sign out and use the guild password to edit.
                 </AlertDescription>
               </Alert>
             )}

@@ -2,10 +2,33 @@ export type JobStatus = 'open' | 'claimed' | 'done';
 export type LedgerType = 'income' | 'expense';
 export type Theme = 'dark' | 'light';
 
-/** One line on a collection job's shopping list: what to gather, and how many. */
+/** One line on a collection job's shopping list: what to gather, and how many.
+ *  Also used for item rewards, which have the same shape. */
 export interface CollectionTarget {
   item: string;
   qty: number;
+}
+
+/** A guild rank that can be assigned to roster members. */
+export interface Role {
+  id: string;
+  name: string;
+  desc: string;
+  /** Credits needed to advance out of this role. 0 = no progression track. */
+  advanceAfter: number;
+  /** Role name a member moves into once advanceAfter is met. */
+  advanceTo: string;
+}
+
+/** A line on a member's record: either a completion that counts toward
+ *  advancement, or a plain note. Mirrors how blooding is tracked in Discord. */
+export interface MemberEntry {
+  id: string;
+  kind: 'credit' | 'note';
+  text: string;
+  jobId: string; // optional link to the job it came from
+  by: string; // who logged it
+  at: string;
 }
 
 /** A member's turn-in against a collection job. */
@@ -24,7 +47,8 @@ export interface Job {
   faction: string;
   tag: string;
   priority: string;
-  reward: number;
+  reward: number; // septims
+  itemRewards: CollectionTarget[];
   description: string;
   postedBy: string;
   postedAt: string;
@@ -36,9 +60,12 @@ export interface Job {
   entries: CollectionEntry[];
 }
 
+/** A storage container (barrel/chest) the guild is tracking. The DB key stays
+ *  `barrels` for compatibility with existing records; the UI calls it Storage. */
 export interface Barrel {
   id: string;
   owner: string;
+  guildMember: boolean;
   paid: boolean;
   rate: number; // septims per week
   start: string;
@@ -62,10 +89,12 @@ export interface Member {
   role: string;
   name: string;
   joined: string;
+  log: MemberEntry[];
 }
 
 export interface DB {
   members: Member[];
+  roles: Role[];
   jobs: Job[];
   barrels: Barrel[];
   ledger: LedgerEntry[];
@@ -75,5 +104,9 @@ export interface DB {
 export interface SyncCfg {
   password: string;
 }
+
+/** What the server says this password is allowed to do. Guests are read-only,
+ *  enforced by the Worker rather than just hidden in the UI. */
+export type AccessRole = 'member' | 'guest';
 
 export type SyncStatus = 'local' | 'syncing' | 'synced' | 'error' | 'denied';

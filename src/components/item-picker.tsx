@@ -8,9 +8,10 @@ import { searchItems } from '@/items';
 import type { CollectionTarget } from '@/types';
 
 /** Searchable Skyrim-item combobox that builds a collection job's shopping list. */
-export function ItemPicker({ targets, setTargets }: {
+export function ItemPicker({ targets, setTargets, label = 'Search Skyrim items…' }: {
   targets: CollectionTarget[];
   setTargets: (fn: (t: CollectionTarget[]) => CollectionTarget[]) => void;
+  label?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -34,7 +35,7 @@ export function ItemPicker({ targets, setTargets }: {
         <PopoverTrigger
           render={
             <Button type="button" variant="outline" className="w-full justify-between font-normal">
-              <span className="text-muted-foreground">Search Skyrim items…</span>
+              <span className="text-muted-foreground">{label}</span>
               <Plus />
             </Button>
           }

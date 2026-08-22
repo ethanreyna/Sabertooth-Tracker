@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Coins, LayoutDashboard, Moon, Package, Settings, Shield, Sun, Users, Briefcase,
+  Coins, LayoutDashboard, Moon, Package, Settings, Shield, ShieldHalf, Sun, Users, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,38 +10,45 @@ import { Modals } from '@/components/modals';
 import type { ModalKind } from '@/components/modals';
 import { Dashboard } from '@/views/dashboard';
 import { Jobs } from '@/views/jobs';
-import { Barrels } from '@/views/barrels';
+import { Storage } from '@/views/storage';
 import { Ledger } from '@/views/ledger';
 import { Roster } from '@/views/roster';
+import { Roles } from '@/views/roles';
 import { emptyDb } from '@/data';
 import { applyTheme, loadTheme } from '@/theme';
 import {
-  AuthError, ConflictError, clearLocal, loadCfg, loadLocal, pullDb, pushDb, saveCfg, saveLocal,
+  AuthError, ConflictError, ReadOnlyError, clearLocal, loadCfg, loadLocal, pullDb, pushDb, saveCfg, saveLocal,
 } from '@/sync';
 import { cn } from '@/lib/utils';
-import type { DB, SyncCfg, SyncStatus, Theme } from '@/types';
+import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
-type View = 'dash' | 'jobs' | 'barrels' | 'ledger' | 'roster';
+type View = 'dash' | 'jobs' | 'storage' | 'ledger' | 'roster' | 'roles';
+
+/** What a read-only guest is allowed to see. */
+const GUEST_VIEWS: View[] = ['jobs', 'storage', 'roster'];
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
 const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard /> },
   { id: 'jobs', label: 'Jobs', icon: <Briefcase /> },
-  { id: 'barrels', label: 'Barrels', icon: <Package /> },
+  { id: 'storage', label: 'Storage', icon: <Package /> },
   { id: 'ledger', label: 'Ledger', icon: <Coins /> },
   { id: 'roster', label: 'Roster', icon: <Users /> },
+  { id: 'roles', label: 'Roles', icon: <ShieldHalf /> },
 ];
 
 const TITLES: Record<View, string> = {
-  dash: 'Dashboard', jobs: 'Jobs', barrels: 'Barrels', ledger: 'Ledger', roster: 'Roster',
+  dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', ledger: 'Ledger',
+  roster: 'Roster', roles: 'Roles',
 };
 
 const ACTIONS: Partial<Record<View, { label: string; modal: ModalKind }>> = {
   jobs: { label: 'New job', modal: 'job' },
-  barrels: { label: 'New barrel', modal: 'barrel' },
+  storage: { label: 'New storage', modal: 'barrel' },
   ledger: { label: 'New entry', modal: 'ledger' },
   roster: { label: 'Add member', modal: 'member' },
+  roles: { label: 'New role', modal: 'role' },
 };
 
 export default function App() {
@@ -50,6 +57,9 @@ export default function App() {
   const [db, setDb] = useState<DB>(() => loadLocal() ?? emptyDb());
   const [exp, setExp] = useState<Record<string, boolean>>({});
   const [modal, setModal] = useState<ModalKind | null>(null);
+  const [editRoleId, setEditRoleId] = useState<string | null>(null);
+  const [editJobId, setEditJobId] = useState<string | null>(null);
+  const [access, setAccess] = useState<AccessRole>('member');
   const [sync, setSync] = useState<SyncStatus>('syncing');
   const [theme, setTheme] = useState<Theme>(() => loadTheme());
   const [cfg, setCfg] = useState<SyncCfg | null>(() => loadCfg());
@@ -60,6 +70,8 @@ export default function App() {
   cfgRef.current = cfg;
   const bootedRef = useRef(booted);
   bootedRef.current = booted;
+  const accessRef = useRef(access);
+  accessRef.current = access;
   const versionRef = useRef(0);
   const pendingRef = useRef<Array<(d: DB) => void>>([]);
   const inFlightRef = useRef(false);
@@ -96,6 +108,12 @@ export default function App() {
         setSync('syncing');
       } else if (e instanceof AuthError) {
         setSync('denied');
+      } else if (e instanceof ReadOnlyError) {
+        // The server refused a write we shouldn't have offered. Drop the queued
+        // edits rather than retrying forever; the next poll restores its copy.
+        pendingRef.current = [];
+        setAccess('guest');
+        setSync('synced');
       } else {
         setSync('error');
       }
@@ -113,8 +131,9 @@ export default function App() {
     // Don't overwrite local edits that haven't landed yet.
     if (!c || pendingRef.current.length || inFlightRef.current) return;
     try {
-      const { db: rec, version } = await pullDb(c);
+      const { db: rec, version, role } = await pullDb(c);
       versionRef.current = version;
+      setAccess(role);
       if (JSON.stringify(rec) !== JSON.stringify(dbRef.current)) commit(rec);
       setOffline(false);
       setSync('synced');
@@ -150,6 +169,8 @@ export default function App() {
   }, [cfg, pull]);
 
   const update = useCallback((fn: (d: DB) => void) => {
+    // Guests can't write. The UI hides the controls; this is the backstop.
+    if (accessRef.current !== 'member') return;
     const next = clone(dbRef.current);
     fn(next);
     commit(next);
@@ -164,9 +185,11 @@ export default function App() {
   // server's copy always wins — nothing local is ever uploaded on sign-in.
   const login = useCallback(async (password: string) => {
     const c: SyncCfg = { password };
-    const { db: rec, version } = await pullDb(c);
+    const { db: rec, version, role } = await pullDb(c);
     versionRef.current = version;
     pendingRef.current = [];
+    setAccess(role);
+    if (role !== 'member') setView('jobs');
     commit(rec);
     saveCfg(c);
     setCfg(c);
@@ -185,6 +208,8 @@ export default function App() {
     setBooted(false);
     setDb(emptyDb());
     setModal(null);
+    setAccess('member');
+    setView('dash');
     setSync('syncing');
   }, []);
 
@@ -213,7 +238,9 @@ export default function App() {
     );
   }
 
-  const action = ACTIONS[view];
+  const readOnly = access !== 'member';
+  const nav = readOnly ? NAV.filter((n) => GUEST_VIEWS.includes(n.id)) : NAV;
+  const action = readOnly ? undefined : ACTIONS[view];
 
   return (
     <div className="flex h-svh overflow-hidden">
@@ -229,7 +256,7 @@ export default function App() {
         </div>
 
         <nav className="flex flex-col gap-0.5 p-2">
-          {NAV.map((n) => (
+          {nav.map((n) => (
             <button
               key={n.id}
               type="button"
@@ -268,6 +295,11 @@ export default function App() {
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-13 shrink-0 items-center gap-3 border-b px-4">
           <h1 className="text-[15px] font-semibold">{TITLES[view]}</h1>
+          {readOnly && (
+            <span className="rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-700 dark:text-sky-400">
+              View only
+            </span>
+          )}
           <div className="ml-auto flex items-center gap-2">
             {view === 'jobs' && (
               <Input
@@ -281,7 +313,7 @@ export default function App() {
 
         {/* Mobile nav: the sidebar is hidden below md. */}
         <nav className="flex shrink-0 gap-1 overflow-x-auto border-b px-2 py-1.5 md:hidden">
-          {NAV.map((n) => (
+          {nav.map((n) => (
             <button
               key={n.id}
               type="button"
@@ -298,24 +330,43 @@ export default function App() {
 
         <div className="flex-1 overflow-y-auto bg-muted/40 p-4">
           {view === 'dash' && <Dashboard db={db} income={income} spend={spend} />}
-          {view === 'jobs' && <Jobs db={db} q={q} exp={exp} setExp={setExp} memberNames={memberNames} update={update} />}
-          {view === 'barrels' && <Barrels db={db} update={update} />}
+          {view === 'jobs' && (
+            <Jobs
+              db={db} q={q} exp={exp} setExp={setExp} memberNames={memberNames} update={update}
+              readOnly={readOnly}
+              onEdit={(id) => { setEditJobId(id); setModal('job'); }}
+            />
+          )}
+          {view === 'storage' && <Storage db={db} update={update} readOnly={readOnly} />}
           {view === 'ledger' && <Ledger db={db} income={income} spend={spend} />}
-          {view === 'roster' && <Roster db={db} update={update} />}
+          {view === 'roster' && <Roster db={db} update={update} readOnly={readOnly} />}
+          {view === 'roles' && (
+            <Roles
+              db={db}
+              update={update}
+              readOnly={readOnly}
+              onEdit={(id) => { setEditRoleId(id); setModal('role'); }}
+            />
+          )}
         </div>
       </main>
 
-      {modal && (
+      {/* Guests get the connection dialog (to sign out) but no editing dialogs. */}
+      {modal && (!readOnly || modal === 'sync') && (
         <Modals
-          key={modal}
+          key={`${modal}:${editRoleId ?? editJobId ?? 'new'}`}
           modal={modal}
-          close={() => setModal(null)}
+          close={() => { setModal(null); setEditRoleId(null); setEditJobId(null); }}
+          roles={db.roles}
           memberNames={memberNames}
+          editRole={db.roles.find((r) => r.id === editRoleId) ?? null}
+          editJob={db.jobs.find((j) => j.id === editJobId) ?? null}
           update={update}
           setJobsView={() => setView('jobs')}
           cfg={cfg}
           sync={sync}
           offline={offline}
+          readOnly={readOnly}
           onLogout={logout}
         />
       )}
