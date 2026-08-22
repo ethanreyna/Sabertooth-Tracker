@@ -1,23 +1,32 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { Moon, Shield, Sun } from 'lucide-react';
+import { Eye, Moon, Shield, Sun } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
 import { Field } from '@/components/bits';
 import { AuthError } from '@/sync';
 import type { Theme } from '@/types';
 
 /** The password gate. Nothing renders behind this until the server says yes. */
-export function Login({ onLogin, theme, toggleTheme }: {
+export function Login({ onLogin, onGuest, theme, toggleTheme }: {
   onLogin: (password: string) => Promise<void>;
+  onGuest: () => Promise<void>;
   theme: Theme;
   toggleTheme: () => void;
 }) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+
+  const fail = (e: unknown) => {
+    setErr(e instanceof AuthError
+      ? 'That password was rejected. Check it with your guildmaster.'
+      : 'Could not reach the guild server. Check your connection and try again.');
+    setBusy(false);
+  };
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -27,10 +36,17 @@ export function Login({ onLogin, theme, toggleTheme }: {
     try {
       await onLogin(password.trim());
     } catch (e2) {
-      setErr(e2 instanceof AuthError
-        ? 'That password was rejected. Check it with your guildmaster.'
-        : 'Could not reach the guild server. Check your connection and try again.');
-      setBusy(false);
+      fail(e2);
+    }
+  };
+
+  const enterAsGuest = async () => {
+    setBusy(true);
+    setErr('');
+    try {
+      await onGuest();
+    } catch (e2) {
+      fail(e2);
     }
   };
 
@@ -44,7 +60,7 @@ export function Login({ onLogin, theme, toggleTheme }: {
             </div>
             <div className="min-w-0 flex-1 leading-tight">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Keizaal</p>
-              <p className="text-sm font-bold tracking-tight">Sabertooth Adventurers</p>
+              <p className="text-sm font-bold tracking-tight">Sabretooth Adventurers</p>
             </div>
             <Button
               type="button" variant="ghost" size="icon-sm" onClick={toggleTheme}
@@ -57,7 +73,6 @@ export function Login({ onLogin, theme, toggleTheme }: {
           <p className="text-sm text-muted-foreground">
             Enter the guild password to open the shared job board, storage register, and ledger.
             Everything you change is saved to the guild database and shows up for everyone else.
-            A guest password, if your guildmaster has set one, gives a read-only view.
           </p>
 
           {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
@@ -74,6 +89,22 @@ export function Login({ onLogin, theme, toggleTheme }: {
               {busy ? 'Checking…' : 'Enter the guild hall'}
             </Button>
           </form>
+
+          <div className="flex items-center gap-3">
+            <Separator className="flex-1" />
+            <span className="text-xs text-muted-foreground">or</span>
+            <Separator className="flex-1" />
+          </div>
+
+          <div className="space-y-1.5">
+            <Button type="button" variant="outline" className="w-full" disabled={busy} onClick={enterAsGuest}>
+              <Eye />
+              Enter as Guest
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Read-only. You’ll see the job board, storage, and roster, but can’t change anything.
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>

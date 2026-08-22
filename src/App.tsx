@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Coins, LayoutDashboard, Moon, Package, Settings, Shield, ShieldHalf, Sun, Users, Briefcase,
+  Coins, LayoutDashboard, Moon, Package, Settings, Shield, ShieldHalf, Skull, Sun, Users, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import { Storage } from '@/views/storage';
 import { Ledger } from '@/views/ledger';
 import { Roster } from '@/views/roster';
 import { Roles } from '@/views/roles';
+import { Dungeons } from '@/views/dungeons';
 import { emptyDb } from '@/data';
 import { applyTheme, loadTheme } from '@/theme';
 import {
@@ -22,10 +23,10 @@ import {
 import { cn } from '@/lib/utils';
 import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
-type View = 'dash' | 'jobs' | 'storage' | 'ledger' | 'roster' | 'roles';
+type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'ledger' | 'roster' | 'roles';
 
 /** What a read-only guest is allowed to see. */
-const GUEST_VIEWS: View[] = ['jobs', 'storage', 'roster'];
+const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'roster'];
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -33,19 +34,21 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard /> },
   { id: 'jobs', label: 'Jobs', icon: <Briefcase /> },
   { id: 'storage', label: 'Storage', icon: <Package /> },
+  { id: 'dungeons', label: 'Dungeons', icon: <Skull /> },
   { id: 'ledger', label: 'Ledger', icon: <Coins /> },
   { id: 'roster', label: 'Roster', icon: <Users /> },
   { id: 'roles', label: 'Roles', icon: <ShieldHalf /> },
 ];
 
 const TITLES: Record<View, string> = {
-  dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', ledger: 'Ledger',
+  dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', ledger: 'Ledger',
   roster: 'Roster', roles: 'Roles',
 };
 
 const ACTIONS: Partial<Record<View, { label: string; modal: ModalKind }>> = {
   jobs: { label: 'New job', modal: 'job' },
   storage: { label: 'New storage', modal: 'barrel' },
+  dungeons: { label: 'New dungeon', modal: 'dungeon' },
   ledger: { label: 'New entry', modal: 'ledger' },
   roster: { label: 'Add member', modal: 'member' },
   roles: { label: 'New role', modal: 'role' },
@@ -59,6 +62,8 @@ export default function App() {
   const [modal, setModal] = useState<ModalKind | null>(null);
   const [editRoleId, setEditRoleId] = useState<string | null>(null);
   const [editJobId, setEditJobId] = useState<string | null>(null);
+  const [editBarrelId, setEditBarrelId] = useState<string | null>(null);
+  const [editDungeonId, setEditDungeonId] = useState<string | null>(null);
   const [access, setAccess] = useState<AccessRole>('member');
   const [sync, setSync] = useState<SyncStatus>('syncing');
   const [theme, setTheme] = useState<Theme>(() => loadTheme());
@@ -183,8 +188,7 @@ export default function App() {
 
   // Verifies the password against the server before letting anyone in. The
   // server's copy always wins — nothing local is ever uploaded on sign-in.
-  const login = useCallback(async (password: string) => {
-    const c: SyncCfg = { password };
+  const start = useCallback(async (c: SyncCfg) => {
     const { db: rec, version, role } = await pullDb(c);
     versionRef.current = version;
     pendingRef.current = [];
@@ -197,6 +201,11 @@ export default function App() {
     setBooted(true);
     setSync('synced');
   }, [commit]);
+
+  const login = useCallback((password: string) => start({ password, guest: false }), [start]);
+
+  /** No password: the Worker serves guests anonymously, read-only and redacted. */
+  const enterAsGuest = useCallback(() => start({ password: '', guest: true }), [start]);
 
   const logout = useCallback(() => {
     window.clearTimeout(pushT.current);
@@ -229,7 +238,7 @@ export default function App() {
 
   // Nothing is usable without the guild password: the tracker is the shared
   // database, not a local notebook that might sync later.
-  if (!cfg) return <Login onLogin={login} theme={theme} toggleTheme={toggleTheme} />;
+  if (!cfg) return <Login onLogin={login} onGuest={enterAsGuest} theme={theme} toggleTheme={toggleTheme} />;
   if (!booted) {
     return (
       <div className="flex min-h-svh items-center justify-center text-sm text-muted-foreground">
@@ -251,7 +260,7 @@ export default function App() {
           </div>
           <div className="min-w-0 leading-tight">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Keizaal</p>
-            <p className="truncate text-xs font-bold tracking-tight">Sabertooth Adventurers</p>
+            <p className="truncate text-xs font-bold tracking-tight">Sabretooth Adventurers</p>
           </div>
         </div>
 
@@ -337,7 +346,18 @@ export default function App() {
               onEdit={(id) => { setEditJobId(id); setModal('job'); }}
             />
           )}
-          {view === 'storage' && <Storage db={db} update={update} readOnly={readOnly} />}
+          {view === 'storage' && (
+            <Storage
+              db={db} update={update} readOnly={readOnly}
+              onEdit={(id) => { setEditBarrelId(id); setModal('barrel'); }}
+            />
+          )}
+          {view === 'dungeons' && (
+            <Dungeons
+              db={db} update={update} readOnly={readOnly}
+              onEdit={(id) => { setEditDungeonId(id); setModal('dungeon'); }}
+            />
+          )}
           {view === 'ledger' && <Ledger db={db} income={income} spend={spend} />}
           {view === 'roster' && <Roster db={db} update={update} readOnly={readOnly} />}
           {view === 'roles' && (
@@ -354,13 +374,19 @@ export default function App() {
       {/* Guests get the connection dialog (to sign out) but no editing dialogs. */}
       {modal && (!readOnly || modal === 'sync') && (
         <Modals
-          key={`${modal}:${editRoleId ?? editJobId ?? 'new'}`}
+          key={`${modal}:${editRoleId ?? editJobId ?? editBarrelId ?? editDungeonId ?? 'new'}`}
           modal={modal}
-          close={() => { setModal(null); setEditRoleId(null); setEditJobId(null); }}
+          close={() => {
+            setModal(null);
+            setEditRoleId(null); setEditJobId(null);
+            setEditBarrelId(null); setEditDungeonId(null);
+          }}
           roles={db.roles}
           memberNames={memberNames}
           editRole={db.roles.find((r) => r.id === editRoleId) ?? null}
           editJob={db.jobs.find((j) => j.id === editJobId) ?? null}
+          editBarrel={db.barrels.find((b) => b.id === editBarrelId) ?? null}
+          editDungeon={db.dungeons.find((g) => g.id === editDungeonId) ?? null}
           update={update}
           setJobsView={() => setView('jobs')}
           cfg={cfg}

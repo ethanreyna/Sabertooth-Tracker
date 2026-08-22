@@ -16,6 +16,7 @@ const TONES = {
 } as const;
 
 export type Tone = keyof typeof TONES;
+export { TONES };
 
 export function TonedBadge({ tone, className, children }: { tone: Tone; className?: string; children: ReactNode }) {
   return <Badge variant="outline" className={cn(TONES[tone], className)}>{children}</Badge>;

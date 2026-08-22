@@ -61,9 +61,12 @@ function SelectContent({
   children,
   side = "bottom",
   sideOffset = 4,
-  align = "center",
+  align = "start",
   alignOffset = 0,
-  alignItemWithTrigger = true,
+  // Base UI defaults this to true, which slides the popup so the *selected*
+  // item lands on the trigger — it reads as a menu floating mid-screen. Anchor
+  // it under the trigger like a normal dropdown instead.
+  alignItemWithTrigger = false,
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<

@@ -75,6 +75,19 @@ export interface Barrel {
   at: string;
 }
 
+/** A dungeon the guild has scouted: where it is, and what it takes to clear. */
+export interface Dungeon {
+  id: string;
+  name: string;
+  location: string;
+  recommended: number; // suggested party size
+  difficulty: string;
+  notes: string;
+  imgs: string[]; // map screenshots (R2 URLs)
+  addedBy: string;
+  at: string;
+}
+
 export interface LedgerEntry {
   id: string;
   type: LedgerType;
@@ -97,12 +110,15 @@ export interface DB {
   roles: Role[];
   jobs: Job[];
   barrels: Barrel[];
+  dungeons: Dungeon[];
   ledger: LedgerEntry[];
 }
 
-/** Credentials for the shared guild database (the Worker's guild password). */
+/** How this browser is talking to the guild database. A guest session carries
+ *  no password and is served anonymously, read-only. */
 export interface SyncCfg {
   password: string;
+  guest: boolean;
 }
 
 /** What the server says this password is allowed to do. Guests are read-only,

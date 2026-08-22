@@ -1,6 +1,7 @@
-import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Job, LedgerEntry, Member, MemberEntry, Role, SyncCfg } from './types';
+import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, MemberEntry, Role, SyncCfg } from './types';
 
-const CFG_KEY = 'sabertooth-auth';
+const CFG_KEY = 'sabretooth-auth';
+const LEGACY_CFG_KEY = 'sabertooth-auth'; // pre-rename; read once so nobody is logged out
 const DB_KEY = 'keizaal-db'; // unchanged so existing local data survives the upgrade
 
 /** Server rejected the write because someone else saved first. */
@@ -29,8 +30,11 @@ export class ReadOnlyError extends Error {
 
 export function loadCfg(): SyncCfg | null {
   try {
-    const c = JSON.parse(localStorage.getItem(CFG_KEY) || 'null');
-    return c && typeof c.password === 'string' && c.password ? { password: c.password } : null;
+    const raw = localStorage.getItem(CFG_KEY) ?? localStorage.getItem(LEGACY_CFG_KEY);
+    const c = JSON.parse(raw || 'null');
+    if (!c) return null;
+    if (c.guest === true) return { password: '', guest: true };
+    return typeof c.password === 'string' && c.password ? { password: c.password, guest: false } : null;
   } catch {
     return null;
   }
@@ -40,6 +44,7 @@ export function saveCfg(cfg: SyncCfg | null): void {
   try {
     if (cfg) localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
     else localStorage.removeItem(CFG_KEY);
+    localStorage.removeItem(LEGACY_CFG_KEY);
   } catch {
     /* ignore */
   }
@@ -71,7 +76,9 @@ export function clearLocal(): void {
   }
 }
 
-const auth = (cfg: SyncCfg) => ({ Authorization: 'Bearer ' + cfg.password });
+/** Guests send no credential at all; the Worker serves them anonymously. */
+const auth = (cfg: SyncCfg): Record<string, string> =>
+  cfg.guest || !cfg.password ? {} : { Authorization: 'Bearer ' + cfg.password };
 
 export async function pullDb(cfg: SyncCfg): Promise<{ db: DB; version: number; role: AccessRole }> {
   const r = await fetch('/api/db', { headers: auth(cfg) });
@@ -208,6 +215,17 @@ export function normalizeDb(raw: unknown): DB {
         start: s(x.start), end: s(x.end), notes: s(x.notes), img: s(x.img), at: s(x.at),
       };
     }),
+    dungeons: arr(o.dungeons).map((g): Dungeon => {
+      const x = (g || {}) as Record<string, unknown>;
+      return {
+        id: s(x.id) || Math.random().toString(36).slice(2, 10),
+        name: s(x.name), location: s(x.location),
+        recommended: Math.max(0, n(x.recommended, 1)),
+        difficulty: s(x.difficulty), notes: s(x.notes),
+        imgs: arr(x.imgs).map((u) => s(u)).filter(Boolean),
+        addedBy: s(x.addedBy), at: s(x.at),
+      };
+    }).filter((g) => g.name),
     ledger: arr(o.ledger).map((l): LedgerEntry => {
       const x = (l || {}) as Record<string, unknown>;
       return {

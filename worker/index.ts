@@ -1,6 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 
-// Sabertooth Tracker backend.
+// Sabretooth Tracker backend.
 //
 //   GET  /api/db        -> { db, version }
 //   PUT  /api/db        -> { version }        body: { db, version }   409 on stale version
@@ -16,13 +16,15 @@ interface Env {
   IMAGES: R2Bucket;
   ASSETS: Fetcher;
   GUILD_PASSWORD: string;
-  /** Optional. When set, grants read-only access. Unset = no guest access. */
-  GUEST_PASSWORD?: string;
 }
 
 type Role = 'member' | 'guest';
 
-const EMPTY_DB = { members: [], jobs: [], barrels: [], ledger: [] };
+/** Sections a guest never receives. The UI hides them too, but stripping them
+ *  server-side means an anonymous caller can't just read them off /api/db. */
+const GUEST_HIDDEN = ['ledger'] as const;
+
+const EMPTY_DB = { members: [], roles: [], jobs: [], barrels: [], dungeons: [], ledger: [] };
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_DB_BYTES = 8 * 1024 * 1024;
 
@@ -40,15 +42,25 @@ function secretEquals(a: string, b: string): boolean {
   return crypto.subtle.timingSafeEqual(ea, eb);
 }
 
-/** Members can write; guests can only read. Null means no valid password. */
-function authRole(req: Request, env: Env): Role | null {
+/**
+ * Members present the guild password and can write. Anyone else is a guest:
+ * read-only, and served a redacted copy. A wrong password is rejected outright
+ * rather than silently downgraded, so a typo doesn't look like it worked.
+ */
+function authRole(req: Request, env: Env): Role | 'bad' {
   const m = /^Bearer\s+(.+)$/i.exec(req.headers.get('Authorization') || '');
-  if (!m) return null;
-  const given = m[1];
+  if (!m) return 'guest';
   // Never allow-all: an unset GUILD_PASSWORD denies rather than admits.
-  if (env.GUILD_PASSWORD && secretEquals(given, env.GUILD_PASSWORD)) return 'member';
-  if (env.GUEST_PASSWORD && secretEquals(given, env.GUEST_PASSWORD)) return 'guest';
-  return null;
+  if (env.GUILD_PASSWORD && secretEquals(m[1], env.GUILD_PASSWORD)) return 'member';
+  return 'bad';
+}
+
+/** Strips member-only sections so a guest never receives them at all. */
+function redactForGuest(db: unknown): unknown {
+  if (!db || typeof db !== 'object') return db;
+  const out = { ...(db as Record<string, unknown>) };
+  for (const k of GUEST_HIDDEN) out[k] = [];
+  return out;
 }
 
 let schemaReady: Promise<unknown> | null = null;
@@ -103,7 +115,7 @@ async function handleApi(req: Request, env: Env, url: URL): Promise<Response> {
   }
 
   const role = authRole(req, env);
-  if (!role) {
+  if (role === 'bad') {
     return json({ error: 'unauthorized' }, 401);
   }
 
@@ -116,7 +128,12 @@ async function handleApi(req: Request, env: Env, url: URL): Promise<Response> {
     await ensureSchema(env);
 
     if (req.method === 'GET') {
-      return json({ ...(await readDoc(env)), role });
+      const doc = await readDoc(env);
+      return json({
+        db: role === 'member' ? doc.db : redactForGuest(doc.db),
+        version: doc.version,
+        role,
+      });
     }
 
     if (req.method === 'PUT') {

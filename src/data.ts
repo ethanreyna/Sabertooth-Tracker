@@ -3,7 +3,7 @@ import type { DB } from './types';
 const d = (days: number) => new Date(Date.now() - days * 864e5).toISOString();
 const f = (days: number) => new Date(Date.now() + days * 864e5).toISOString();
 
-export const emptyDb = (): DB => ({ members: [], roles: [], jobs: [], barrels: [], ledger: [] });
+export const emptyDb = (): DB => ({ members: [], roles: [], jobs: [], barrels: [], dungeons: [], ledger: [] });
 
 /** Sensible starting ranks, offered when the roster has no roles yet. The
  *  Initiate -> Saberblooded track mirrors the guild's blooding process. */
@@ -73,6 +73,20 @@ export const demoDb = (): DB => ({
   barrels: [
     { id: 'b1', owner: 'Waxillius Scadrian', guildMember: true, paid: true, rate: 50, start: d(5), end: f(9), notes: 'Riverwood — behind the smithy, third barrel', img: '', at: d(5) },
     { id: 'b2', owner: 'Hide the Mute', guildMember: true, paid: false, rate: 50, start: d(2), end: f(12), notes: 'Whiterun — by the guild cellar door', img: '', at: d(2) },
+  ],
+  dungeons: [
+    {
+      id: 'dg1', name: 'Bleak Falls Barrow', location: 'Above Riverwood, up the mountain path',
+      recommended: 2, difficulty: 'Moderate',
+      notes: 'Draugr throughout, one Draugr Overlord at the end. Watch the swinging gate puzzle.',
+      imgs: [], addedBy: 'Karina', at: d(9),
+    },
+    {
+      id: 'dg2', name: 'Valtheim Towers', location: 'White River, east of Whiterun',
+      recommended: 3, difficulty: 'Easy',
+      notes: 'Bandits, archers on the bridge. Approach from the road side.',
+      imgs: [], addedBy: 'Zahir Alazar', at: d(6),
+    },
   ],
   ledger: [
     { id: 'l1', type: 'income', amount: 2000, desc: 'Bounty payout — Valtheim towers', by: 'Karina', at: d(1) },

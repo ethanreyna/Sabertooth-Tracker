@@ -1,4 +1,4 @@
-import { ImageIcon } from 'lucide-react';
+import { ImageIcon, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState, TonedBadge } from '@/components/bits';
@@ -6,8 +6,9 @@ import { dstr, sep } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { DB } from '@/types';
 
-export function Storage({ db, update, readOnly }: {
+export function Storage({ db, update, readOnly, onEdit }: {
   db: DB; update: (fn: (d: DB) => void) => void; readOnly: boolean;
+  onEdit: (id: string) => void;
 }) {
   const now = Date.now();
   const units = db.barrels.slice().sort((a, b) => (b.at || '').localeCompare(a.at || ''));
@@ -70,16 +71,24 @@ export function Storage({ db, update, readOnly }: {
                   {expired ? `Expired ${Math.abs(left!)}d ago` : left === null ? '' : `${left} days left`}
                 </span>
                 {!readOnly && (
-                  <Button
-                    variant="ghost" size="xs" className="ml-auto text-destructive"
-                    onClick={() => {
-                      if (confirm('Remove this storage entry?')) {
-                        update((d) => { d.barrels = d.barrels.filter((x) => x.id !== b.id); });
-                      }
-                    }}
-                  >
-                    Remove
-                  </Button>
+                  <>
+                    <Button
+                      variant="ghost" size="icon-xs" className="ml-auto"
+                      aria-label={`Edit ${b.owner}'s storage`} onClick={() => onEdit(b.id)}
+                    >
+                      <Pencil />
+                    </Button>
+                    <Button
+                      variant="ghost" size="xs" className="text-destructive"
+                      onClick={() => {
+                        if (confirm('Remove this storage entry?')) {
+                          update((d) => { d.barrels = d.barrels.filter((x) => x.id !== b.id); });
+                        }
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  </>
                 )}
               </div>
             </div>

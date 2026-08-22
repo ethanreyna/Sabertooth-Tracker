@@ -14,14 +14,15 @@ import { uploadImage } from '@/sync';
 import { uid } from '@/lib/format';
 import { DURATION_UNITS, fromNow } from '@/lib/deadline';
 import type { DurationUnit } from '@/lib/deadline';
-import type { Barrel, CollectionTarget, DB, Job, LedgerEntry, Member, Role, SyncCfg, SyncStatus } from '@/types';
+import type { Barrel, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, Role, SyncCfg, SyncStatus } from '@/types';
 
-export type ModalKind = 'job' | 'barrel' | 'ledger' | 'member' | 'role' | 'sync';
+export type ModalKind = 'job' | 'barrel' | 'dungeon' | 'ledger' | 'member' | 'role' | 'sync';
 
 const NO_ROLE = '__none';
 const COLLECTION_TAG = 'Resource collection';
 const TAGS = [COLLECTION_TAG, 'Kill', 'Arrest', 'Guard', 'Escort', 'Delivery', 'Other'];
 const PRIORITIES = ['Normal', 'Low', 'High', 'Urgent'];
+const DIFFICULTIES = ['Easy', 'Moderate', 'Hard', 'Deadly'];
 
 /** yyyy-mm-dd for a date input, in local time. */
 const toDateInput = (iso: string) => {
@@ -31,9 +32,9 @@ const toDateInput = (iso: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-export function Modals({ modal, close, roles, memberNames, editRole, editJob, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
+export function Modals({ modal, close, roles, memberNames, editRole, editJob, editBarrel, editDungeon, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
   modal: ModalKind; close: () => void; roles: Role[]; memberNames: string[];
-  editRole: Role | null; editJob: Job | null;
+  editRole: Role | null; editJob: Job | null; editBarrel: Barrel | null; editDungeon: Dungeon | null;
   update: (fn: (d: DB) => void) => void; setJobsView: () => void;
   cfg: SyncCfg | null; sync: SyncStatus; offline: boolean; readOnly: boolean; onLogout: () => void;
 }) {
@@ -41,8 +42,10 @@ export function Modals({ modal, close, roles, memberNames, editRole, editJob, up
   // Resource-collection jobs are collection jobs by definition, so the box is
   // on by default for that tag. Still overridable for the odd exception.
   const [collection, setCollection] = useState(editJob ? editJob.collection : TAGS[0] === COLLECTION_TAG);
-  const [paid, setPaid] = useState(false);
-  const [guildMember, setGuildMember] = useState(true);
+  const [paid, setPaid] = useState(editBarrel?.paid ?? false);
+  const [guildMember, setGuildMember] = useState(editBarrel?.guildMember ?? true);
+  const [difficulty, setDifficulty] = useState(editDungeon?.difficulty || DIFFICULTIES[1]);
+  const [dungeonImgs, setDungeonImgs] = useState<string[]>(editDungeon?.imgs ?? []);
   const [targets, setTargets] = useState<CollectionTarget[]>(editJob?.items ?? []);
   const [itemRewards, setItemRewards] = useState<CollectionTarget[]>(editJob?.itemRewards ?? []);
   const [priority, setPriority] = useState(editJob?.priority ?? PRIORITIES[0]);
@@ -63,7 +66,8 @@ export function Modals({ modal, close, roles, memberNames, editRole, editJob, up
 
   const titles: Record<ModalKind, string> = {
     job: editJob ? 'Edit job' : 'Post a job',
-    barrel: 'Track storage',
+    barrel: editBarrel ? 'Edit storage' : 'Track storage',
+    dungeon: editDungeon ? 'Edit dungeon' : 'Add a dungeon',
     ledger: 'Record a ledger entry',
     member: 'Add a member',
     role: editRole ? 'Edit role' : 'Create a role',
@@ -154,7 +158,8 @@ export function Modals({ modal, close, roles, memberNames, editRole, editJob, up
     const f = new FormData(e.currentTarget);
     const file = f.get('shot') as File | null;
 
-    let img = '';
+    // Keep the existing screenshot unless a new file was picked.
+    let img = editBarrel?.img ?? '';
     if (file && file.size && cfg) {
       setBusy(true);
       setErr('');
@@ -168,8 +173,7 @@ export function Modals({ modal, close, roles, memberNames, editRole, editJob, up
       setBusy(false);
     }
 
-    const b: Barrel = {
-      id: uid(),
+    const fields = {
       owner: String(f.get('owner') || '').trim(),
       guildMember,
       paid,
@@ -177,10 +181,60 @@ export function Modals({ modal, close, roles, memberNames, editRole, editJob, up
       start: f.get('start') ? new Date(String(f.get('start'))).toISOString() : '',
       end: f.get('end') ? new Date(String(f.get('end'))).toISOString() : '',
       notes: String(f.get('notes') || ''),
-      img, at: new Date().toISOString(),
+      img,
     };
+
     close();
-    update((d) => { d.barrels.push(b); });
+    if (editBarrel) {
+      update((d) => {
+        const t = d.barrels.find((x) => x.id === editBarrel.id);
+        if (t) Object.assign(t, fields);
+      });
+      return;
+    }
+    update((d) => { d.barrels.push({ id: uid(), ...fields, at: new Date().toISOString() }); });
+  };
+
+  const submitDungeon = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const files = (f.getAll('maps') as File[]).filter((x) => x && x.size);
+
+    let imgs = dungeonImgs;
+    if (files.length && cfg) {
+      setBusy(true);
+      setErr('');
+      try {
+        const uploaded = await Promise.all(files.map((file) => uploadImage(cfg, file)));
+        imgs = [...imgs, ...uploaded.filter(Boolean)];
+      } catch {
+        setBusy(false);
+        setErr('Map upload failed. Save without it, or try smaller images.');
+        return;
+      }
+      setBusy(false);
+    }
+
+    const fields = {
+      name: String(f.get('name') || '').trim(),
+      location: String(f.get('location') || '').trim(),
+      recommended: Math.max(0, Number(f.get('recommended') || 0)),
+      difficulty,
+      notes: String(f.get('notes') || ''),
+      imgs,
+      addedBy: String(f.get('addedBy') || '').trim(),
+    };
+    if (!fields.name) return;
+
+    close();
+    if (editDungeon) {
+      update((d) => {
+        const t = d.dungeons.find((x) => x.id === editDungeon.id);
+        if (t) Object.assign(t, fields);
+      });
+      return;
+    }
+    update((d) => { d.dungeons.push({ id: uid(), ...fields, at: new Date().toISOString() }); });
   };
 
   const submitLedger = (e: FormEvent<HTMLFormElement>) => {
@@ -360,29 +414,32 @@ export function Modals({ modal, close, roles, memberNames, editRole, editJob, up
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Renter" htmlFor="barrel-owner">
                 <NameField id="barrel-owner" name="owner" listId="dl-renters" options={memberNames} required
-                  defaultValue={memberNames[0] || ''} placeholder="Pick a member or write in" />
+                  defaultValue={editBarrel?.owner ?? (memberNames[0] || '')} placeholder="Pick a member or write in" />
               </Field>
               <Field label="Weekly rate (septims)" htmlFor="barrel-rate">
-                <Input id="barrel-rate" name="rate" type="number" min={0} defaultValue={50} />
+                <Input id="barrel-rate" name="rate" type="number" min={0} defaultValue={editBarrel?.rate ?? 50} />
               </Field>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Rented from" htmlFor="barrel-start">
-                <Input id="barrel-start" name="start" type="date" required />
+                <Input id="barrel-start" name="start" type="date" required defaultValue={toDateInput(editBarrel?.start ?? '')} />
               </Field>
               <Field label="Rented until" htmlFor="barrel-end">
-                <Input id="barrel-end" name="end" type="date" required />
+                <Input id="barrel-end" name="end" type="date" required defaultValue={toDateInput(editBarrel?.end ?? '')} />
               </Field>
             </div>
 
             <Field label="Location notes" htmlFor="barrel-notes">
-              <Input id="barrel-notes" name="notes" placeholder="e.g. Riverwood, behind the smithy" />
+              <Input id="barrel-notes" name="notes" defaultValue={editBarrel?.notes ?? ''} placeholder="e.g. Riverwood, behind the smithy" />
             </Field>
 
-            <Field label="Location screenshot" htmlFor="barrel-shot">
+            <Field label={editBarrel?.img ? 'Replace location screenshot' : 'Location screenshot'} htmlFor="barrel-shot">
               <Input id="barrel-shot" name="shot" type="file" accept="image/*" className="cursor-pointer" />
             </Field>
+            {editBarrel?.img && (
+              <img src={editBarrel.img} alt="Current location" className="h-28 w-full rounded-lg border object-cover" />
+            )}
 
             <div className="space-y-2.5">
               <Label className="flex items-center gap-2.5 text-sm font-normal">
@@ -395,7 +452,72 @@ export function Modals({ modal, close, roles, memberNames, editRole, editJob, up
               </Label>
             </div>
 
-            {footer('Add storage')}
+            {footer(editBarrel ? 'Save storage' : 'Add storage')}
+          </form>
+        )}
+
+        {modal === 'dungeon' && (
+          <form onSubmit={submitDungeon} className="space-y-4">
+            <Field label="Dungeon name" htmlFor="dg-name">
+              <Input id="dg-name" name="name" required autoFocus
+                defaultValue={editDungeon?.name ?? ''} placeholder="e.g. Bleak Falls Barrow" />
+            </Field>
+
+            <Field label="Location" htmlFor="dg-location">
+              <Input id="dg-location" name="location"
+                defaultValue={editDungeon?.location ?? ''}
+                placeholder="e.g. Above Riverwood, up the mountain path" />
+            </Field>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Recommended party size" htmlFor="dg-rec">
+                <Input id="dg-rec" name="recommended" type="number" min={1}
+                  defaultValue={editDungeon?.recommended || 2} />
+              </Field>
+              <Field label="Difficulty">
+                <Select value={difficulty} onValueChange={(v) => setDifficulty(v ?? DIFFICULTIES[1])}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {DIFFICULTIES.map((x) => <SelectItem key={x} value={x}>{x}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+
+            <Field label="Notes" htmlFor="dg-notes">
+              <Textarea id="dg-notes" name="notes" rows={3}
+                defaultValue={editDungeon?.notes ?? ''}
+                placeholder="What's inside, what to watch out for, best approach" />
+            </Field>
+
+            <Field label="Map screenshots" htmlFor="dg-maps">
+              <Input id="dg-maps" name="maps" type="file" accept="image/*" multiple className="cursor-pointer" />
+            </Field>
+
+            {dungeonImgs.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {dungeonImgs.map((src) => (
+                  <div key={src} className="relative">
+                    <img src={src} alt="Map" className="h-20 w-full rounded-md border object-cover" />
+                    <Button
+                      type="button" variant="destructive" size="icon-xs"
+                      className="absolute right-1 top-1" aria-label="Remove map"
+                      onClick={() => setDungeonImgs((list) => list.filter((u) => u !== src))}
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Field label="Added by" htmlFor="dg-by">
+              <NameField id="dg-by" name="addedBy" listId="dl-dungeon-by" options={memberNames} required
+                defaultValue={editDungeon?.addedBy ?? (memberNames[0] || '')}
+                placeholder="Pick a member or write in" />
+            </Field>
+
+            {footer(editDungeon ? 'Save dungeon' : 'Add dungeon')}
           </form>
         )}
 

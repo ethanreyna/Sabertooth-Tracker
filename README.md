@@ -1,4 +1,4 @@
-# Sabertooth Adventurers Guild Tracker
+# Sabretooth Adventurers Guild Tracker
 
 Guild management app for the Keizaal Skyrim RP server: job board with searchable
 Skyrim item collection lists, barrel storage tracking with location screenshots,
@@ -34,8 +34,10 @@ formatting helpers.
   ("Initiate advances to Saberblooded after 3 completions").
 - **Roster** — assign roles, log completions and notes against a member, and
   watch their progress toward the next rank. Promote in one click when ready.
-- **Guest mode** — an optional second password grants a read-only view of jobs,
-  storage, and the roster.
+- **Dungeons** — scouted dungeons with location, recommended party size,
+  difficulty, notes, and map screenshots.
+- **Guest mode** — an **Enter as Guest** button on the login screen gives a
+  read-only view of jobs, storage, dungeons, and the roster. No password needed.
 - **Themes** — dark by default; toggle to light in the sidebar. Remembered per browser.
 - **Shared by default** — one guild password opens the shared database for
   everyone; edits propagate to other members within ~10 seconds.
@@ -72,13 +74,10 @@ pnpm cf:d1:create           # create the D1 database
 pnpm cf:d1:init             # create the table in the remote database
 pnpm cf:r2:create           # create the screenshots bucket
 pnpm cf:secret              # set GUILD_PASSWORD — paste the shared password
-pnpm cf:secret:guest        # optional: GUEST_PASSWORD for read-only access
 ```
 
-`GUEST_PASSWORD` is optional. Leave it unset and there is no guest access at all;
-set it and anyone holding it can read jobs, storage, and the roster but cannot
-write. The Worker enforces this — a guest's write attempt is rejected with `403`
-regardless of what the UI offers.
+`GUILD_PASSWORD` is the only secret. Guest access needs no password: an
+unauthenticated request is served as a guest.
 
 Commit the `database_id` change, then deploy:
 
@@ -126,10 +125,23 @@ counter:
   `/api/img/<uuid>` URL, which is what gets stored on the barrel. Images no
   longer live inside the database, so there is no practical size cap.
 
-Every endpoint except `/api/img/*` requires `Authorization: Bearer <guild
-password>`, compared in constant time against the `GUILD_PASSWORD` secret.
-Image URLs are unauthenticated (a browser `<img src>` cannot send headers) but
-the keys are random UUIDs, so they are unguessable rather than secret.
+Writes require `Authorization: Bearer <guild password>`, compared in constant
+time against the `GUILD_PASSWORD` secret. Image URLs are unauthenticated (a
+browser `<img src>` cannot send headers) but the keys are random UUIDs, so they
+are unguessable rather than secret.
+
+### Guest access is public read access
+
+An unauthenticated `GET /api/db` succeeds and returns `role: "guest"`. That is
+what the **Enter as Guest** button uses, and it means **anyone who knows the URL
+can read the guild's data** — there is no password in front of it. A wrong
+password is still rejected outright (`401`) rather than quietly downgraded to
+guest, so a typo can't look like it worked.
+
+To limit what guests get, the Worker strips sections listed in `GUEST_HIDDEN`
+(currently the ledger) from the guest response, so an anonymous caller never
+receives them at all rather than merely having them hidden in the UI. Writes are
+rejected with `403` for anyone without the guild password.
 
 The app re-reads the server every 10 seconds while the tab is visible (and
 immediately when you switch back to it), and pushes edits ~800ms after you stop
