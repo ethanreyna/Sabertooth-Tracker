@@ -17,7 +17,7 @@ interface Env {
   ASSETS: Fetcher;
   GUILD_PASSWORD: string;
   PRICES_SHEET_ID?: string;
-  PRICES_SHEET_GIDS?: string;
+  PRICES_SHEET_TABS?: string;
 }
 
 type Role = 'member' | 'guest';
@@ -105,47 +105,102 @@ function parseCsv(text: string): string[][] {
 }
 
 interface PriceRow {
+  tab: string;
   category: string;
   item: string;
-  make: string;
-  unit: string;
-  sell: string;
+  values: Record<string, string>;
 }
 
+/** Header cells that name the thing rather than a value about it. */
+const NAME_LABELS = new Set(['item', 'ingredient', 'potion', 'name', 'items']);
+/** Header cells worth carrying through as columns. */
+const VALUE_LABELS = new Set([
+  'make price', 'price of 1', 'buy', 'sell', 'price', 'value', 'cost',
+  'potions used in', 'ingredients', 'effects', 'contents', 'stock adjust',
+  'stock change', 'details', 'notes', 'stock', 'price to brew', 'profit',
+  'high demand', 'buy price code', 'low', 'high', 'avg',
+]);
+
+const clean = (s: string | undefined) => (s || '').trim().replace(/\s+/g, ' ');
+
 /**
- * The sheet is laid out as repeating blocks: a header row naming the category
- * and the columns ("Ore | Make Price | Price of 1 | Sell"), then item rows,
- * then a blank spacer. Column positions are read off each header row rather
- * than hardcoded, so inserting a column doesn't break the parse.
+ * Parses one tab of the guild's price sheet.
+ *
+ * Every tab is laid out differently — hand-made blocks with a header row
+ * naming the category and the columns, then item rows, then a spacer. Some tabs
+ * call the middle column "Price of 1", others "Buy"; some put the item name in
+ * column 0, ALCHEMY puts it in column 5. So rather than hardcoding positions we
+ * read them off whichever header row we last saw.
+ *
+ * Two fallbacks keep the messier tabs usable:
+ *  - If a row's labelled columns are all empty, its non-empty cells are matched
+ *    to the header labels in order. ARMOR and TAILORING need this: their header
+ *    labels sit in different columns from the values beneath them.
+ *  - A tab with no recognisable header at all (Copy of Sheet1, which is really
+ *    crafting recipes) is read as "one cell = a category, two or more = an item
+ *    plus details".
+ *
+ * It is best-effort against a spreadsheet meant for humans: an unlabelled
+ * column is dropped rather than guessed at.
  */
-function parsePriceSheet(csv: string): PriceRow[] {
+function parsePriceSheet(tab: string, csv: string): PriceRow[] {
   const out: PriceRow[] = [];
   let category = '';
-  let nameCol = -1;
-  let makeCol = -1;
-  let unitCol = -1;
-  let sellCol = -1;
+  let nameIdx = -1;
+  let cols: Array<{ i: number; label: string }> = [];
 
   for (const cells of parseCsv(csv)) {
-    const lower = cells.map((c) => c.trim().toLowerCase());
-    const headerAt = lower.findIndex((c) => c === 'make price');
+    const lower = cells.map((c) => clean(c).toLowerCase());
+    const nonEmpty = lower.map((c, i) => ({ c, i })).filter((x) => x.c !== '');
+    if (nonEmpty.length === 0) continue;
 
-    if (headerAt >= 0) {
-      makeCol = headerAt;
-      unitCol = lower.findIndex((c) => c.startsWith('price of'));
-      sellCol = lower.findIndex((c) => c === 'sell');
-      // The category label sits in the first non-empty cell left of the prices.
-      nameCol = lower.findIndex((c, i) => i < headerAt && c !== '');
-      category = nameCol >= 0 ? cells[nameCol].trim() : '';
+    const labelled = nonEmpty.filter((x) => VALUE_LABELS.has(x.c));
+    const named = nonEmpty.find((x) => NAME_LABELS.has(x.c));
+
+    // A header row is anything that names at least one value column.
+    if (labelled.length > 0) {
+      cols = labelled.map((x) => ({ i: x.i, label: clean(cells[x.i]) }));
+      if (named) {
+        nameIdx = named.i; // "Item" / "Ingredient" — the block keeps its category
+      } else {
+        const first = nonEmpty.find((x) => !VALUE_LABELS.has(x.c));
+        nameIdx = first ? first.i : -1;
+        if (first) category = clean(cells[first.i]); // e.g. "Ore", "ORICHALCUM"
+      }
       continue;
     }
 
-    if (nameCol < 0) continue; // nothing useful before the first header
-    const item = (cells[nameCol] || '').trim().replace(/\s+/g, ' ');
-    if (!item) continue; // blank spacer row
+    // No header seen yet: treat this as a plain list (crafting recipes).
+    if (nameIdx < 0) {
+      if (nonEmpty.length === 1) {
+        category = clean(cells[nonEmpty[0].i]);
+      } else {
+        const [first, second] = nonEmpty;
+        out.push({
+          tab, category,
+          item: clean(cells[first.i]),
+          values: { Details: clean(cells[second.i]) },
+        });
+      }
+      continue;
+    }
 
-    const at = (i: number) => (i >= 0 ? (cells[i] || '').trim() : '');
-    out.push({ category, item, make: at(makeCol), unit: at(unitCol), sell: at(sellCol) });
+    const item = clean(cells[nameIdx]);
+    if (!item || NAME_LABELS.has(item.toLowerCase())) continue;
+
+    const values: Record<string, string> = {};
+    for (const c of cols) {
+      const v = clean(cells[c.i]);
+      if (v) values[c.label] = v;
+    }
+
+    // Labels and values misaligned (merged cells): match them up in order.
+    if (Object.keys(values).length === 0) {
+      const rest = nonEmpty.filter((x) => x.i !== nameIdx).map((x) => clean(cells[x.i]));
+      cols.forEach((c, k) => { if (rest[k]) values[c.label] = rest[k]; });
+    }
+
+    out.push({ tab, category: category || tab, item, values });
   }
   return out;
 }
@@ -154,29 +209,57 @@ async function handlePrices(env: Env, url: URL): Promise<Response> {
   const id = env.PRICES_SHEET_ID;
   if (!id) return json({ error: 'no sheet configured', prices: [] }, 501);
 
-  const gids = (env.PRICES_SHEET_GIDS || '').split(',').map((g) => g.trim()).filter(Boolean);
-  const targets = gids.length ? gids : [''];
+  // Each entry is "<gid>:<display label>".
+  const sheets = (env.PRICES_SHEET_TABS || '').split(',')
+    .map((entry) => {
+      const at = entry.indexOf(':');
+      const gid = (at >= 0 ? entry.slice(0, at) : entry).trim();
+      const tab = (at >= 0 ? entry.slice(at + 1) : entry).trim();
+      return { gid, tab };
+    })
+    .filter((s) => s.gid !== '' && s.tab !== '');
+  if (sheets.length === 0) return json({ error: 'no tabs configured', prices: [] }, 501);
+
+  const tabs = sheets.map((s) => s.tab);
   const bypass = url.searchParams.get('refresh') === '1';
 
-  const prices: PriceRow[] = [];
-  for (const gid of targets) {
-    const src = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv${gid ? `&gid=${gid}` : ''}`;
-    const res = await fetch(src, {
-      cf: { cacheTtl: bypass ? 0 : PRICES_TTL_SECONDS, cacheEverything: true },
-      headers: { 'User-Agent': 'sabretooth-tracker' },
-    });
-    if (!res.ok) {
-      return json({
-        error: res.status === 401 || res.status === 403
-          ? 'The sheet is not shared publicly. Set link sharing to "Anyone with the link can view".'
-          : `Google returned ${res.status}.`,
-        prices: [],
-      }, 502);
+  // Fetched in parallel, so eight tabs cost one round trip rather than eight.
+  const results = await Promise.all(sheets.map(async ({ gid, tab }) => {
+    const src = `https://docs.google.com/spreadsheets/d/${id}/export`
+      + `?format=csv&gid=${encodeURIComponent(gid)}`;
+    try {
+      const res = await fetch(src, {
+        cf: { cacheTtl: bypass ? 0 : PRICES_TTL_SECONDS, cacheEverything: true },
+        headers: { 'User-Agent': 'sabretooth-tracker' },
+      });
+      if (!res.ok) return { tab, status: res.status, rows: [] as PriceRow[] };
+      return { tab, status: 200, rows: parsePriceSheet(tab, await res.text()) };
+    } catch {
+      return { tab, status: 0, rows: [] as PriceRow[] };
     }
-    prices.push(...parsePriceSheet(await res.text()));
+  }));
+
+  const prices = results.flatMap((r) => r.rows);
+  const failed = results.filter((r) => r.status !== 200).map((r) => r.tab);
+
+  // A single bad tab shouldn't sink the whole list — report it alongside the
+  // rows that did load.
+  if (prices.length === 0 && failed.length) {
+    const anyAuth = results.some((r) => r.status === 401 || r.status === 403);
+    return json({
+      error: anyAuth
+        ? 'The sheet is not shared publicly. Set link sharing to "Anyone with the link can view".'
+        : `Could not read: ${failed.join(', ')}.`,
+      prices: [],
+    }, 502);
   }
 
-  return new Response(JSON.stringify({ prices, syncedAt: new Date().toISOString() }), {
+  return new Response(JSON.stringify({
+    prices,
+    tabs,
+    failed,
+    syncedAt: new Date().toISOString(),
+  }), {
     headers: {
       'Content-Type': 'application/json',
       'Cache-Control': bypass ? 'no-store' : `public, max-age=${PRICES_TTL_SECONDS}`,

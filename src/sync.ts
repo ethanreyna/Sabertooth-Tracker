@@ -134,10 +134,13 @@ export async function fetchPrices(cfg: SyncCfg, force = false): Promise<{ prices
 
   const prices: Price[] = arr(j.prices).map((p) => {
     const x = (p || {}) as Record<string, unknown>;
-    return {
-      category: s(x.category), item: s(x.item),
-      make: s(x.make), unit: s(x.unit), sell: s(x.sell),
-    };
+    const raw = (x.values && typeof x.values === 'object' ? x.values : {}) as Record<string, unknown>;
+    const values: Record<string, string> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      const text = s(v);
+      if (text) values[k] = text;
+    }
+    return { tab: s(x.tab), category: s(x.category), item: s(x.item), values };
   }).filter((p) => p.item);
 
   const out = { prices, syncedAt: s(j.syncedAt) || new Date().toISOString() };

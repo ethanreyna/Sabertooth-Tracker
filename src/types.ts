@@ -115,13 +115,13 @@ export interface DB {
 }
 
 /** One row of the market price list, mirrored from the guild's Google Sheet.
- *  Values stay strings because the sheet uses "N/A" and "-" alongside numbers. */
+ *  Columns vary per tab, so values are a label->text map rather than fixed
+ *  fields, and stay strings because the sheet mixes numbers with "N/A" and "-". */
 export interface Price {
+  tab: string;
   category: string;
   item: string;
-  make: string;
-  unit: string;
-  sell: string;
+  values: Record<string, string>;
 }
 
 /** How this browser is talking to the guild database. A guest session carries
