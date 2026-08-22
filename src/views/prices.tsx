@@ -16,42 +16,61 @@ const SHEET_URL =
 
 const ALL = '__all';
 
-/** Right-align numbers; leave "N/A", "-" and free text looking like text. */
-function ValueCell({ value }: { value: string }) {
+// Money columns always appear in this order, whichever order the sheet happened
+// to introduce them, so every block reads the same way.
+const PRICE_ORDER = ['make price', 'price to brew', 'price of 1', 'buy', 'price', 'cost', 'sell', 'profit'];
+
+// Prose columns: left-aligned and allowed to wrap, unlike the numeric ones.
+const TEXT_COLUMNS = new Set([
+  'ingredients', 'effects', 'potions used in', 'contents', 'details', 'notes',
+]);
+
+const isTextColumn = (label: string) => TEXT_COLUMNS.has(label.toLowerCase());
+
+/** Money columns first in a fixed order, then anything else, first-seen. */
+function orderLabels(labels: string[]): string[] {
+  const rank = (l: string) => {
+    const i = PRICE_ORDER.indexOf(l.toLowerCase());
+    return i === -1 ? PRICE_ORDER.length : i;
+  };
+  return labels
+    .map((l, i) => ({ l, i }))
+    .sort((a, b) => rank(a.l) - rank(b.l) || a.i - b.i)
+    .map((x) => x.l);
+}
+
+function ValueCell({ value, label }: { value: string; label: string }) {
+  if (isTextColumn(label)) {
+    return <TableCell className="min-w-64 text-sm whitespace-normal">{value}</TableCell>;
+  }
   const numeric = value !== '' && !Number.isNaN(Number(value.replace(/[g,]/g, '')));
   return (
-    <TableCell className={cn(numeric ? 'text-right tabular-nums' : 'text-muted-foreground')}>
-      {value || '—'}
+    <TableCell className={cn('text-right', numeric ? 'tabular-nums' : 'text-muted-foreground')}>
+      {value}
     </TableCell>
   );
 }
 
-/** One block of rows sharing a category, with columns derived from the rows. */
-function PriceTable({ rows }: { rows: Price[] }) {
-  // Columns vary per tab, so take the union of labels in first-seen order.
-  // `values` is guarded because a row can also arrive from an older cache.
-  const labels = useMemo(() => {
-    const seen: string[] = [];
-    for (const r of rows) {
-      for (const k of Object.keys(r.values ?? {})) if (!seen.includes(k)) seen.push(k);
-    }
-    return seen;
-  }, [rows]);
-
+/** One block of rows. Columns come from the whole tab so blocks line up. */
+function PriceTable({ rows, labels }: { rows: Price[]; labels: string[] }) {
   return (
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="min-w-48">Item</TableHead>
-            {labels.map((l) => <TableHead key={l} className="whitespace-nowrap">{l}</TableHead>)}
+            <TableHead className="min-w-56">Item</TableHead>
+            {labels.map((l) => (
+              <TableHead key={l} className={cn('whitespace-nowrap', !isTextColumn(l) && 'text-right')}>
+                {l}
+              </TableHead>
+            ))}
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.map((r, i) => (
             <TableRow key={`${r.tab}-${r.category}-${r.item}-${i}`}>
-              <TableCell className="font-medium">{r.item.toLowerCase()}</TableCell>
-              {labels.map((l) => <ValueCell key={l} value={r.values?.[l] ?? ''} />)}
+              <TableCell className="font-medium capitalize">{r.item.toLowerCase()}</TableCell>
+              {labels.map((l) => <ValueCell key={l} label={l} value={r.values?.[l] ?? ''} />)}
             </TableRow>
           ))}
         </TableBody>
@@ -118,6 +137,18 @@ export function Prices() {
     }
     return out;
   }, [prices, q, tab]);
+
+  // Column set is decided per tab, not per block, so every table in a tab has
+  // the same columns in the same order and they line up down the page.
+  const labelsByTab = useMemo(() => {
+    const seen = new Map<string, string[]>();
+    for (const p of prices) {
+      const list = seen.get(p.tab) ?? [];
+      for (const k of Object.keys(p.values ?? {})) if (!list.includes(k)) list.push(k);
+      seen.set(p.tab, list);
+    }
+    return new Map([...seen].map(([t, list]) => [t, orderLabels(list)]));
+  }, [prices]);
 
   const shown = groups.reduce((n, g) => n + g.rows.length, 0);
 
@@ -187,16 +218,16 @@ export function Prices() {
               )}
               <span className="ml-auto text-xs text-muted-foreground">{g.rows.length}</span>
             </div>
-            <PriceTable rows={g.rows} />
+            <PriceTable rows={g.rows} labels={labelsByTab.get(g.tab) ?? []} />
           </Card>
         ))
       )}
 
       <p className="text-xs text-muted-foreground">
         Pulled from the guild's Google Sheet through the server, since Google sends no CORS headers.
-        Cached 5 minutes; Refresh forces a fresh pull. Each tab is laid out differently, so columns
-        are read from whatever headers the sheet uses — an unlabelled column is dropped rather than
-        guessed at.
+        Cached 5 minutes; Refresh forces a fresh pull. Columns come from the headers in each tab and
+        a blank cell means the sheet has no value there — nothing is inferred, so a price is never
+        shown under a column it didn't come from.
       </p>
     </div>
   );

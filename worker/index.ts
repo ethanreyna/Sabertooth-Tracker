@@ -188,16 +188,14 @@ function parsePriceSheet(tab: string, csv: string): PriceRow[] {
     const item = clean(cells[nameIdx]);
     if (!item || NAME_LABELS.has(item.toLowerCase())) continue;
 
+    // Strictly positional against the block's own header. There is deliberately
+    // no "match leftover cells to labels in order" fallback: the faithful CSV
+    // export keeps values under their headers, and guessing produced sell
+    // prices filed under Make Price — wrong numbers that looked plausible.
     const values: Record<string, string> = {};
     for (const c of cols) {
       const v = clean(cells[c.i]);
       if (v) values[c.label] = v;
-    }
-
-    // Labels and values misaligned (merged cells): match them up in order.
-    if (Object.keys(values).length === 0) {
-      const rest = nonEmpty.filter((x) => x.i !== nameIdx).map((x) => clean(cells[x.i]));
-      cols.forEach((c, k) => { if (rest[k]) values[c.label] = rest[k]; });
     }
 
     out.push({ tab, category: category || tab, item, values });
