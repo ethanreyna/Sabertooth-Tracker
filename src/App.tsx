@@ -26,12 +26,12 @@ import {
 import { cn } from '@/lib/utils';
 import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
-type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'spots' | 'bank' | 'ledger' | 'recipes' | 'roster' | 'roles';
+type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'poi' | 'bank' | 'ledger' | 'recipes' | 'roster' | 'roles';
 
 /** What a read-only guest is allowed to see. `ledger` is the market price list,
  *  which comes from the public sheet; `bank` (the guild's septims) stays hidden,
  *  and the Worker strips those transactions from a guest response entirely. */
-const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'spots', 'ledger', 'recipes', 'roster'];
+const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'poi', 'ledger', 'recipes', 'roster'];
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -40,7 +40,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'jobs', label: 'Jobs', icon: <Briefcase /> },
   { id: 'storage', label: 'Storage', icon: <Package /> },
   { id: 'dungeons', label: 'Dungeons', icon: <Skull /> },
-  { id: 'spots', label: 'Spots', icon: <Pickaxe /> },
+  { id: 'poi', label: 'Points of Interest', icon: <Pickaxe /> },
   { id: 'bank', label: 'Bank', icon: <Coins /> },
   { id: 'ledger', label: 'Ledger', icon: <Scale /> },
   { id: 'recipes', label: 'Recipes', icon: <Hammer /> },
@@ -49,7 +49,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
 ];
 
 const TITLES: Record<View, string> = {
-  dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', spots: 'Spots',
+  dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', poi: 'Points of Interest',
   bank: 'Bank', ledger: 'Ledger', recipes: 'Recipes', roster: 'Roster', roles: 'Roles',
 };
 
@@ -57,7 +57,7 @@ const ACTIONS: Partial<Record<View, { label: string; modal: ModalKind }>> = {
   jobs: { label: 'New job', modal: 'job' },
   storage: { label: 'New storage', modal: 'barrel' },
   dungeons: { label: 'New dungeon', modal: 'dungeon' },
-  spots: { label: 'New spot', modal: 'spot' },
+  poi: { label: 'New point', modal: 'spot' },
   bank: { label: 'New entry', modal: 'ledger' },
   roster: { label: 'Add member', modal: 'member' },
   roles: { label: 'New role', modal: 'role' },
@@ -368,7 +368,7 @@ export default function App() {
               onEdit={(id) => { setEditDungeonId(id); setModal('dungeon'); }}
             />
           )}
-          {view === 'spots' && (
+          {view === 'poi' && (
             <Spots
               db={db} update={update} readOnly={readOnly}
               onEdit={(id) => { setEditSpotId(id); setModal('spot'); }}

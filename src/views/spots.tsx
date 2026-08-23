@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ImageIcon, MapPin, Pencil, RefreshCw, Search, Trash2, X } from 'lucide-react';
+import { ExternalLink, ImageIcon, Map, MapPin, Pencil, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState, TonedBadge } from '@/components/bits';
 import type { Tone } from '@/components/bits';
 import { ago } from '@/lib/format';
+import { KEIZAAL_MAP_URL } from '@/types';
 import type { DB, Spot } from '@/types';
 
 const ALL = '__all';
@@ -65,7 +66,24 @@ function SpotCard({ spot, readOnly, onEdit, remove }: {
           </p>
         )}
 
+        {spot.coords && (
+          <p className="text-xs">
+            <span className="text-muted-foreground">Coords: </span>
+            <span className="tabular-nums">{spot.coords}</span>
+          </p>
+        )}
+
         {spot.notes && <p className="text-xs whitespace-pre-wrap">{spot.notes}</p>}
+
+        {spot.mapUrl && (
+          <Button
+            variant="outline" size="xs" className="self-start"
+            render={<a href={spot.mapUrl} target="_blank" rel="noreferrer" />}
+          >
+            <Map />
+            Open on map
+          </Button>
+        )}
 
         <div className="mt-auto flex items-center gap-2 pt-1">
           <span className="text-xs text-muted-foreground">
@@ -129,13 +147,23 @@ export function Spots({ db, update, readOnly, onEdit }: {
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name));
 
+  const mapLink = (
+    <Button variant="ghost" size="sm" render={<a href={KEIZAAL_MAP_URL} target="_blank" rel="noreferrer" />}>
+      <ExternalLink />
+      Keizaal map
+    </Button>
+  );
+
   if (db.spots.length === 0) {
     return (
-      <EmptyState>
-        {readOnly
-          ? 'No gathering spots recorded yet.'
-          : 'No spots yet. Add one with New spot — ore veins, hunting grounds, ingredient patches, fishing holes.'}
-      </EmptyState>
+      <div className="space-y-3">
+        <EmptyState>
+          {readOnly
+            ? 'No points of interest recorded yet.'
+            : 'Nothing here yet. Add one with New point — ore veins, hunting grounds, ingredient patches, fishing holes.'}
+        </EmptyState>
+        <div className="flex justify-center">{mapLink}</div>
+      </div>
     );
   }
 
@@ -153,21 +181,24 @@ export function Spots({ db, update, readOnly, onEdit }: {
 
   return (
     <div className="space-y-4">
-      <div className="relative w-72">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search spots…" value={q} onChange={(e) => setQ(e.target.value)}
-          className="h-8 pl-8"
-        />
-        {q && (
-          <Button
-            variant="ghost" size="icon-xs" aria-label="Clear search"
-            className="absolute right-1 top-1/2 -translate-y-1/2"
-            onClick={() => setQ('')}
-          >
-            <X />
-          </Button>
-        )}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-72">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search points of interest…" value={q} onChange={(e) => setQ(e.target.value)}
+            className="h-8 pl-8"
+          />
+          {q && (
+            <Button
+              variant="ghost" size="icon-xs" aria-label="Clear search"
+              className="absolute right-1 top-1/2 -translate-y-1/2"
+              onClick={() => setQ('')}
+            >
+              <X />
+            </Button>
+          )}
+        </div>
+        <div className="ml-auto">{mapLink}</div>
       </div>
 
       <Tabs value={kind} onValueChange={(v) => setKind(v ? String(v) : ALL)}>

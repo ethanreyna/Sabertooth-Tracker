@@ -14,7 +14,7 @@ import { uploadImage } from '@/sync';
 import { uid } from '@/lib/format';
 import { DURATION_UNITS, fromNow } from '@/lib/deadline';
 import type { DurationUnit } from '@/lib/deadline';
-import { SPOT_KINDS } from '@/types';
+import { KEIZAAL_MAP_URL, SPOT_KINDS } from '@/types';
 import type { Barrel, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, Role, Settings, Spot, SyncCfg, SyncStatus } from '@/types';
 
 export type ModalKind = 'job' | 'barrel' | 'dungeon' | 'spot' | 'ledger' | 'member' | 'role' | 'sync';
@@ -24,6 +24,12 @@ const COLLECTION_TAG = 'Resource collection';
 const TAGS = [COLLECTION_TAG, 'Kill', 'Arrest', 'Guard', 'Escort', 'Delivery', 'Other'];
 const PRIORITIES = ['Normal', 'Low', 'High', 'Urgent'];
 const DIFFICULTIES = ['Easy', 'Moderate', 'Hard', 'Deadly'];
+
+/** Keeps only http(s) links, so nothing stored can become a javascript: URL. */
+const httpUrlOrEmpty = (raw: string) => {
+  const v = raw.trim();
+  return /^https?:\/\//i.test(v) ? v : '';
+};
 
 /** yyyy-mm-dd for a date input, in local time. */
 const toDateInput = (iso: string) => {
@@ -81,7 +87,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
     job: editJob ? 'Edit job' : 'Post a job',
     barrel: editBarrel ? 'Edit storage' : 'Track storage',
     dungeon: editDungeon ? 'Edit dungeon' : 'Add a dungeon',
-    spot: editSpot ? 'Edit spot' : 'Add a gathering spot',
+    spot: editSpot ? 'Edit point of interest' : 'Add a point of interest',
     ledger: 'Record a ledger entry',
     member: 'Add a member',
     role: editRole ? 'Edit role' : 'Create a role',
@@ -235,6 +241,10 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
       location: String(f.get('location') || '').trim(),
       yield: String(f.get('yield') || '').trim(),
       respawn: String(f.get('respawn') || '').trim(),
+      coords: String(f.get('coords') || '').trim(),
+      // Only http(s) accepted, so a pasted javascript: URL can't be stored and
+      // later run from the card's "Open on map" link.
+      mapUrl: httpUrlOrEmpty(String(f.get('mapUrl') || '')),
       notes: String(f.get('notes') || ''),
       imgs,
       addedBy: String(f.get('addedBy') || '').trim(),
@@ -516,7 +526,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
         {modal === 'spot' && (
           <form onSubmit={submitSpot} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Spot name" htmlFor="sp-name">
+              <Field label="Name" htmlFor="sp-name">
                 <Input id="sp-name" name="name" required autoFocus
                   defaultValue={editSpot?.name ?? ''} placeholder="e.g. Halted Stream iron veins" />
               </Field>
@@ -542,6 +552,30 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                 <Input id="sp-respawn" name="respawn"
                   defaultValue={editSpot?.respawn ?? ''} placeholder="e.g. every 10 days" />
               </Field>
+            </div>
+
+            <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Map
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Coordinates" htmlFor="sp-coords">
+                  <Input id="sp-coords" name="coords"
+                    defaultValue={editSpot?.coords ?? ''} placeholder="however the server gives them" />
+                </Field>
+                <Field label="Map link" htmlFor="sp-mapurl">
+                  <Input id="sp-mapurl" name="mapUrl" type="url"
+                    defaultValue={editSpot?.mapUrl ?? ''} placeholder="https://keizaal.com/map…" />
+                </Field>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Open{' '}
+                <a href={KEIZAAL_MAP_URL} target="_blank" rel="noreferrer" className="underline">
+                  keizaal.com/map
+                </a>
+                , find the place, then copy the address bar in here — the card gets an “Open on map”
+                button pointing straight at it.
+              </p>
             </div>
 
             <Field label="Notes" htmlFor="sp-notes">
@@ -577,7 +611,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                 placeholder="Pick a member or write in" />
             </Field>
 
-            {footer(editSpot ? 'Save spot' : 'Add spot')}
+            {footer(editSpot ? 'Save point' : 'Add point')}
           </form>
         )}
 

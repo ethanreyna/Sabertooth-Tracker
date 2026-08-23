@@ -36,15 +36,16 @@ formatting helpers.
   watch their progress toward the next rank. Promote in one click when ready.
 - **Dungeons** — scouted dungeons with location, recommended party size,
   difficulty, notes, and map screenshots.
-- **Spots** — gathering locations (ore veins, hunting grounds, ingredient
-  patches, fishing holes) with yield, respawn, notes and screenshots. Tabbed by
-  kind, and the tabs come from the data, so a written-in kind gets its own tab.
+- **Points of Interest** — ore veins, hunting grounds, ingredient patches,
+  fishing holes: kind, location, yield, respawn, coordinates, notes and
+  screenshots, plus a pasted link to keizaal.com/map. Tabbed by kind, and the
+  tabs come from the data, so a written-in kind gets its own tab.
 - **Recipes** — 102 Skyforge blacksmith recipes with armour/damage and
   ingredients, searchable **by ingredient** ("what can I make with leather
   strips"). Baked in rather than synced — see *Recipes* below.
 - **Guest mode** — an **Enter as Guest** button on the login screen gives a
-  read-only view of jobs, storage, dungeons, spots, recipes, prices and the
-  roster. No password needed.
+  read-only view of jobs, storage, dungeons, points of interest, recipes,
+  prices and the roster. No password needed.
 - **Themes** — dark by default; toggle to light in the sidebar. Remembered per browser.
 - **Shared by default** — one guild password opens the shared database for
   everyone; edits propagate to other members within ~10 seconds.
