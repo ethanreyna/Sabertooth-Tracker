@@ -88,6 +88,24 @@ export interface Dungeon {
   at: string;
 }
 
+/** A gathering spot: ore veins, hunting grounds, ingredient patches and so on. */
+export interface Spot {
+  id: string;
+  name: string;
+  kind: string; // Ore, Hunting, Alchemy, Fishing, Wood, …
+  location: string;
+  yield: string; // what it gives, e.g. "3-4 iron veins"
+  respawn: string; // e.g. "10 days"
+  notes: string;
+  imgs: string[]; // map screenshots (R2 URLs)
+  addedBy: string;
+  at: string;
+}
+
+/** Offered as suggestions; members can write in anything, and the page's tabs
+ *  are built from whatever kinds actually exist. */
+export const SPOT_KINDS = ['Ore', 'Hunting', 'Alchemy', 'Fishing', 'Wood', 'Other'];
+
 export interface LedgerEntry {
   id: string;
   type: LedgerType;
@@ -120,6 +138,7 @@ export interface DB {
   jobs: Job[];
   barrels: Barrel[];
   dungeons: Dungeon[];
+  spots: Spot[];
   ledger: LedgerEntry[];
 }
 

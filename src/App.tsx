@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Coins, Hammer, LayoutDashboard, Moon, Package, Scale, Settings, Shield, ShieldHalf, Skull, Sun, Users, Briefcase,
+  Coins, Hammer, LayoutDashboard, Moon, Package, Pickaxe, Scale, Settings, Shield, ShieldHalf, Skull, Sun, Users, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,7 @@ import { Roster } from '@/views/roster';
 import { Roles } from '@/views/roles';
 import { Dungeons } from '@/views/dungeons';
 import { Recipes } from '@/views/recipes';
+import { Spots } from '@/views/spots';
 import { emptyDb } from '@/data';
 import { applyTheme, loadTheme } from '@/theme';
 import {
@@ -25,12 +26,12 @@ import {
 import { cn } from '@/lib/utils';
 import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
-type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'bank' | 'ledger' | 'recipes' | 'roster' | 'roles';
+type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'spots' | 'bank' | 'ledger' | 'recipes' | 'roster' | 'roles';
 
 /** What a read-only guest is allowed to see. `ledger` is the market price list,
  *  which comes from the public sheet; `bank` (the guild's septims) stays hidden,
  *  and the Worker strips those transactions from a guest response entirely. */
-const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'ledger', 'recipes', 'roster'];
+const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'spots', 'ledger', 'recipes', 'roster'];
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -39,6 +40,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'jobs', label: 'Jobs', icon: <Briefcase /> },
   { id: 'storage', label: 'Storage', icon: <Package /> },
   { id: 'dungeons', label: 'Dungeons', icon: <Skull /> },
+  { id: 'spots', label: 'Spots', icon: <Pickaxe /> },
   { id: 'bank', label: 'Bank', icon: <Coins /> },
   { id: 'ledger', label: 'Ledger', icon: <Scale /> },
   { id: 'recipes', label: 'Recipes', icon: <Hammer /> },
@@ -47,7 +49,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
 ];
 
 const TITLES: Record<View, string> = {
-  dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons',
+  dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', spots: 'Spots',
   bank: 'Bank', ledger: 'Ledger', recipes: 'Recipes', roster: 'Roster', roles: 'Roles',
 };
 
@@ -55,6 +57,7 @@ const ACTIONS: Partial<Record<View, { label: string; modal: ModalKind }>> = {
   jobs: { label: 'New job', modal: 'job' },
   storage: { label: 'New storage', modal: 'barrel' },
   dungeons: { label: 'New dungeon', modal: 'dungeon' },
+  spots: { label: 'New spot', modal: 'spot' },
   bank: { label: 'New entry', modal: 'ledger' },
   roster: { label: 'Add member', modal: 'member' },
   roles: { label: 'New role', modal: 'role' },
@@ -70,6 +73,7 @@ export default function App() {
   const [editJobId, setEditJobId] = useState<string | null>(null);
   const [editBarrelId, setEditBarrelId] = useState<string | null>(null);
   const [editDungeonId, setEditDungeonId] = useState<string | null>(null);
+  const [editSpotId, setEditSpotId] = useState<string | null>(null);
   const [access, setAccess] = useState<AccessRole>('member');
   const [sync, setSync] = useState<SyncStatus>('syncing');
   const [theme, setTheme] = useState<Theme>(() => loadTheme());
@@ -364,6 +368,12 @@ export default function App() {
               onEdit={(id) => { setEditDungeonId(id); setModal('dungeon'); }}
             />
           )}
+          {view === 'spots' && (
+            <Spots
+              db={db} update={update} readOnly={readOnly}
+              onEdit={(id) => { setEditSpotId(id); setModal('spot'); }}
+            />
+          )}
           {view === 'bank' && <Bank db={db} income={income} spend={spend} />}
           {view === 'ledger' && <Prices />}
           {view === 'recipes' && <Recipes />}
@@ -382,12 +392,12 @@ export default function App() {
       {/* Guests get the connection dialog (to sign out) but no editing dialogs. */}
       {modal && (!readOnly || modal === 'sync') && (
         <Modals
-          key={`${modal}:${editRoleId ?? editJobId ?? editBarrelId ?? editDungeonId ?? 'new'}`}
+          key={`${modal}:${editRoleId ?? editJobId ?? editBarrelId ?? editDungeonId ?? editSpotId ?? 'new'}`}
           modal={modal}
           close={() => {
             setModal(null);
             setEditRoleId(null); setEditJobId(null);
-            setEditBarrelId(null); setEditDungeonId(null);
+            setEditBarrelId(null); setEditDungeonId(null); setEditSpotId(null);
           }}
           roles={db.roles}
           settings={db.settings}
@@ -396,6 +406,7 @@ export default function App() {
           editJob={db.jobs.find((j) => j.id === editJobId) ?? null}
           editBarrel={db.barrels.find((b) => b.id === editBarrelId) ?? null}
           editDungeon={db.dungeons.find((g) => g.id === editDungeonId) ?? null}
+          editSpot={db.spots.find((sp) => sp.id === editSpotId) ?? null}
           update={update}
           setJobsView={() => setView('jobs')}
           cfg={cfg}

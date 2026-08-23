@@ -1,5 +1,5 @@
 import { DEFAULT_GUILD_CUT_PCT } from './types';
-import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, MemberEntry, Price, Role, SyncCfg } from './types';
+import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, MemberEntry, Price, Role, Spot, SyncCfg } from './types';
 
 const CFG_KEY = 'sabretooth-auth';
 const LEGACY_CFG_KEY = 'sabertooth-auth'; // pre-rename; read once so nobody is logged out
@@ -293,6 +293,17 @@ export function normalizeDb(raw: unknown): DB {
         addedBy: s(x.addedBy), at: s(x.at),
       };
     }).filter((g) => g.name),
+    spots: arr(o.spots).map((sp): Spot => {
+      const x = (sp || {}) as Record<string, unknown>;
+      return {
+        id: s(x.id) || Math.random().toString(36).slice(2, 10),
+        name: s(x.name), kind: s(x.kind, 'Other'),
+        location: s(x.location), yield: s(x.yield), respawn: s(x.respawn),
+        notes: s(x.notes),
+        imgs: arr(x.imgs).map((u) => s(u)).filter(Boolean),
+        addedBy: s(x.addedBy), at: s(x.at),
+      };
+    }).filter((sp) => sp.name),
     ledger: arr(o.ledger).map((l): LedgerEntry => {
       const x = (l || {}) as Record<string, unknown>;
       return {

@@ -4,7 +4,7 @@ import type { DB } from './types';
 const d = (days: number) => new Date(Date.now() - days * 864e5).toISOString();
 const f = (days: number) => new Date(Date.now() + days * 864e5).toISOString();
 
-export const emptyDb = (): DB => ({ settings: { guildCutPct: DEFAULT_GUILD_CUT_PCT }, members: [], roles: [], jobs: [], barrels: [], dungeons: [], ledger: [] });
+export const emptyDb = (): DB => ({ settings: { guildCutPct: DEFAULT_GUILD_CUT_PCT }, members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [], ledger: [] });
 
 /** Sensible starting ranks, offered when the roster has no roles yet. The
  *  Initiate -> Saberblooded track mirrors the guild's blooding process. */
@@ -75,6 +75,22 @@ export const demoDb = (): DB => ({
   barrels: [
     { id: 'b1', owner: 'Waxillius Scadrian', guildMember: true, paid: true, rate: 50, start: d(5), end: f(9), notes: 'Riverwood — behind the smithy, third barrel', img: '', at: d(5) },
     { id: 'b2', owner: 'Hide the Mute', guildMember: true, paid: false, rate: 50, start: d(2), end: f(12), notes: 'Whiterun — by the guild cellar door', img: '', at: d(2) },
+  ],
+  spots: [
+    {
+      id: 'sp1', name: 'Halted Stream iron veins', kind: 'Ore',
+      location: 'Whiterun Hold — Halted Stream Camp, north of Whiterun',
+      yield: '8 iron veins plus a transmute spell tome', respawn: 'every 10 days',
+      notes: 'Bandit camp on top; clear it first. Mammoth skull altar behind.',
+      imgs: [], addedBy: 'Karina', at: d(7),
+    },
+    {
+      id: 'sp2', name: 'Whiterun plains elk', kind: 'Hunting',
+      location: 'Whiterun Hold — the plains west of the city',
+      yield: 'Elk hide, venison, antlers', respawn: 'roams',
+      notes: 'Good bow practice. Watch for sabre cats near the watchtower.',
+      imgs: [], addedBy: 'Waxillius Scadrian', at: d(4),
+    },
   ],
   dungeons: [
     {

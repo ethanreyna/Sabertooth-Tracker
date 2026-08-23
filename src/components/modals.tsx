@@ -14,9 +14,10 @@ import { uploadImage } from '@/sync';
 import { uid } from '@/lib/format';
 import { DURATION_UNITS, fromNow } from '@/lib/deadline';
 import type { DurationUnit } from '@/lib/deadline';
-import type { Barrel, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, Role, Settings, SyncCfg, SyncStatus } from '@/types';
+import { SPOT_KINDS } from '@/types';
+import type { Barrel, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, Role, Settings, Spot, SyncCfg, SyncStatus } from '@/types';
 
-export type ModalKind = 'job' | 'barrel' | 'dungeon' | 'ledger' | 'member' | 'role' | 'sync';
+export type ModalKind = 'job' | 'barrel' | 'dungeon' | 'spot' | 'ledger' | 'member' | 'role' | 'sync';
 
 const NO_ROLE = '__none';
 const COLLECTION_TAG = 'Resource collection';
@@ -32,9 +33,10 @@ const toDateInput = (iso: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-export function Modals({ modal, close, roles, settings, memberNames, editRole, editJob, editBarrel, editDungeon, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
+export function Modals({ modal, close, roles, settings, memberNames, editRole, editJob, editBarrel, editDungeon, editSpot, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
   modal: ModalKind; close: () => void; roles: Role[]; settings: Settings; memberNames: string[];
-  editRole: Role | null; editJob: Job | null; editBarrel: Barrel | null; editDungeon: Dungeon | null;
+  editRole: Role | null; editJob: Job | null; editBarrel: Barrel | null;
+  editDungeon: Dungeon | null; editSpot: Spot | null;
   update: (fn: (d: DB) => void) => void; setJobsView: () => void;
   cfg: SyncCfg | null; sync: SyncStatus; offline: boolean; readOnly: boolean; onLogout: () => void;
 }) {
@@ -46,6 +48,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
   const [guildMember, setGuildMember] = useState(editBarrel?.guildMember ?? true);
   const [difficulty, setDifficulty] = useState(editDungeon?.difficulty || DIFFICULTIES[1]);
   const [dungeonImgs, setDungeonImgs] = useState<string[]>(editDungeon?.imgs ?? []);
+  const [spotImgs, setSpotImgs] = useState<string[]>(editSpot?.imgs ?? []);
   const [targets, setTargets] = useState<CollectionTarget[]>(editJob?.items ?? []);
   const [itemRewards, setItemRewards] = useState<CollectionTarget[]>(editJob?.itemRewards ?? []);
   const [priority, setPriority] = useState(editJob?.priority ?? PRIORITIES[0]);
@@ -78,6 +81,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
     job: editJob ? 'Edit job' : 'Post a job',
     barrel: editBarrel ? 'Edit storage' : 'Track storage',
     dungeon: editDungeon ? 'Edit dungeon' : 'Add a dungeon',
+    spot: editSpot ? 'Edit spot' : 'Add a gathering spot',
     ledger: 'Record a ledger entry',
     member: 'Add a member',
     role: editRole ? 'Edit role' : 'Create a role',
@@ -203,6 +207,49 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
       return;
     }
     update((d) => { d.barrels.push({ id: uid(), ...fields, at: new Date().toISOString() }); });
+  };
+
+  const submitSpot = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const files = (f.getAll('shots') as File[]).filter((x) => x && x.size);
+
+    let imgs = spotImgs;
+    if (files.length && cfg) {
+      setBusy(true);
+      setErr('');
+      try {
+        const uploaded = await Promise.all(files.map((file) => uploadImage(cfg, file)));
+        imgs = [...imgs, ...uploaded.filter(Boolean)];
+      } catch {
+        setBusy(false);
+        setErr('Screenshot upload failed. Save without it, or try smaller images.');
+        return;
+      }
+      setBusy(false);
+    }
+
+    const fields = {
+      name: String(f.get('name') || '').trim(),
+      kind: String(f.get('kind') || '').trim() || 'Other',
+      location: String(f.get('location') || '').trim(),
+      yield: String(f.get('yield') || '').trim(),
+      respawn: String(f.get('respawn') || '').trim(),
+      notes: String(f.get('notes') || ''),
+      imgs,
+      addedBy: String(f.get('addedBy') || '').trim(),
+    };
+    if (!fields.name) return;
+
+    close();
+    if (editSpot) {
+      update((d) => {
+        const t = d.spots.find((x) => x.id === editSpot.id);
+        if (t) Object.assign(t, fields);
+      });
+      return;
+    }
+    update((d) => { d.spots.push({ id: uid(), ...fields, at: new Date().toISOString() }); });
   };
 
   const submitDungeon = async (e: FormEvent<HTMLFormElement>) => {
@@ -463,6 +510,74 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
             </div>
 
             {footer(editBarrel ? 'Save storage' : 'Add storage')}
+          </form>
+        )}
+
+        {modal === 'spot' && (
+          <form onSubmit={submitSpot} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Spot name" htmlFor="sp-name">
+                <Input id="sp-name" name="name" required autoFocus
+                  defaultValue={editSpot?.name ?? ''} placeholder="e.g. Halted Stream iron veins" />
+              </Field>
+              <Field label="Kind" htmlFor="sp-kind">
+                {/* Free text with suggestions: a written-in kind gets its own tab. */}
+                <NameField id="sp-kind" name="kind" listId="dl-spot-kinds" options={SPOT_KINDS} required
+                  defaultValue={editSpot?.kind ?? SPOT_KINDS[0]} placeholder="Ore, Hunting, Alchemy…" />
+              </Field>
+            </div>
+
+            <Field label="Location" htmlFor="sp-location">
+              <Input id="sp-location" name="location"
+                defaultValue={editSpot?.location ?? ''}
+                placeholder="e.g. Halted Stream Camp, north of Whiterun" />
+            </Field>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Yield" htmlFor="sp-yield">
+                <Input id="sp-yield" name="yield"
+                  defaultValue={editSpot?.yield ?? ''} placeholder="e.g. 8 iron veins + transmute" />
+              </Field>
+              <Field label="Respawn" htmlFor="sp-respawn">
+                <Input id="sp-respawn" name="respawn"
+                  defaultValue={editSpot?.respawn ?? ''} placeholder="e.g. every 10 days" />
+              </Field>
+            </div>
+
+            <Field label="Notes" htmlFor="sp-notes">
+              <Textarea id="sp-notes" name="notes" rows={3}
+                defaultValue={editSpot?.notes ?? ''}
+                placeholder="Route in, what guards it, anything worth knowing" />
+            </Field>
+
+            <Field label="Screenshots" htmlFor="sp-shots">
+              <Input id="sp-shots" name="shots" type="file" accept="image/*" multiple className="cursor-pointer" />
+            </Field>
+
+            {spotImgs.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {spotImgs.map((src) => (
+                  <div key={src} className="relative">
+                    <img src={src} alt="Spot" className="h-20 w-full rounded-md border object-cover" />
+                    <Button
+                      type="button" variant="destructive" size="icon-xs"
+                      className="absolute right-1 top-1" aria-label="Remove screenshot"
+                      onClick={() => setSpotImgs((list) => list.filter((u) => u !== src))}
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Field label="Added by" htmlFor="sp-by">
+              <NameField id="sp-by" name="addedBy" listId="dl-spot-by" options={memberNames} required
+                defaultValue={editSpot?.addedBy ?? (memberNames[0] || '')}
+                placeholder="Pick a member or write in" />
+            </Field>
+
+            {footer(editSpot ? 'Save spot' : 'Add spot')}
           </form>
         )}
 

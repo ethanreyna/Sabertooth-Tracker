@@ -28,7 +28,7 @@ const GUEST_HIDDEN = ['ledger'] as const;
 
 const EMPTY_DB = {
   settings: { guildCutPct: 20 },
-  members: [], roles: [], jobs: [], barrels: [], dungeons: [], ledger: [],
+  members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [], ledger: [],
 };
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_DB_BYTES = 8 * 1024 * 1024;
