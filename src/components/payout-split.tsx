@@ -1,15 +1,15 @@
 import { useMemo } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TonedBadge } from '@/components/bits';
-import { GUILD_CUT, computePayout } from '@/lib/payout';
+import { computePayout } from '@/lib/payout';
 import { sep } from '@/lib/format';
 import type { Job } from '@/types';
 
 const pct = (n: number) => `${(n * 100).toFixed(n > 0 && n < 0.01 ? 2 : 1)}%`;
 
 /** Who has earned what of a collection job's septim reward. */
-export function PayoutSplit({ job }: { job: Job }) {
-  const p = useMemo(() => computePayout(job), [job]);
+export function PayoutSplit({ job, cutPct }: { job: Job; cutPct: number }) {
+  const p = useMemo(() => computePayout(job, cutPct), [job, cutPct]);
 
   if (p.reward <= 0) return null;
 
@@ -26,7 +26,7 @@ export function PayoutSplit({ job }: { job: Job }) {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
           { label: 'Reward', value: sep(p.reward) },
-          { label: `Guild cut (${pct(GUILD_CUT)})`, value: sep(p.guildCut) },
+          { label: `Guild cut (${p.cutPct}%)`, value: sep(p.guildCut) },
           { label: 'Player pool', value: sep(p.pool) },
           { label: 'Earned so far', value: sep(p.paid) },
         ].map((s) => (
@@ -85,7 +85,8 @@ export function PayoutSplit({ job }: { job: Job }) {
       <p className="text-xs text-muted-foreground">
         Shares are the fraction of the requested totals each member delivered, so a finished job pays
         out the full pool. Credit is capped at the requested quantity and given oldest turn-in first;
-        anything past the target, or not on the list, counts as surplus and earns nothing.
+        anything past the target, or not on the list, counts as surplus and earns nothing. The guild's
+        {' '}{p.cutPct}% cut is set under the gear icon.
       </p>
     </div>
   );

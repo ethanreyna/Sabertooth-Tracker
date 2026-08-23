@@ -26,7 +26,10 @@ type Role = 'member' | 'guest';
  *  server-side means an anonymous caller can't just read them off /api/db. */
 const GUEST_HIDDEN = ['ledger'] as const;
 
-const EMPTY_DB = { members: [], roles: [], jobs: [], barrels: [], dungeons: [], ledger: [] };
+const EMPTY_DB = {
+  settings: { guildCutPct: 20 },
+  members: [], roles: [], jobs: [], barrels: [], dungeons: [], ledger: [],
+};
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_DB_BYTES = 8 * 1024 * 1024;
 

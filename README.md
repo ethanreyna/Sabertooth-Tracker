@@ -26,7 +26,7 @@ formatting helpers.
   a custom item). Members log turn-ins; the job shows a progress bar per item.
   Jobs tagged *Resource collection* switch this on automatically.
 - **Septim splits** — a collection job's septim reward is divided by contribution
-  after a 25% guild cut. See *Reward splits* below.
+  after the guild's cut (20% by default, editable). See *Reward splits* below.
 - **Storage** — track owner, whether they're a guild member, weekly rate (50
   septims default), rental window, paid status, and a location screenshot.
 - **Ledger** — income and spending with a running treasury balance.
@@ -101,7 +101,10 @@ deploy will fail.
 
 A collection job's septim reward is divided like this:
 
-- The guild keeps **25%**, so the player pool is **75%** of the reward.
+- The guild keeps **20% by default**, so the player pool is the remaining 80%.
+  Change it under the gear icon → *Payout* → *Guild cut (%)*; it is stored with
+  the guild database, so everyone shares one figure. Changing it re-splits every
+  job, finished ones included.
 - A member who delivers **10% of what the job asked for** earns **10% of that
   pool**. So a finished job pays out the whole pool; a half-finished one pays
   half, and the rest stays unearned rather than being shared out early.

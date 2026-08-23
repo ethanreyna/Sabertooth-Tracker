@@ -153,7 +153,7 @@ export function Jobs({ db, q, exp, setExp, memberNames, update, readOnly, onEdit
                       {j.reward > 0 && (
                         <div>
                           <SectionLabel>Septim split</SectionLabel>
-                          <PayoutSplit job={j} />
+                          <PayoutSplit job={j} cutPct={db.settings.guildCutPct} />
                         </div>
                       )}
 

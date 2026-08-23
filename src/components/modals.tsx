@@ -14,7 +14,7 @@ import { uploadImage } from '@/sync';
 import { uid } from '@/lib/format';
 import { DURATION_UNITS, fromNow } from '@/lib/deadline';
 import type { DurationUnit } from '@/lib/deadline';
-import type { Barrel, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, Role, SyncCfg, SyncStatus } from '@/types';
+import type { Barrel, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, Role, Settings, SyncCfg, SyncStatus } from '@/types';
 
 export type ModalKind = 'job' | 'barrel' | 'dungeon' | 'ledger' | 'member' | 'role' | 'sync';
 
@@ -32,8 +32,8 @@ const toDateInput = (iso: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-export function Modals({ modal, close, roles, memberNames, editRole, editJob, editBarrel, editDungeon, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
-  modal: ModalKind; close: () => void; roles: Role[]; memberNames: string[];
+export function Modals({ modal, close, roles, settings, memberNames, editRole, editJob, editBarrel, editDungeon, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
+  modal: ModalKind; close: () => void; roles: Role[]; settings: Settings; memberNames: string[];
   editRole: Role | null; editJob: Job | null; editBarrel: Barrel | null; editDungeon: Dungeon | null;
   update: (fn: (d: DB) => void) => void; setJobsView: () => void;
   cfg: SyncCfg | null; sync: SyncStatus; offline: boolean; readOnly: boolean; onLogout: () => void;
@@ -55,8 +55,18 @@ export function Modals({ modal, close, roles, memberNames, editRole, editJob, ed
   const [ledgerType, setLedgerType] = useState<LedgerEntry['type']>('income');
   const [memberRole, setMemberRole] = useState(roles[0]?.name ?? NO_ROLE);
   const [advanceRole, setAdvanceRole] = useState(editRole?.advanceTo || NO_ROLE);
+  const [cutPct, setCutPct] = useState(String(settings.guildCutPct));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+
+  const cutClean = Math.min(100, Math.max(0, Math.round(Number(cutPct) || 0)));
+  const cutDirty = cutPct !== '' && cutClean !== settings.guildCutPct;
+
+  const submitSettings = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!cutDirty) return;
+    update((d) => { d.settings.guildCutPct = cutClean; });
+  };
 
   const pickTag = (v: string | null) => {
     const next = v ?? TAGS[0];
@@ -654,10 +664,33 @@ export function Modals({ modal, close, roles, memberNames, editRole, editJob, ed
             {readOnly && (
               <Alert className="border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-400">
                 <AlertDescription>
-                  You’re signed in with the guest password — you can read the board but not change it.
-                  Sign out and use the guild password to edit.
+                  You’re viewing as a guest — you can read the board but not change it. Sign out and
+                  enter the guild password to edit.
                 </AlertDescription>
               </Alert>
+            )}
+
+            {!readOnly && (
+              <form onSubmit={submitSettings} className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Payout
+                </p>
+                <div className="flex items-end gap-2">
+                  <Field label="Guild cut (%)" htmlFor="guild-cut" className="flex-1">
+                    <Input
+                      id="guild-cut" type="number" min={0} max={100} step={1}
+                      value={cutPct}
+                      onChange={(e) => setCutPct(e.target.value)}
+                    />
+                  </Field>
+                  <Button type="submit" disabled={!cutDirty}>Save</Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  The guild keeps this share of every collection job's septim reward; members split
+                  the remaining {100 - (Number(cutPct) || 0)}% by how much they delivered. Changing it
+                  re-splits every job, including finished ones.
+                </p>
+              </form>
             )}
 
             <p className="text-sm text-muted-foreground">

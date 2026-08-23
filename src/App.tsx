@@ -387,6 +387,7 @@ export default function App() {
             setEditBarrelId(null); setEditDungeonId(null);
           }}
           roles={db.roles}
+          settings={db.settings}
           memberNames={memberNames}
           editRole={db.roles.find((r) => r.id === editRoleId) ?? null}
           editJob={db.jobs.find((j) => j.id === editJobId) ?? null}

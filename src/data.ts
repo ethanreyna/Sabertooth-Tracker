@@ -1,9 +1,10 @@
+import { DEFAULT_GUILD_CUT_PCT } from './types';
 import type { DB } from './types';
 
 const d = (days: number) => new Date(Date.now() - days * 864e5).toISOString();
 const f = (days: number) => new Date(Date.now() + days * 864e5).toISOString();
 
-export const emptyDb = (): DB => ({ members: [], roles: [], jobs: [], barrels: [], dungeons: [], ledger: [] });
+export const emptyDb = (): DB => ({ settings: { guildCutPct: DEFAULT_GUILD_CUT_PCT }, members: [], roles: [], jobs: [], barrels: [], dungeons: [], ledger: [] });
 
 /** Sensible starting ranks, offered when the roster has no roles yet. The
  *  Initiate -> Saberblooded track mirrors the guild's blooding process. */
@@ -17,6 +18,7 @@ export const STARTER_ROLES = [
 
 /** Not wired into the app — kept for local testing. See emptyDb() for the real default. */
 export const demoDb = (): DB => ({
+  settings: { guildCutPct: DEFAULT_GUILD_CUT_PCT },
   members: [
     { id: 'm1', name: 'Zahir Alazar', role: 'Guildmaster', joined: d(120), log: [] },
     { id: 'm2', name: 'Karina', role: 'Quartermaster', joined: d(95), log: [] },

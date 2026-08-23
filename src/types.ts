@@ -105,7 +105,16 @@ export interface Member {
   log: MemberEntry[];
 }
 
+/** Guild-wide settings, editable from the guild database dialog. */
+export interface Settings {
+  /** Percent of a job's septim reward the guild keeps. 0-100. */
+  guildCutPct: number;
+}
+
+export const DEFAULT_GUILD_CUT_PCT = 20;
+
 export interface DB {
+  settings: Settings;
   members: Member[];
   roles: Role[];
   jobs: Job[];

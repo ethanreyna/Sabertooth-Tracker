@@ -1,3 +1,4 @@
+import { DEFAULT_GUILD_CUT_PCT } from './types';
 import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, MemberEntry, Price, Role, SyncCfg } from './types';
 
 const CFG_KEY = 'sabretooth-auth';
@@ -237,7 +238,15 @@ function normJob(raw: unknown): Job {
 
 export function normalizeDb(raw: unknown): DB {
   const o = (raw || {}) as Record<string, unknown>;
+  const st = (o.settings || {}) as Record<string, unknown>;
   return {
+    settings: {
+      // Records written before the setting existed fall back to the default
+      // rather than to 0, which would hand the guild nothing.
+      guildCutPct: st.guildCutPct === undefined || st.guildCutPct === null
+        ? DEFAULT_GUILD_CUT_PCT
+        : Math.min(100, Math.max(0, n(st.guildCutPct, DEFAULT_GUILD_CUT_PCT))),
+    },
     members: arr(o.members).map((m): Member => {
       const x = (m || {}) as Record<string, unknown>;
       return {

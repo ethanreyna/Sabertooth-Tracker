@@ -1,7 +1,5 @@
+import { DEFAULT_GUILD_CUT_PCT } from '@/types';
 import type { Job } from '@/types';
-
-/** The guild always keeps this much of a job's septim reward. */
-export const GUILD_CUT = 0.25;
 
 export interface PayoutRow {
   member: string;
@@ -16,6 +14,7 @@ export interface PayoutSummary {
   totalCredited: number;
   completion: number; // 0..1
   reward: number;
+  cutPct: number; // the guild's percentage, as applied
   guildCut: number; // septims the guild keeps
   pool: number; // septims available to players when the job is fully done
   paid: number; // septims earned so far
@@ -26,16 +25,17 @@ export interface PayoutSummary {
 /**
  * Splits a collection job's septim reward across contributors.
  *
- * The guild keeps 25%, so the player pool is 75% of the reward. A member who
- * delivers 10% of what the job asked for earns 10% of that pool — meaning a
- * finished job pays out the full 75%, and a half-finished one pays half, with
- * the rest left unearned rather than being shared out early.
+ * The guild keeps `cutPct` (20% by default, set per guild), so the player pool
+ * is the rest. A member who delivers 10% of what the job asked for earns 10% of
+ * that pool — meaning a finished job pays out the whole pool, and a
+ * half-finished one pays half, with the remainder left unearned rather than
+ * being shared out early.
  *
  * Credit is capped per item at the requested quantity and awarded oldest
  * turn-in first, so nobody is paid for surplus the job never asked for. Items
  * that were not requested at all earn nothing. Both show as `surplus`.
  */
-export function computePayout(job: Job): PayoutSummary {
+export function computePayout(job: Job, cutPct = DEFAULT_GUILD_CUT_PCT): PayoutSummary {
   const targets = new Map<string, number>();
   for (const t of job.items) {
     const key = t.item.trim().toLowerCase();
@@ -68,7 +68,8 @@ export function computePayout(job: Job): PayoutSummary {
   }
 
   const reward = Math.max(0, Number(job.reward) || 0);
-  const guildCut = reward * GUILD_CUT;
+  const pct = Math.min(100, Math.max(0, Number(cutPct) || 0));
+  const guildCut = reward * (pct / 100);
   const pool = reward - guildCut;
 
   const names = new Set([...credited.keys(), ...surplus.keys()]);
@@ -94,6 +95,7 @@ export function computePayout(job: Job): PayoutSummary {
     totalCredited,
     completion: totalRequired > 0 ? totalCredited / totalRequired : 0,
     reward,
+    cutPct: pct,
     guildCut: Math.round(guildCut),
     pool: Math.round(pool),
     paid,
