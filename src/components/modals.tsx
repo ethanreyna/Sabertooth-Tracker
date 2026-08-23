@@ -34,10 +34,11 @@ const toDateInput = (iso: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-export function Modals({ modal, close, roles, settings, memberNames, editRole, editJob, editBarrel, editDungeon, editSpot, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
+export function Modals({ modal, close, roles, settings, memberNames, editRole, editJob, editBarrel, editDungeon, editSpot, newSpotAt, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
   modal: ModalKind; close: () => void; roles: Role[]; settings: Settings; memberNames: string[];
   editRole: Role | null; editJob: Job | null; editBarrel: Barrel | null;
   editDungeon: Dungeon | null; editSpot: Spot | null;
+  newSpotAt: { x: string; y: string } | null;
   update: (fn: (d: DB) => void) => void; setJobsView: () => void;
   cfg: SyncCfg | null; sync: SyncStatus; offline: boolean; readOnly: boolean; onLogout: () => void;
 }) {
@@ -557,11 +558,11 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
               <div className="grid gap-4 sm:grid-cols-3">
                 <Field label="X" htmlFor="sp-x">
                   <Input id="sp-x" name="x" inputMode="numeric"
-                    defaultValue={editSpot?.x ?? ''} placeholder="-5782" />
+                    defaultValue={editSpot?.x ?? newSpotAt?.x ?? ''} placeholder="-5782" />
                 </Field>
                 <Field label="Y" htmlFor="sp-y">
                   <Input id="sp-y" name="y" inputMode="numeric"
-                    defaultValue={editSpot?.y ?? ''} placeholder="23050" />
+                    defaultValue={editSpot?.y ?? newSpotAt?.y ?? ''} placeholder="23050" />
                 </Field>
                 <Field label="Keizaal map link" htmlFor="sp-mapurl">
                   <Input id="sp-mapurl" name="mapUrl" type="url"

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Coins, Hammer, LayoutDashboard, Moon, Package, Pickaxe, Scale, Settings, Shield, ShieldHalf, Skull, Sun, Users, Briefcase,
+  Coins, Hammer, LayoutDashboard, Map as MapIcon, Moon, Package, Pickaxe, Scale, Settings, Shield, ShieldHalf, Skull, Sun, Users, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ import { Roles } from '@/views/roles';
 import { Dungeons } from '@/views/dungeons';
 import { Recipes } from '@/views/recipes';
 import { Spots } from '@/views/spots';
+import { MapView } from '@/views/map';
 import { emptyDb } from '@/data';
 import { applyTheme, loadTheme } from '@/theme';
 import {
@@ -26,12 +27,12 @@ import {
 import { cn } from '@/lib/utils';
 import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
-type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'poi' | 'bank' | 'ledger' | 'recipes' | 'roster' | 'roles';
+type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'poi' | 'map' | 'bank' | 'ledger' | 'recipes' | 'roster' | 'roles';
 
 /** What a read-only guest is allowed to see. `ledger` is the market price list,
  *  which comes from the public sheet; `bank` (the guild's septims) stays hidden,
  *  and the Worker strips those transactions from a guest response entirely. */
-const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'poi', 'ledger', 'recipes', 'roster'];
+const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'poi', 'map', 'ledger', 'recipes', 'roster'];
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -41,6 +42,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'storage', label: 'Storage', icon: <Package /> },
   { id: 'dungeons', label: 'Dungeons', icon: <Skull /> },
   { id: 'poi', label: 'Points of Interest', icon: <Pickaxe /> },
+  { id: 'map', label: 'Map', icon: <MapIcon /> },
   { id: 'bank', label: 'Bank', icon: <Coins /> },
   { id: 'ledger', label: 'Ledger', icon: <Scale /> },
   { id: 'recipes', label: 'Recipes', icon: <Hammer /> },
@@ -49,7 +51,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
 ];
 
 const TITLES: Record<View, string> = {
-  dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', poi: 'Points of Interest',
+  dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', poi: 'Points of Interest', map: 'Map',
   bank: 'Bank', ledger: 'Ledger', recipes: 'Recipes', roster: 'Roster', roles: 'Roles',
 };
 
@@ -74,6 +76,7 @@ export default function App() {
   const [editBarrelId, setEditBarrelId] = useState<string | null>(null);
   const [editDungeonId, setEditDungeonId] = useState<string | null>(null);
   const [editSpotId, setEditSpotId] = useState<string | null>(null);
+  const [newSpotAt, setNewSpotAt] = useState<{ x: string; y: string } | null>(null);
   const [access, setAccess] = useState<AccessRole>('member');
   const [sync, setSync] = useState<SyncStatus>('syncing');
   const [theme, setTheme] = useState<Theme>(() => loadTheme());
@@ -374,6 +377,13 @@ export default function App() {
               onEdit={(id) => { setEditSpotId(id); setModal('spot'); }}
             />
           )}
+          {view === 'map' && (
+            <MapView
+              db={db} readOnly={readOnly}
+              onPick={(x, y) => { setNewSpotAt({ x: String(x), y: String(y) }); setModal('spot'); }}
+              onOpen={(id) => { setEditSpotId(id); setModal('spot'); }}
+            />
+          )}
           {view === 'bank' && <Bank db={db} income={income} spend={spend} />}
           {view === 'ledger' && <Prices />}
           {view === 'recipes' && <Recipes />}
@@ -398,6 +408,7 @@ export default function App() {
             setModal(null);
             setEditRoleId(null); setEditJobId(null);
             setEditBarrelId(null); setEditDungeonId(null); setEditSpotId(null);
+            setNewSpotAt(null);
           }}
           roles={db.roles}
           settings={db.settings}
@@ -407,6 +418,7 @@ export default function App() {
           editBarrel={db.barrels.find((b) => b.id === editBarrelId) ?? null}
           editDungeon={db.dungeons.find((g) => g.id === editDungeonId) ?? null}
           editSpot={db.spots.find((sp) => sp.id === editSpotId) ?? null}
+          newSpotAt={newSpotAt}
           update={update}
           setJobsView={() => setView('jobs')}
           cfg={cfg}
