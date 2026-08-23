@@ -98,16 +98,16 @@ export interface Spot {
   location: string;
   yield: string; // what it gives, e.g. "3-4 iron veins"
   respawn: string; // e.g. "10 days"
-  coords: string; // free text, however the server states coordinates
+  /** Skyrim world coordinates, as strings so "not recorded" is just empty.
+   *  Used to build a UESP map link. */
+  x: string;
+  y: string;
   mapUrl: string; // a link pasted from keizaal.com/map pointing at this place
   notes: string;
   imgs: string[]; // screenshots (R2 URLs)
   addedBy: string;
   at: string;
 }
-
-/** The community map. Members paste a link from here onto a point of interest. */
-export const KEIZAAL_MAP_URL = 'https://keizaal.com/map';
 
 /** Offered as suggestions; members can write in anything, and the page's tabs
  *  are built from whatever kinds actually exist. */

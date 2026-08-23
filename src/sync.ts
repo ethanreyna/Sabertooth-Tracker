@@ -1,4 +1,5 @@
 import { DEFAULT_GUILD_CUT_PCT } from './types';
+import { coordOrEmpty, httpUrlOrEmpty } from './lib/maps';
 import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, MemberEntry, Price, Role, Spot, SyncCfg } from './types';
 
 const CFG_KEY = 'sabretooth-auth';
@@ -299,10 +300,10 @@ export function normalizeDb(raw: unknown): DB {
         id: s(x.id) || Math.random().toString(36).slice(2, 10),
         name: s(x.name), kind: s(x.kind, 'Other'),
         location: s(x.location), yield: s(x.yield), respawn: s(x.respawn),
-        coords: s(x.coords),
+        x: coordOrEmpty(s(x.x)), y: coordOrEmpty(s(x.y)),
         // Only http(s) links are kept, so a stored value can't become a
         // javascript: URL that runs when someone clicks "Open on map".
-        mapUrl: /^https?:\/\//i.test(s(x.mapUrl).trim()) ? s(x.mapUrl).trim() : '',
+        mapUrl: httpUrlOrEmpty(s(x.mapUrl)),
         notes: s(x.notes),
         imgs: arr(x.imgs).map((u) => s(u)).filter(Boolean),
         addedBy: s(x.addedBy), at: s(x.at),

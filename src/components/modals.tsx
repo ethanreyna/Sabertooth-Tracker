@@ -14,7 +14,8 @@ import { uploadImage } from '@/sync';
 import { uid } from '@/lib/format';
 import { DURATION_UNITS, fromNow } from '@/lib/deadline';
 import type { DurationUnit } from '@/lib/deadline';
-import { KEIZAAL_MAP_URL, SPOT_KINDS } from '@/types';
+import { SPOT_KINDS } from '@/types';
+import { KEIZAAL_MAP_URL, coordOrEmpty, httpUrlOrEmpty } from '@/lib/maps';
 import type { Barrel, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, Role, Settings, Spot, SyncCfg, SyncStatus } from '@/types';
 
 export type ModalKind = 'job' | 'barrel' | 'dungeon' | 'spot' | 'ledger' | 'member' | 'role' | 'sync';
@@ -24,12 +25,6 @@ const COLLECTION_TAG = 'Resource collection';
 const TAGS = [COLLECTION_TAG, 'Kill', 'Arrest', 'Guard', 'Escort', 'Delivery', 'Other'];
 const PRIORITIES = ['Normal', 'Low', 'High', 'Urgent'];
 const DIFFICULTIES = ['Easy', 'Moderate', 'Hard', 'Deadly'];
-
-/** Keeps only http(s) links, so nothing stored can become a javascript: URL. */
-const httpUrlOrEmpty = (raw: string) => {
-  const v = raw.trim();
-  return /^https?:\/\//i.test(v) ? v : '';
-};
 
 /** yyyy-mm-dd for a date input, in local time. */
 const toDateInput = (iso: string) => {
@@ -241,9 +236,10 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
       location: String(f.get('location') || '').trim(),
       yield: String(f.get('yield') || '').trim(),
       respawn: String(f.get('respawn') || '').trim(),
-      coords: String(f.get('coords') || '').trim(),
+      x: coordOrEmpty(String(f.get('x') || '')),
+      y: coordOrEmpty(String(f.get('y') || '')),
       // Only http(s) accepted, so a pasted javascript: URL can't be stored and
-      // later run from the card's "Open on map" link.
+      // later run from the card's map button.
       mapUrl: httpUrlOrEmpty(String(f.get('mapUrl') || '')),
       notes: String(f.get('notes') || ''),
       imgs,
@@ -558,23 +554,32 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Map
               </p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Coordinates" htmlFor="sp-coords">
-                  <Input id="sp-coords" name="coords"
-                    defaultValue={editSpot?.coords ?? ''} placeholder="however the server gives them" />
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Field label="X" htmlFor="sp-x">
+                  <Input id="sp-x" name="x" inputMode="numeric"
+                    defaultValue={editSpot?.x ?? ''} placeholder="-5782" />
                 </Field>
-                <Field label="Map link" htmlFor="sp-mapurl">
+                <Field label="Y" htmlFor="sp-y">
+                  <Input id="sp-y" name="y" inputMode="numeric"
+                    defaultValue={editSpot?.y ?? ''} placeholder="23050" />
+                </Field>
+                <Field label="Keizaal map link" htmlFor="sp-mapurl">
                   <Input id="sp-mapurl" name="mapUrl" type="url"
                     defaultValue={editSpot?.mapUrl ?? ''} placeholder="https://keizaal.com/map…" />
                 </Field>
               </div>
               <p className="text-xs text-muted-foreground">
-                Open{' '}
+                Skyrim world coordinates build a{' '}
+                <a href="https://gamemap.uesp.net/sr/" target="_blank" rel="noreferrer" className="underline">
+                  UESP map
+                </a>{' '}
+                link automatically — read them off the UESP map's address bar, or from{' '}
+                <code className="text-[11px]">getpos</code> in the console. The Keizaal link is
+                optional: open{' '}
                 <a href={KEIZAAL_MAP_URL} target="_blank" rel="noreferrer" className="underline">
                   keizaal.com/map
                 </a>
-                , find the place, then copy the address bar in here — the card gets an “Open on map”
-                button pointing straight at it.
+                , find the place, and paste the address bar here.
               </p>
             </div>
 

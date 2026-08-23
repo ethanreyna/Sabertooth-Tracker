@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState, TonedBadge } from '@/components/bits';
 import type { Tone } from '@/components/bits';
 import { ago } from '@/lib/format';
-import { KEIZAAL_MAP_URL } from '@/types';
+import { KEIZAAL_MAP_URL, uespMapUrl } from '@/lib/maps';
 import type { DB, Spot } from '@/types';
 
 const ALL = '__all';
@@ -20,6 +20,7 @@ const toneFor = (kind: string) => KIND_TONE[kind.toLowerCase()] ?? 'neutral';
 function SpotCard({ spot, readOnly, onEdit, remove }: {
   spot: Spot; readOnly: boolean; onEdit: (id: string) => void; remove: (s: Spot) => void;
 }) {
+  const uesp = uespMapUrl(spot.x, spot.y);
   return (
     <Card className="flex flex-col overflow-hidden py-0">
       {spot.imgs.length > 0 ? (
@@ -66,23 +67,36 @@ function SpotCard({ spot, readOnly, onEdit, remove }: {
           </p>
         )}
 
-        {spot.coords && (
+        {spot.x && spot.y && (
           <p className="text-xs">
             <span className="text-muted-foreground">Coords: </span>
-            <span className="tabular-nums">{spot.coords}</span>
+            <span className="tabular-nums">{spot.x}, {spot.y}</span>
           </p>
         )}
 
         {spot.notes && <p className="text-xs whitespace-pre-wrap">{spot.notes}</p>}
 
-        {spot.mapUrl && (
-          <Button
-            variant="outline" size="xs" className="self-start"
-            render={<a href={spot.mapUrl} target="_blank" rel="noreferrer" />}
-          >
-            <Map />
-            Open on map
-          </Button>
+        {(uesp || spot.mapUrl) && (
+          <div className="flex flex-wrap gap-1.5">
+            {uesp && (
+              <Button
+                variant="outline" size="xs"
+                render={<a href={uesp} target="_blank" rel="noreferrer" />}
+              >
+                <Map />
+                UESP map
+              </Button>
+            )}
+            {spot.mapUrl && (
+              <Button
+                variant="outline" size="xs"
+                render={<a href={spot.mapUrl} target="_blank" rel="noreferrer" />}
+              >
+                <ExternalLink />
+                Keizaal map
+              </Button>
+            )}
+          </div>
         )}
 
         <div className="mt-auto flex items-center gap-2 pt-1">
