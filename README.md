@@ -36,6 +36,9 @@ formatting helpers.
   watch their progress toward the next rank. Promote in one click when ready.
 - **Dungeons** — scouted dungeons with location, recommended party size,
   difficulty, notes, and map screenshots.
+- **Recipes** — 102 Skyforge blacksmith recipes with armour/damage and
+  ingredients, searchable **by ingredient** ("what can I make with leather
+  strips"). Baked in rather than synced — see *Recipes* below.
 - **Guest mode** — an **Enter as Guest** button on the login screen gives a
   read-only view of jobs, storage, dungeons, and the roster. No password needed.
 - **Themes** — dark by default; toggle to light in the sidebar. Remembered per browser.
@@ -113,6 +116,31 @@ A collection job's septim reward is divided like this:
   that weren't requested at all earn nothing. Both show as *surplus*.
 
 The maths lives in `src/lib/payout.ts` if you want to change the cut.
+
+## Recipes
+
+`src/recipes.ts` is generated once from the guild's blacksmith recipe Google Doc
+and ships with the app — deliberately not a live feed, so the Recipes page works
+with no network and no dependence on that doc staying shared. Re-extract after
+the doc changes:
+
+```sh
+curl -sL -o /tmp/recipes.txt \
+  "https://docs.google.com/document/d/<DOC_ID>/export?format=txt"
+python3 scripts/gen_recipes.py /tmp/recipes.txt src/recipes.ts
+```
+
+The generator prints a per-category count; check it before committing. Two
+things it handles that are easy to get wrong:
+
+- The armour blocks head their middle column **Armor**, the weapons block calls
+  it **Damage**. Only matching "Armor" silently drops every weapon.
+- Ingredient counts marked `(?)` in the doc were obscured in the footage it was
+  transcribed from. They are kept verbatim rather than tidied, so a guess is
+  never mistaken for a confirmed figure.
+
+The doc's own header says "97 recipes"; it contains **102** (306 record lines,
+dividing exactly by three). The larger number is the real one.
 
 ## How syncing works
 
