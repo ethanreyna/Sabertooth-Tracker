@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
+import {
+  Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList,
+} from '@/components/ui/combobox';
 import { cn } from '@/lib/utils';
 import type { JobStatus } from '@/types';
 
@@ -45,20 +48,45 @@ export function Field({ label, htmlFor, className, children }: {
   );
 }
 
-/** Free-text field that also suggests roster members — pick one or write anyone in. */
-export function NameField({ name, listId, options, defaultValue, required, placeholder, id }: {
-  name: string; listId: string; options: string[];
+/**
+ * A combobox that also accepts anything typed in, for the fields where the
+ * suggestion list is help rather than law — a job can be posted for someone
+ * who isn't on the roster, and a point of interest can be a kind nobody has
+ * used yet.
+ *
+ * The typed text is mirrored into a hidden input so the surrounding forms keep
+ * reading their values straight off FormData. Base UI's own `name` would submit
+ * the *selected* item, which would silently drop a written-in value.
+ */
+export function NameField({ name, options, defaultValue = '', required, placeholder, id }: {
+  name: string; options: string[];
   defaultValue?: string; required?: boolean; placeholder?: string; id?: string;
 }) {
+  const [value, setValue] = useState(defaultValue);
+  const known = options.some((o) => o.toLowerCase() === value.trim().toLowerCase());
+
   return (
     <>
-      <Input
-        id={id} name={name} list={listId} defaultValue={defaultValue}
-        required={required} placeholder={placeholder} autoComplete="off"
-      />
-      <datalist id={listId}>
-        {options.map((o) => <option key={o} value={o} />)}
-      </datalist>
+      <input type="hidden" name={name} value={value} />
+      <Combobox
+        items={options}
+        inputValue={value}
+        onInputValueChange={(v) => setValue(String(v ?? ''))}
+        openOnInputClick
+      >
+        <ComboboxInput id={id} placeholder={placeholder} required={required} autoComplete="off" />
+        <ComboboxContent>
+          <ComboboxEmpty>Not on the list — saved as typed.</ComboboxEmpty>
+          <ComboboxList>
+            {(item: string) => (
+              <ComboboxItem key={item} value={item}>{item}</ComboboxItem>
+            )}
+          </ComboboxList>
+        </ComboboxContent>
+      </Combobox>
+      {value.trim() !== '' && !known && (
+        <p className="text-[11px] text-muted-foreground">New entry — saved as “{value.trim()}”.</p>
+      )}
     </>
   );
 }

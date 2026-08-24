@@ -359,11 +359,11 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Posted for (client)" htmlFor="job-client">
-                <NameField id="job-client" name="client" listId="dl-clients" options={memberNames} required
+                <NameField id="job-client" name="client" options={memberNames} required
                   defaultValue={editJob?.client ?? ""} placeholder="Pick a member or write anyone in" />
               </Field>
               <Field label="Posted by" htmlFor="job-poster">
-                <NameField id="job-poster" name="postedBy" listId="dl-posters" options={memberNames} required
+                <NameField id="job-poster" name="postedBy" options={memberNames} required
                   defaultValue={editJob?.postedBy ?? (memberNames[0] || '')} placeholder="Pick a member or write in" />
               </Field>
             </div>
@@ -477,7 +477,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
           <form onSubmit={submitBarrel} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Renter" htmlFor="barrel-owner">
-                <NameField id="barrel-owner" name="owner" listId="dl-renters" options={memberNames} required
+                <NameField id="barrel-owner" name="owner" options={memberNames} required
                   defaultValue={editBarrel?.owner ?? (memberNames[0] || '')} placeholder="Pick a member or write in" />
               </Field>
               <Field label="Weekly rate (septims)" htmlFor="barrel-rate">
@@ -529,7 +529,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
               </Field>
               <Field label="Kind" htmlFor="sp-kind">
                 {/* Free text with suggestions: a written-in kind gets its own tab. */}
-                <NameField id="sp-kind" name="kind" listId="dl-spot-kinds" options={SPOT_KINDS} required
+                <NameField id="sp-kind" name="kind" options={SPOT_KINDS} required
                   defaultValue={editSpot?.kind ?? SPOT_KINDS[0]} placeholder="Ore, Hunting, Alchemy…" />
               </Field>
             </div>
@@ -612,7 +612,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
             )}
 
             <Field label="Added by" htmlFor="sp-by">
-              <NameField id="sp-by" name="addedBy" listId="dl-spot-by" options={memberNames} required
+              <NameField id="sp-by" name="addedBy" options={memberNames} required
                 defaultValue={editSpot?.addedBy ?? (memberNames[0] || '')}
                 placeholder="Pick a member or write in" />
             </Field>
@@ -677,7 +677,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
             )}
 
             <Field label="Added by" htmlFor="dg-by">
-              <NameField id="dg-by" name="addedBy" listId="dl-dungeon-by" options={memberNames} required
+              <NameField id="dg-by" name="addedBy" options={memberNames} required
                 defaultValue={editDungeon?.addedBy ?? (memberNames[0] || '')}
                 placeholder="Pick a member or write in" />
             </Field>
@@ -708,7 +708,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
             </Field>
 
             <Field label="Recorded by" htmlFor="ledger-by">
-              <NameField id="ledger-by" name="by" listId="dl-ledger-by" options={memberNames} required
+              <NameField id="ledger-by" name="by" options={memberNames} required
                 defaultValue={memberNames[0] || ''} placeholder="Pick a member or write in" />
             </Field>
 

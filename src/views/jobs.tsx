@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CollectionProgress } from '@/components/collection-progress';
 import { PayoutSplit } from '@/components/payout-split';
-import { EmptyState, PriorityBadge, StatusBadge, TonedBadge } from '@/components/bits';
+import { EmptyState, NameField, PriorityBadge, StatusBadge, TonedBadge } from '@/components/bits';
 import { ALL_ITEM_NAMES } from '@/items';
 import { collectedByItem } from '@/sync';
 import { ago, dstr, sep } from '@/lib/format';
@@ -189,22 +189,23 @@ export function Jobs({ db, q, exp, setExp, memberNames, update, readOnly, onEdit
                         {!readOnly && (
                         <form onSubmit={addEntry} className="mt-2 flex flex-wrap items-end gap-2">
                           <input type="hidden" name="jobId" value={j.id} />
-                          <Input
-                            name="by" required placeholder="Who collected it"
-                            list={`members-${j.id}`} autoComplete="off" className="h-8 w-40"
-                          />
-                          <datalist id={`members-${j.id}`}>
-                            {memberNames.map((n) => <option key={n} value={n} />)}
-                          </datalist>
-                          <Input
-                            name="item" required placeholder="Item collected"
-                            list={`items-${j.id}`} autoComplete="off" className="h-8 min-w-36 flex-1"
-                          />
-                          <datalist id={`items-${j.id}`}>
-                            {j.items.map((t) => <option key={`t-${t.item}`} value={t.item} />)}
-                            {ALL_ITEM_NAMES.map((nm) => <option key={nm} value={nm} />)}
-                          </datalist>
-                          <Input name="qty" type="number" min={1} defaultValue={1} className="h-8 w-20" />
+                          <div className="w-44">
+                            <NameField name="by" options={memberNames} required placeholder="Who collected it" />
+                          </div>
+                          <div className="min-w-44 flex-1">
+                            {/* The job's own requests first: that's what a turn-in
+                                is usually against, out of ~600 catalogue items. */}
+                            <NameField
+                              name="item" required placeholder="Item collected"
+                              options={[
+                                ...j.items.map((t) => t.item),
+                                ...ALL_ITEM_NAMES.filter(
+                                  (nm) => !j.items.some((t) => t.item.toLowerCase() === nm.toLowerCase()),
+                                ),
+                              ]}
+                            />
+                          </div>
+                          <Input name="qty" type="number" min={1} defaultValue={1} className="h-9 w-20" />
                           <Button type="submit" size="sm">Add turn-in</Button>
                         </form>
                         )}

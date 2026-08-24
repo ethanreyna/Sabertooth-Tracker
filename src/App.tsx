@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Coins, Hammer, LayoutDashboard, Map as MapIcon, Moon, Package, Pickaxe, Scale, Settings, Shield, ShieldHalf, Skull, Sun, Users, Briefcase,
+  Coins, Hammer, LayoutDashboard, Map as MapIcon, Moon, Package, Scale, Settings, Shield, ShieldHalf, Skull, Sun, Users, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,6 @@ import { Roster } from '@/views/roster';
 import { Roles } from '@/views/roles';
 import { Dungeons } from '@/views/dungeons';
 import { Recipes } from '@/views/recipes';
-import { Spots } from '@/views/spots';
 import { MapView } from '@/views/map';
 import { emptyDb } from '@/data';
 import { applyTheme, loadTheme } from '@/theme';
@@ -27,12 +26,12 @@ import {
 import { cn } from '@/lib/utils';
 import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
-type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'poi' | 'map' | 'bank' | 'ledger' | 'recipes' | 'roster' | 'roles';
+type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'recipes' | 'roster' | 'roles';
 
 /** What a read-only guest is allowed to see. `ledger` is the market price list,
  *  which comes from the public sheet; `bank` (the guild's septims) stays hidden,
  *  and the Worker strips those transactions from a guest response entirely. */
-const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'poi', 'map', 'ledger', 'recipes', 'roster'];
+const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'recipes', 'roster'];
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -41,8 +40,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'jobs', label: 'Jobs', icon: <Briefcase /> },
   { id: 'storage', label: 'Storage', icon: <Package /> },
   { id: 'dungeons', label: 'Dungeons', icon: <Skull /> },
-  { id: 'poi', label: 'Points of Interest', icon: <Pickaxe /> },
-  { id: 'map', label: 'Map', icon: <MapIcon /> },
+  { id: 'map', label: 'Map & Points', icon: <MapIcon /> },
   { id: 'bank', label: 'Bank', icon: <Coins /> },
   { id: 'ledger', label: 'Ledger', icon: <Scale /> },
   { id: 'recipes', label: 'Recipes', icon: <Hammer /> },
@@ -51,7 +49,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
 ];
 
 const TITLES: Record<View, string> = {
-  dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', poi: 'Points of Interest', map: 'Map',
+  dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', map: 'Map & Points of Interest',
   bank: 'Bank', ledger: 'Ledger', recipes: 'Recipes', roster: 'Roster', roles: 'Roles',
 };
 
@@ -59,7 +57,7 @@ const ACTIONS: Partial<Record<View, { label: string; modal: ModalKind }>> = {
   jobs: { label: 'New job', modal: 'job' },
   storage: { label: 'New storage', modal: 'barrel' },
   dungeons: { label: 'New dungeon', modal: 'dungeon' },
-  poi: { label: 'New point', modal: 'spot' },
+  map: { label: 'New point', modal: 'spot' },
   bank: { label: 'New entry', modal: 'ledger' },
   roster: { label: 'Add member', modal: 'member' },
   roles: { label: 'New role', modal: 'role' },
@@ -371,17 +369,12 @@ export default function App() {
               onEdit={(id) => { setEditDungeonId(id); setModal('dungeon'); }}
             />
           )}
-          {view === 'poi' && (
-            <Spots
-              db={db} update={update} readOnly={readOnly}
-              onEdit={(id) => { setEditSpotId(id); setModal('spot'); }}
-            />
-          )}
           {view === 'map' && (
             <MapView
-              db={db} readOnly={readOnly}
+              db={db} update={update} readOnly={readOnly}
               onPick={(x, y) => { setNewSpotAt({ x: String(x), y: String(y) }); setModal('spot'); }}
               onOpen={(id) => { setEditSpotId(id); setModal('spot'); }}
+              onDelete={(id) => update((d) => { d.spots = d.spots.filter((sp) => sp.id !== id); })}
             />
           )}
           {view === 'bank' && <Bank db={db} income={income} spend={spend} />}

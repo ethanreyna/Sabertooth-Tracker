@@ -36,9 +36,10 @@ export interface MapCanvasProps {
   /** Clicking empty map hands back coordinates so a point can be created there. */
   onPick: (x: number, y: number) => void;
   onOpen: (id: string) => void;
+  onDelete: (id: string) => void;
 }
 
-export default function MapCanvas({ db, readOnly, onPick, onOpen }: MapCanvasProps) {
+export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete }: MapCanvasProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -47,6 +48,8 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen }: MapCanvasPro
   pickRef.current = onPick;
   const openRef = useRef(onOpen);
   openRef.current = onOpen;
+  const deleteRef = useRef(onDelete);
+  deleteRef.current = onDelete;
   const roRef = useRef(readOnly);
   roRef.current = readOnly;
 
@@ -124,19 +127,29 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen }: MapCanvasPro
         fillOpacity: 0.95,
       });
       marker.bindTooltip(`${esc(s.name)} · ${esc(s.kind)}`, { direction: 'top' });
+      const btn = 'font-size:12px;text-decoration:underline;cursor:pointer;background:none;border:0;padding:0';
       marker.bindPopup(
         `<div style="min-width:180px">
            <div style="font-weight:600">${esc(s.name)}</div>
            <div style="opacity:.7;font-size:12px">${esc(s.kind)}${s.location ? ' · ' + esc(s.location) : ''}</div>
            ${s.yield ? `<div style="font-size:12px;margin-top:4px">${esc(s.yield)}</div>` : ''}
            <div style="font-size:11px;opacity:.6;margin-top:4px">${esc(s.x)}, ${esc(s.y)}</div>
-           <button data-poi="${esc(s.id)}" style="margin-top:6px;font-size:12px;text-decoration:underline;cursor:pointer;background:none;border:0;padding:0;color:inherit">Open</button>
+           <div style="display:flex;gap:10px;margin-top:6px">
+             <button data-act="open" style="${btn};color:inherit">Open</button>
+             ${roRef.current ? '' : `<button data-act="del" style="${btn};color:#dc2626">Delete</button>`}
+           </div>
          </div>`,
       );
       marker.on('popupopen', (e) => {
         const el = (e as unknown as { popup: L.Popup }).popup.getElement();
-        el?.querySelector<HTMLButtonElement>('button[data-poi]')
+        el?.querySelector<HTMLButtonElement>('button[data-act="open"]')
           ?.addEventListener('click', () => openRef.current(s.id));
+        el?.querySelector<HTMLButtonElement>('button[data-act="del"]')
+          ?.addEventListener('click', () => {
+            // Confirmed here rather than in React: the popup is Leaflet's own
+            // DOM, so there is no dialog to hand this off to.
+            if (confirm(`Delete “${s.name}”?`)) deleteRef.current(s.id);
+          });
       });
       marker.addTo(group);
     }
