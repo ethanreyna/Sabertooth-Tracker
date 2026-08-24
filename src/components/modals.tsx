@@ -440,7 +440,9 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
       }
       d.items.push({
         id: uid(), name, category, notes,
-        addedBy: memberNames[0] || '',
+        // No field asks who added it, and guessing the first name on the roster
+        // would put one person's name on everybody's items.
+        addedBy: '',
         at: new Date().toISOString(),
       });
     });
@@ -497,7 +499,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
               </Field>
               <Field label="Posted by" htmlFor="job-poster">
                 <NameField id="job-poster" name="postedBy" options={memberNames} required
-                  defaultValue={editJob?.postedBy ?? (memberNames[0] || '')} placeholder="Pick a member or write in" />
+                  defaultValue={editJob?.postedBy ?? ''} placeholder="Pick a member or write in" />
               </Field>
             </div>
 
@@ -601,7 +603,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Renter" htmlFor="barrel-owner">
                 <NameField id="barrel-owner" name="owner" options={memberNames} required
-                  defaultValue={editBarrel?.owner ?? draftBarrel?.owner ?? (memberNames[0] || '')} placeholder="Pick a member or write in" />
+                  defaultValue={editBarrel?.owner ?? draftBarrel?.owner ?? ''} placeholder="Pick a member or write in" />
               </Field>
               <Field label="Weekly rate (septims)" htmlFor="barrel-rate">
                 <Input id="barrel-rate" name="rate" type="number" min={0} defaultValue={editBarrel?.rate ?? draftBarrel?.rate ?? 50} />
@@ -777,7 +779,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
 
             <Field label="Added by" htmlFor="sp-by">
               <NameField id="sp-by" name="addedBy" options={memberNames} required
-                defaultValue={editSpot?.addedBy ?? (memberNames[0] || '')}
+                defaultValue={editSpot?.addedBy ?? ''}
                 placeholder="Pick a member or write in" />
             </Field>
 
@@ -865,7 +867,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
 
             <Field label="Added by" htmlFor="dg-by">
               <NameField id="dg-by" name="addedBy" options={memberNames} required
-                defaultValue={editDungeon?.addedBy ?? (memberNames[0] || '')}
+                defaultValue={editDungeon?.addedBy ?? ''}
                 placeholder="Pick a member or write in" />
             </Field>
 
@@ -894,7 +896,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
 
             <Field label="Recorded by" htmlFor="ledger-by">
               <NameField id="ledger-by" name="by" options={memberNames} required
-                defaultValue={memberNames[0] || ''} placeholder="Pick a member or write in" />
+                placeholder="Pick a member or write in" />
             </Field>
 
             {footer('Record')}
@@ -927,7 +929,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
 
             <Field label="Logged by" htmlFor="bank-item-by">
               <NameField id="bank-item-by" name="by" options={memberNames} required
-                defaultValue={memberNames[0] || ''} placeholder="Pick a member or write in" />
+                placeholder="Pick a member or write in" />
             </Field>
 
             {footer('Log it')}
