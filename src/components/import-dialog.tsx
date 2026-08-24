@@ -33,10 +33,11 @@ const FORMATS = {
     title: 'Import storage',
     help: 'Paste a storage post — where the container is and what it costs. '
       + 'Or drop in a screenshot and it will be read for you.',
-    fields: 'Reads: whose it is, where the container is, the weekly rate '
-      + '(“rents for free” means nothing owed), and whether it is a guild member and paid up.',
-    sample: 'Name : Skadi\n\nBottom right barrel of the meadery tavern.\n\n'
-      + 'Guildmember rate : 50 septims per week\n\nPaid in full through work for the guild.',
+    fields: 'Reads: whose it is (the thread’s own title counts — that is usually the renter), '
+      + 'where the container is, the weekly rate, whether it is a guild member and paid up, '
+      + 'and the paid and due dates. Dates are read day-first: 24/8/26 is the 24th of August.',
+    sample: 'End-with-Pride\n\nLarge Sack in the corner under the stairs of the Boilery\n'
+      + 'guildmember rate:\n50 Septims paid 21/8/26\ndue 24/8/26',
     button: 'Open in the storage form',
     wrong: 'That reads more like a job post. It will still be imported as storage — '
       + 'use the Jobs page instead if that was the intention.',
@@ -211,6 +212,8 @@ function Preview({ draft }: { draft: Draft }) {
             <Line label="Weekly rate">{draft.rate > 0 ? `${sep(draft.rate)} septims` : 'free'}</Line>
             <Line label="Guild member">{draft.guildMember ? 'yes' : 'no'}</Line>
             <Line label="Paid">{draft.paid ? 'yes' : 'no'}</Line>
+            {draft.start && <Line label="Rented from">{draft.start}</Line>}
+            {draft.end && <Line label="Due">{draft.end}</Line>}
             {draft.notes && <Line label="Where">{draft.notes}</Line>}
           </>
         )}

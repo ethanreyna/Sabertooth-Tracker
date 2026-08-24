@@ -32,6 +32,9 @@ export interface BarrelDraft {
   guildMember: boolean;
   paid: boolean;
   rate: number;
+  /** yyyy-mm-dd, ready for a date input. Blank when the post didn't say. */
+  start: string;
+  end: string;
   notes: string;
   missing: string[];
 }
@@ -53,6 +56,44 @@ function pick(rows: Array<{ label: string; value: string }>, ...keys: string[]):
   for (const k of keys) {
     const hit = rows.find((r) => r.label.includes(k) && r.value !== '');
     if (hit) return hit.value;
+  }
+  return '';
+}
+
+/**
+ * A date as the board writes it: 21/8/26, 21/08/2026, 2026-08-21.
+ *
+ * Day first, deliberately. "due 24/8/26" is unambiguous either way, but 3/8/26
+ * is not, and this guild writes British-style — reading it month-first would
+ * quietly move a rent date by months.
+ */
+export function parseDate(raw: string): string {
+  const t = raw.trim();
+
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
+  if (iso) return ymd(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+
+  const slash = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/.exec(t);
+  if (!slash) return '';
+  const day = Number(slash[1]);
+  const month = Number(slash[2]);
+  let year = Number(slash[3]);
+  if (year < 100) year += 2000;
+  if (day < 1 || day > 31 || month < 1 || month > 12) return '';
+  return ymd(year, month, day);
+}
+
+const ymd = (y: number, m: number, d: number) =>
+  `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+const DATE_RE = String.raw`(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}|\d{4}-\d{1,2}-\d{1,2})`;
+
+/** The first date following one of `keys` — "paid 21/8/26", "due 24/8/26". */
+function dateAfter(blob: string, ...keys: string[]): string {
+  for (const k of keys) {
+    const m = new RegExp(k + String.raw`\s*:?\s*(?:on\s+|by\s+)?` + DATE_RE, 'i').exec(blob);
+    const d = m ? parseDate(m[1]) : '';
+    if (d) return d;
   }
   return '';
 }
@@ -95,7 +136,17 @@ const titled = (v: string) =>
 /** The byline Discord puts above every post: name, an OP chip, then a stamp. */
 const BYLINE = /\d{1,2}\/\d{1,2}\/\d{2,4}\s+\d{1,2}:\d{2}\s*(?:AM|PM)?|\bOP\b\s+\d/i;
 /** Chrome that would otherwise be read as content. */
-const NOISE = /^(?:OP|\(?edited\)?|\d{1,2}\/\d{1,2}\/\d{2,4}.*|\d{1,2}:\d{2}\s?(?:AM|PM)?)$/i;
+const MONTHS = 'January|February|March|April|May|June|July|August|September|October|November|December';
+const NOISE = new RegExp(
+  '^(?:OP'
+  + String.raw`|\(?edited\)?`
+  + String.raw`|\d{1,2}/\d{1,2}/\d{2,4}.*`
+  + String.raw`|\d{1,2}:\d{2}\s?(?:AM|PM)?`
+  // "August 21, 2026" — the day divider Discord puts above a post.
+  + `|(?:${MONTHS})` + String.raw`\s+\d{1,2},?\s+\d{4}`
+  + ')$',
+  'i',
+);
 
 const isChrome = (l: string) => NOISE.test(l) || BYLINE.test(l);
 
@@ -145,7 +196,8 @@ export function sniff(text: string): Draft['kind'] {
 export function parseImport(text: string, as?: Draft['kind']): Draft {
   const all = lines(text);
   const kind = as ?? sniff(text);
-  return kind === 'barrel' ? parseStorage(all) : parseJob(all, threadTitle(text));
+  const title = threadTitle(text);
+  return kind === 'barrel' ? parseStorage(all, title) : parseJob(all, title);
 }
 
 function parseJob(all: string[], title = ''): JobDraft {
@@ -217,32 +269,47 @@ function parseJob(all: string[], title = ''): JobDraft {
   };
 }
 
-function parseStorage(all: string[]): BarrelDraft {
+/** A line that is only about money or dates, and so isn't the location. */
+const isTerms = (line: string) =>
+  /(?:^|\s)(?:rate|paid|due|owed|owing|rent(?:ed|s)?|free|per week|weekly)\b/i.test(line)
+  || new RegExp('^\s*' + DATE_RE + '\s*$').test(line);
+
+function parseStorage(all: string[], title = ''): BarrelDraft {
   const rows = all.map(labelled).filter((r): r is { label: string; value: string } => r !== null);
-  const blob = all.join(' ');
+  const blob = all.join('\n');
   const l = blob.toLowerCase();
 
-  const owner = pick(rows, 'name', 'owner', 'renter', 'member');
+  // On the storage board the thread is named after the renter, so the title is
+  // usually the only place their name appears at all.
+  const owner = pick(rows, 'name', 'owner', 'renter', 'tenant') || title;
 
   // "Guildmember rate", "Bartender rents for free", "Paid in full through work
-  // for the guild" — the three ways the board says who is paying what.
+  // for the guild" — the ways the board says who is paying what.
   const guildMember = /guild\s?member|guildmember|for the guild/.test(l);
-  const free = /\bfree\b|no charge|free of charge/.test(l);
-  const paid = free || /paid in full|paid up|prepaid|paid through/.test(l);
+  const free = /\bfree\b|no charge/.test(l);
+  // A plain "paid" counts, but not "unpaid" or "not paid".
+  const paid = free || (/\bpaid\b|\bprepaid\b/.test(l) && !/\bun-?paid\b|\bnot paid\b|\bnever paid\b/.test(l));
 
-  const rateMatch = /(\d[\d,]*)\s*(?:septims?|s\b|gold)?\s*(?:per|a|\/)\s*week/i.exec(blob)
+  // "50 Septims paid 21/8/26" and "50 per week" and "rate: 50" all mean the
+  // same thing. Taken in that order so a date can't be read as a rate.
+  const rateMatch = /(\d[\d,]*)\s*(?:septims?|gold)/i.exec(blob)
+    ?? /(\d[\d,]*)\s*(?:septims?|gold)?\s*(?:per|a|\/)\s*week/i.exec(blob)
     ?? /rate\s*:?\s*(\d[\d,]*)/i.exec(blob);
   const rate = free ? 0 : Number((rateMatch?.[1] ?? '').replace(/,/g, '')) || 0;
 
-  // Everything that isn't a label line is the description of where it is.
-  const notes = all.filter((line) => {
-    const row = labelled(line);
-    return !row || (!!row.value && /rate|detail|note|place|location/.test(row.label));
-  }).join('\n');
+  const start = dateAfter(blob, 'paid', 'from', 'rented', 'start');
+  const end = dateAfter(blob, 'due', 'until', 'till', 'to', 'expires', 'ends');
+
+  // What's left describes where the container is, which is the one thing only
+  // a person can write. Terms and labels are already accounted for above.
+  const notes = all
+    .filter((line) => line !== title && !isTerms(line) && !labelled(line))
+    .join('\n');
 
   const missing: string[] = [];
   if (!owner) missing.push('who it belongs to');
   if (!rate && !free) missing.push('weekly rate');
+  if (!end) missing.push('when it runs out');
 
-  return { kind: 'barrel', owner, guildMember, paid, rate, notes, missing };
+  return { kind: 'barrel', owner, guildMember, paid, rate, start, end, notes, missing };
 }

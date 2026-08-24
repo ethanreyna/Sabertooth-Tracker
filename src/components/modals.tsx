@@ -610,10 +610,12 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Rented from" htmlFor="barrel-start">
-                <Input id="barrel-start" name="start" type="date" required defaultValue={toDateInput(editBarrel?.start ?? '')} />
+                <Input id="barrel-start" name="start" type="date" required
+                  defaultValue={editBarrel ? toDateInput(editBarrel.start) : draftBarrel?.start ?? ''} />
               </Field>
               <Field label="Rented until" htmlFor="barrel-end">
-                <Input id="barrel-end" name="end" type="date" required defaultValue={toDateInput(editBarrel?.end ?? '')} />
+                <Input id="barrel-end" name="end" type="date" required
+                  defaultValue={editBarrel ? toDateInput(editBarrel.end) : draftBarrel?.end ?? ''} />
               </Field>
             </div>
 
