@@ -25,6 +25,35 @@ const KIND_COLOR: Record<string, string> = {
 };
 const colorFor = (kind: string) => KIND_COLOR[kind.toLowerCase()] ?? '#a1a1aa';
 
+// Silhouettes in the spirit of Skyrim's own map markers: a cave mouth for
+// anything you go into, a gabled house for anywhere people live.
+const CAVE_PATH = 'M12 2 C6 2 3 7 3 13 v8 h5 v-6 a4 4 0 0 1 8 0 v6 h5 v-8 c0-6-3-11-9-11z';
+const HOUSE_PATH = 'M12 2 2 11 h3 v11 h6 v-6 h2 v6 h6 V11 h3z';
+
+const glyph = (path: string, size: number) =>
+  `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">
+     <path d="${path}" fill="#111114" stroke="#e4e4e7" stroke-width="1.6" stroke-linejoin="round"/>
+   </svg>`;
+
+/** Dungeon and Settlement points get a glyph; everything else stays a dot. */
+function spotIcon(kind: string): L.DivIcon {
+  const k = kind.trim().toLowerCase();
+  if (k === 'dungeon') {
+    return L.divIcon({ className: '', iconSize: [24, 24], iconAnchor: [12, 20], html: glyph(CAVE_PATH, 24) });
+  }
+  if (k === 'settlement' || k === 'city' || k === 'town') {
+    return L.divIcon({ className: '', iconSize: [24, 24], iconAnchor: [12, 20], html: glyph(HOUSE_PATH, 24) });
+  }
+  return L.divIcon({
+    className: '',
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
+    html: `<span style="display:block;width:14px;height:14px;border-radius:9999px;
+             background:${colorFor(kind)};border:2px solid #0b0b0c;
+             box-shadow:0 0 0 1px rgba(255,255,255,.35)"></span>`,
+  });
+}
+
 const esc = (s: string) =>
   s.replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
@@ -127,14 +156,7 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMo
       // dragging is how a mis-placed point gets fixed.
       const marker = L.marker(L.latLng(Number(s.y), Number(s.x)), {
         draggable: !roRef.current,
-        icon: L.divIcon({
-          className: '',
-          iconSize: [14, 14],
-          iconAnchor: [7, 7],
-          html: `<span style="display:block;width:14px;height:14px;border-radius:9999px;
-                   background:${colorFor(s.kind)};border:2px solid #0b0b0c;
-                   box-shadow:0 0 0 1px rgba(255,255,255,.35)"></span>`,
-        }),
+        icon: spotIcon(s.kind),
       });
       marker.bindTooltip(`${esc(s.name)} · ${esc(s.kind)}`, { direction: 'top' });
       const btn = 'font-size:12px;text-decoration:underline;cursor:pointer;background:none;border:0;padding:0';

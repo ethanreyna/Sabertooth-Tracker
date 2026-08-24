@@ -114,7 +114,9 @@ export interface Spot {
 
 /** Offered as suggestions; members can write in anything, and the page's tabs
  *  are built from whatever kinds actually exist. */
-export const SPOT_KINDS = ['Ore', 'Hunting', 'Alchemy', 'Fishing', 'Wood', 'Other'];
+export const SPOT_KINDS = [
+  'Ore', 'Hunting', 'Alchemy', 'Fishing', 'Wood', 'Dungeon', 'Settlement', 'Other',
+];
 
 export interface LedgerEntry {
   id: string;
