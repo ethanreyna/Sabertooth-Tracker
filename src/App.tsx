@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Boxes, Coins, FileInput, Hammer, Inbox, LayoutDashboard, Swords, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, Settings, Shield, ShieldHalf, Skull, Sun, Users, Briefcase,
+  Boxes, Coins, FileInput, Hammer, Inbox, LayoutDashboard, Swords, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, Settings, Shield, Skull, Sun, Users, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,8 +13,6 @@ import { Jobs } from '@/views/jobs';
 import { Storage } from '@/views/storage';
 import { Ledger as Bank } from '@/views/ledger';
 import { Prices } from '@/views/prices';
-import { Roster } from '@/views/roster';
-import { Roles } from '@/views/roles';
 import { Dungeons } from '@/views/dungeons';
 import { Recipes } from '@/views/recipes';
 import { MapView } from '@/views/map';
@@ -22,6 +20,8 @@ import { Suggestions } from '@/views/suggestions';
 import { Suggest } from '@/views/suggest';
 import { Items } from '@/views/items';
 import { Run } from '@/views/run';
+import { Settings as SettingsView } from '@/views/settings';
+import type { SettingsTab } from '@/views/settings';
 import { ImportDialog } from '@/components/import-dialog';
 import type { Draft } from '@/lib/parse-import';
 import type { AddMode } from '@/views/map';
@@ -35,12 +35,12 @@ import {
 import { cn } from '@/lib/utils';
 import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
-type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'run' | 'recipes' | 'roster' | 'roles' | 'suggestions' | 'suggest';
+type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'run' | 'recipes' | 'settings' | 'suggestions' | 'suggest';
 
 /** What a read-only guest is allowed to see. `ledger` is the market price list,
  *  which comes from the public sheet; `bank` (the guild's septims) stays hidden,
  *  and the Worker strips those transactions from a guest response entirely. */
-const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'items', 'run', 'recipes', 'roster', 'suggest'];
+const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'items', 'run', 'recipes', 'settings', 'suggest'];
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -48,39 +48,45 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard /> },
   { id: 'jobs', label: 'Jobs', icon: <Briefcase /> },
   { id: 'storage', label: 'Storage', icon: <Package /> },
-  { id: 'dungeons', label: 'Dungeons', icon: <Skull /> },
-  { id: 'run', label: 'Loot Tracker', icon: <Swords /> },
-  { id: 'map', label: 'Map & Points', icon: <MapIcon /> },
+  { id: 'map', label: 'Map', icon: <MapIcon /> },
   { id: 'bank', label: 'Bank', icon: <Coins /> },
   { id: 'ledger', label: 'Ledger', icon: <Scale /> },
-  { id: 'items', label: 'Items', icon: <Boxes /> },
   { id: 'recipes', label: 'Recipes', icon: <Hammer /> },
-  { id: 'roster', label: 'Roster', icon: <Users /> },
-  { id: 'roles', label: 'Roles', icon: <ShieldHalf /> },
+  { id: 'items', label: 'Items', icon: <Boxes /> },
+  { id: 'settings', label: 'Settings', icon: <Users /> },
   { id: 'suggestions', label: 'Suggestions', icon: <Inbox /> },
+  { id: 'run', label: 'Loot Tracker', icon: <Swords /> },
+  { id: 'dungeons', label: 'Dungeons', icon: <Skull /> },
   { id: 'suggest', label: 'Suggest', icon: <MessageSquarePlus /> },
 ];
 
 const TITLES: Record<View, string> = {
-  dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', map: 'Map & Points of Interest',
-  bank: 'Bank', ledger: 'Ledger', items: 'Item database', run: 'Loot Tracker', recipes: 'Recipes', roster: 'Roster', roles: 'Roles',
-  suggestions: 'Guest suggestions', suggest: 'Suggest a change',
+  dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', map: 'Map',
+  bank: 'Bank', ledger: 'Ledger', items: 'Item database', run: 'Loot Tracker', recipes: 'Recipes',
+  settings: 'Settings', suggestions: 'Guest suggestions', suggest: 'Suggest a change',
 };
 
+type Action = { label: string; modal: ModalKind; variant?: 'outline' };
+
 /** Header buttons per view. Bank has two, one per tab. */
-const ACTIONS: Partial<Record<View, Array<{ label: string; modal: ModalKind; variant?: 'outline' }>>> = {
+const ACTIONS: Partial<Record<View, Action[]>> = {
   jobs: [{ label: 'Import', modal: 'import', variant: 'outline' }, { label: 'New job', modal: 'job' }],
   storage: [{ label: 'Import', modal: 'import', variant: 'outline' }, { label: 'New storage', modal: 'barrel' }],
   dungeons: [{ label: 'New dungeon', modal: 'dungeon' }],
   map: [{ label: 'New point', modal: 'spot' }],
   bank: [{ label: 'New item', modal: 'bankItem' }, { label: 'New entry', modal: 'ledger' }],
+  items: [{ label: 'Add item', modal: 'item' }],
+};
+
+/** Settings holds two lists behind tabs, so its button depends on which. */
+const SETTINGS_ACTIONS: Record<SettingsTab, Action[]> = {
   roster: [{ label: 'Add member', modal: 'member' }],
   roles: [{ label: 'New role', modal: 'role' }],
-  items: [{ label: 'Add item', modal: 'item' }],
 };
 
 export default function App() {
   const [view, setView] = useState<View>('dash');
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('roster');
   const [q, setQ] = useState('');
   const [db, setDb] = useState<DB>(() => loadLocal() ?? emptyDb());
   const [exp, setExp] = useState<Record<string, boolean>>({});
@@ -299,7 +305,9 @@ export default function App() {
   const nav = readOnly
     ? NAV.filter((n) => GUEST_VIEWS.includes(n.id))
     : NAV.filter((n) => n.id !== 'suggest');
-  const actions = readOnly ? undefined : ACTIONS[view];
+  const actions = readOnly
+    ? undefined
+    : view === 'settings' ? SETTINGS_ACTIONS[settingsTab] : ACTIONS[view];
   const pending = db.suggestions.filter((s) => s.status === 'pending').length;
 
   return (
@@ -484,13 +492,11 @@ export default function App() {
             />
           )}
           {view === 'recipes' && <Recipes />}
-          {view === 'roster' && <Roster db={db} update={update} readOnly={readOnly} />}
-          {view === 'roles' && (
-            <Roles
-              db={db}
-              update={update}
-              readOnly={readOnly}
-              onEdit={(id) => { setEditRoleId(id); setModal('role'); }}
+          {view === 'settings' && (
+            <SettingsView
+              db={db} update={update} readOnly={readOnly}
+              tab={settingsTab} onTabChange={setSettingsTab}
+              onEditRole={(id) => { setEditRoleId(id); setModal('role'); }}
             />
           )}
         </div>
@@ -499,6 +505,9 @@ export default function App() {
       {modal === 'import' && !readOnly && (
         <ImportDialog
           cfg={cfg}
+          // Which page the button was on decides how the post is read: the two
+          // board formats overlap enough that guessing gets short posts wrong.
+          kind={view === 'storage' ? 'barrel' : 'job'}
           close={() => setModal(null)}
           onUse={(d) => {
             // Straight into the record's own form, so it gets the same

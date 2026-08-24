@@ -8,16 +8,43 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { TonedBadge } from '@/components/bits';
 import { NoVisionError, readScreenshot } from '@/sync';
-import { parseImport } from '@/lib/parse-import';
+import { parseImport, sniff } from '@/lib/parse-import';
 import type { Draft } from '@/lib/parse-import';
 import { sep } from '@/lib/format';
 import type { SyncCfg } from '@/types';
 
-const PASTE_HELP =
-  'Paste the post — select the message in Discord, copy, and paste here. '
-  + 'Or drop in a screenshot and it will be read for you.';
+/** The two boards are written differently, so each importer says what it
+ *  expects and shows the shape of the post it knows how to read. */
+const FORMATS = {
+  job: {
+    title: 'Import a job',
+    help: 'Paste a job-board post — select the message in Discord, copy, and paste here. '
+      + 'Or drop in a screenshot and it will be read for you.',
+    fields: 'Reads: client, contact, faction or place, what to collect and how many, '
+      + 'the septim or item reward, and the time limit.',
+    sample: 'Name of Client: loses-the-way\n\nFaction Association of Client: Whiterun\n\n'
+      + 'Description of Job request: Collect the following:\n300 Imp Stool\n300 Grass Pods\n\n'
+      + 'Quest Reward:\n30 Minor Potions of Healing\n\nQuest time limit: 2 weeks',
+    button: 'Open in the job form',
+    wrong: 'That reads more like a storage post. It will still be imported as a job — '
+      + 'use the Storage page instead if that was the intention.',
+  },
+  barrel: {
+    title: 'Import storage',
+    help: 'Paste a storage post — where the container is and what it costs. '
+      + 'Or drop in a screenshot and it will be read for you.',
+    fields: 'Reads: whose it is, where the container is, the weekly rate '
+      + '(“rents for free” means nothing owed), and whether it is a guild member and paid up.',
+    sample: 'Name : Skadi\n\nBottom right barrel of the meadery tavern.\n\n'
+      + 'Guildmember rate : 50 septims per week\n\nPaid in full through work for the guild.',
+    button: 'Open in the storage form',
+    wrong: 'That reads more like a job post. It will still be imported as storage — '
+      + 'use the Jobs page instead if that was the intention.',
+  },
+} as const;
 
 /**
+
  * Turns a Discord job-board or storage post into a draft record.
  *
  * Two ways in, because they fail differently: pasted text is exact and always
@@ -25,23 +52,30 @@ const PASTE_HELP =
  * unavailable or misread a word. Either way the result opens in the normal form
  * for review — nothing is saved from here.
  */
-export function ImportDialog({ cfg, close, onUse }: {
+export function ImportDialog({ cfg, kind, close, onUse }: {
   cfg: SyncCfg;
+  /** Which board this was opened from, and so how the post is read. */
+  kind: Draft['kind'];
   close: () => void;
   onUse: (draft: Draft) => void;
 }) {
+  const fmt = FORMATS[kind];
   const [text, setText] = useState('');
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [note, setNote] = useState('');
+  const [mismatch, setMismatch] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const read = (raw: string) => {
     setErr('');
     const trimmed = raw.trim();
     if (!trimmed) { setErr('Nothing to read yet — paste the post first.'); return; }
-    setDraft(parseImport(trimmed));
+    // Read as this board's format regardless, but say so when it looks like the
+    // other one — better than quietly filing a barrel as a job.
+    setMismatch(sniff(trimmed) !== kind);
+    setDraft(parseImport(trimmed, kind));
   };
 
   const readImage = async (file: File) => {
@@ -52,7 +86,8 @@ export function ImportDialog({ cfg, close, onUse }: {
       const got = await readScreenshot(cfg, file);
       setText(got);
       if (got.trim()) {
-        setDraft(parseImport(got));
+        setMismatch(sniff(got) !== kind);
+        setDraft(parseImport(got, kind));
         setNote('Read from the screenshot — check it against the picture before saving.');
       } else {
         setErr('Nothing legible came back. Paste the post’s text instead.');
@@ -81,20 +116,21 @@ export function ImportDialog({ cfg, close, onUse }: {
     <Dialog open onOpenChange={(open) => { if (!open) close(); }}>
       <DialogContent className="max-h-[calc(100vh-4rem)] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Import from the job board</DialogTitle>
-          <DialogDescription>{PASTE_HELP}</DialogDescription>
+          <DialogTitle>{fmt.title}</DialogTitle>
+          <DialogDescription>{fmt.help}</DialogDescription>
         </DialogHeader>
 
         {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
         {note && <Alert><ScanText /><AlertDescription>{note}</AlertDescription></Alert>}
+        {mismatch && <Alert><AlertDescription>{fmt.wrong}</AlertDescription></Alert>}
 
         <div className="space-y-4">
           <Textarea
             rows={9}
             value={text}
-            onChange={(e) => { setText(e.target.value); setDraft(null); }}
+            onChange={(e) => { setText(e.target.value); setDraft(null); setMismatch(false); }}
             onPaste={onPaste}
-            placeholder={'Name of Client: loses-the-way\n\nDescription of Job request: Collect the following:\n300 Imp Stool\n…'}
+            placeholder={fmt.sample}
             className="font-mono text-xs"
           />
 
@@ -118,13 +154,15 @@ export function ImportDialog({ cfg, close, onUse }: {
             />
           </div>
 
+          <p className="text-xs text-muted-foreground">{fmt.fields}</p>
+
           {draft && <Preview draft={draft} />}
         </div>
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={close}>Cancel</Button>
           <Button type="button" disabled={!draft} onClick={() => { if (draft) onUse(draft); }}>
-            {draft?.kind === 'barrel' ? 'Open in the storage form' : 'Open in the job form'}
+            {fmt.button}
           </Button>
         </DialogFooter>
       </DialogContent>

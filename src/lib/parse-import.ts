@@ -131,9 +131,21 @@ function looksLikeStorage(all: string[]): boolean {
   return /\b(barrel|chest|dresser|cupboard|sack|strongbox|urn|satchel|rents?|rent)\b/.test(blob);
 }
 
-export function parseImport(text: string): Draft {
+/** What the text reads like, when nobody has said which board it came from. */
+export function sniff(text: string): Draft['kind'] {
+  return looksLikeStorage(lines(text)) ? 'barrel' : 'job';
+}
+
+/**
+ * `as` says which board the post came from, and is what the Jobs and Storage
+ * importers pass: the two formats overlap enough ("Name :", a location, a
+ * number) that guessing gets it wrong on the short posts, and the person
+ * clicking Import on the Storage page has already told us which it is.
+ */
+export function parseImport(text: string, as?: Draft['kind']): Draft {
   const all = lines(text);
-  return looksLikeStorage(all) ? parseStorage(all) : parseJob(all, threadTitle(text));
+  const kind = as ?? sniff(text);
+  return kind === 'barrel' ? parseStorage(all) : parseJob(all, threadTitle(text));
 }
 
 function parseJob(all: string[], title = ''): JobDraft {
