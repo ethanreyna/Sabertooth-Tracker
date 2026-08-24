@@ -91,6 +91,69 @@ export function NameField({ name, options, defaultValue = '', required, placehol
   );
 }
 
+/** One option in a {@link Picker}: the stored value, and what people read. */
+export type Choice = { value: string; label: string };
+
+/** Options whose label is the value, which is most of them. */
+export const choices = (values: readonly string[]): Choice[] =>
+  values.map((v) => ({ value: v, label: v }));
+
+/** "Nothing chosen", as a real option. Its value is empty rather than a
+ *  sentinel, so it reads as None wherever it lands and nothing placeholder-
+ *  shaped can leak into a record or show up in the box. */
+export const NONE: Choice = { value: '', label: 'None' };
+
+/**
+ * A searchable dropdown. Every picker in the app is one of these rather than a
+ * plain select: the roster, the dungeon list and the item catalogue all grow
+ * past the point where scrolling is pleasant, and typing to filter is quicker
+ * even on the short lists.
+ *
+ * Unlike {@link NameField} this only ever yields one of `options` — typing is
+ * filtering, not writing in — so "nothing chosen" is a real option carrying an
+ * empty value, and reads as whatever it is called (None, Unassigned, …) rather
+ * than as a placeholder value that leaks into the box.
+ */
+export function Picker({ id, value, onValueChange, options, placeholder, className, ariaLabel }: {
+  id?: string;
+  value: string;
+  onValueChange: (v: string) => void;
+  options: Choice[];
+  placeholder?: string;
+  className?: string;
+  ariaLabel?: string;
+}) {
+  // A value the list doesn't offer still has to be readable: roles get
+  // renamed and old records carry kinds nobody uses any more, and dropping
+  // such a value to a blank box would quietly rewrite it on the next save.
+  const known = options.find((o) => o.value === value) ?? null;
+  const all = known || !value ? options : [...options, { value, label: value }];
+  const selected = known ?? (value ? all[all.length - 1] : null);
+
+  return (
+    <Combobox<Choice>
+      items={all}
+      value={selected}
+      onValueChange={(v) => onValueChange(v ? v.value : '')}
+      itemToStringLabel={(o) => o.label}
+      isItemEqualToValue={(a, b) => a.value === b.value}
+      openOnInputClick
+      autoHighlight
+    >
+      <ComboboxInput
+        id={id} placeholder={placeholder} aria-label={ariaLabel}
+        className={className} autoComplete="off"
+      />
+      <ComboboxContent>
+        <ComboboxEmpty>Nothing matches.</ComboboxEmpty>
+        <ComboboxList>
+          {(o: Choice) => <ComboboxItem key={o.value} value={o}>{o.label}</ComboboxItem>}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
+  );
+}
+
 export function EmptyState({ children }: { children: ReactNode }) {
   return (
     <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">

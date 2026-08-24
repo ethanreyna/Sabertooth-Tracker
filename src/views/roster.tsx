@@ -6,13 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { EmptyState, TonedBadge } from '@/components/bits';
+import { EmptyState, NONE, Picker, TonedBadge, choices } from '@/components/bits';
 import { ago, dstr, initials, sep, uid } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { DB, Member, MemberEntry, Role } from '@/types';
 
-const NO_ROLE = '__none';
 
 /** Credits count toward the threshold on the member's current role. */
 function progressFor(member: Member, roles: Role[]) {
@@ -112,22 +110,21 @@ export function Roster({ db, update, readOnly }: {
 
               {!readOnly && (
                 <>
-                  <Select
-                    value={m.role || NO_ROLE}
-                    onValueChange={(v) => {
-                      const val = !v || v === NO_ROLE ? '' : v;
-                      update((d) => { const t = d.members.find((x) => x.id === m.id); if (t) t.role = val; });
-                    }}
-                  >
-                    <SelectTrigger className="h-8 w-36 shrink-0 max-sm:hidden" aria-label={`Role for ${m.name}`}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NO_ROLE}>No role</SelectItem>
-                      {db.roles.map((r) => <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>)}
-                      {m.role && !known && <SelectItem value={m.role}>{m.role} (unlisted)</SelectItem>}
-                    </SelectContent>
-                  </Select>
+                  <div className="w-40 shrink-0 max-sm:hidden">
+                    <Picker
+                      value={m.role}
+                      ariaLabel={`Role for ${m.name}`}
+                      onValueChange={(val) => update((d) => {
+                        const t = d.members.find((x) => x.id === m.id);
+                        if (t) t.role = val;
+                      })}
+                      options={[
+                        NONE,
+                        ...choices(db.roles.map((r) => r.name)),
+                        ...(m.role && !known ? [{ value: m.role, label: `${m.role} (unlisted)` }] : []),
+                      ]}
+                    />
+                  </div>
                   <Button
                     variant="ghost" size="icon-sm" aria-label={`Remove ${m.name}`}
                     onClick={() => {

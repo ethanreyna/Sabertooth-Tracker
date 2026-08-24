@@ -6,10 +6,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { MapPinPlus } from 'lucide-react';
-import { Field, NameField } from '@/components/bits';
+import { Field, NONE, NameField, Picker, choices } from '@/components/bits';
+import type { Choice } from '@/components/bits';
 import { ItemPicker } from '@/components/item-picker';
 import { ALL_ITEM_NAMES } from '@/items';
 import { uploadImage } from '@/sync';
@@ -22,8 +22,19 @@ import type { BankItem, Barrel, CollectionTarget, DB, Dungeon, Job, LedgerEntry,
 
 export type ModalKind = 'job' | 'barrel' | 'dungeon' | 'spot' | 'ledger' | 'bankItem' | 'member' | 'role' | 'sync';
 
-const NO_ROLE = '__none';
-const NO_KIND = '__none';
+const DEADLINE_MODES: Choice[] = [
+  { value: 'none', label: 'No time limit' },
+  { value: 'in', label: 'A set time from now' },
+  { value: 'date', label: 'By a specific date' },
+];
+const LEDGER_TYPES: Choice[] = [
+  { value: 'income', label: 'Income' },
+  { value: 'expense', label: 'Spending' },
+];
+const BANK_MOVES: Choice[] = [
+  { value: 'in', label: 'Put into guild storage' },
+  { value: 'out', label: 'Took out of guild storage' },
+];
 const COLLECTION_TAG = 'Resource collection';
 const TAGS = [COLLECTION_TAG, 'Kill', 'Arrest', 'Guard', 'Escort', 'Delivery', 'Other'];
 const PRIORITIES = ['Normal', 'Low', 'High', 'Urgent'];
@@ -69,8 +80,8 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
   const [durationUnit, setDurationUnit] = useState<DurationUnit>('weeks');
   const [ledgerType, setLedgerType] = useState<LedgerEntry['type']>('income');
   const [bankMove, setBankMove] = useState<BankItem['type']>('in');
-  const [memberRole, setMemberRole] = useState(roles[0]?.name ?? NO_ROLE);
-  const [advanceRole, setAdvanceRole] = useState(editRole?.advanceTo || NO_ROLE);
+  const [memberRole, setMemberRole] = useState(roles[0]?.name ?? '');
+  const [advanceRole, setAdvanceRole] = useState(editRole?.advanceTo ?? '');
   const [spotKind, setSpotKind] = useState(editSpot?.kind ?? newSpotKind);
   const [attachDungeon, setAttachDungeon] = useState('');
   const [cutPct, setCutPct] = useState(String(settings.guildCutPct));
@@ -166,7 +177,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
     const clash = roles.some((r) => r.id !== editRole?.id && r.name.toLowerCase() === name.toLowerCase());
     if (clash) { setErr(`There is already a role called “${name}”.`); return; }
 
-    const advanceTo = advanceRole === NO_ROLE ? '' : advanceRole;
+    const advanceTo = advanceRole;
     const advanceAfter = advanceTo ? Math.max(1, Number(f.get('advanceAfter') || 1)) : 0;
 
     close();
@@ -387,7 +398,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
     const m: Member = {
       id: uid(),
       name: String(f.get('name')).trim(),
-      role: memberRole === NO_ROLE ? '' : memberRole,
+      role: memberRole,
       joined: new Date().toISOString(),
       log: [],
     };
@@ -445,20 +456,13 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Job tag">
-                <Select value={tag} onValueChange={pickTag}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {TAGS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Picker value={tag} onValueChange={pickTag} options={choices(TAGS)} ariaLabel="Job tag" />
               </Field>
               <Field label="Priority">
-                <Select value={priority} onValueChange={(v) => setPriority(v ?? PRIORITIES[0])}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Picker
+                  value={priority} onValueChange={(v) => setPriority(v || PRIORITIES[0])}
+                  options={choices(PRIORITIES)} ariaLabel="Priority"
+                />
               </Field>
             </div>
 
@@ -485,14 +489,11 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Time limit
               </p>
-              <Select value={deadlineMode} onValueChange={(v) => setDeadlineMode((v as typeof deadlineMode) || 'none')}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No time limit</SelectItem>
-                  <SelectItem value="in">A set time from now</SelectItem>
-                  <SelectItem value="date">By a specific date</SelectItem>
-                </SelectContent>
-              </Select>
+              <Picker
+                value={deadlineMode}
+                onValueChange={(v) => setDeadlineMode((v as typeof deadlineMode) || 'none')}
+                options={DEADLINE_MODES} ariaLabel="Time limit"
+              />
 
               {deadlineMode === 'date' && (
                 <Input id="job-deadline" name="deadline" type="date" required defaultValue={toDateInput(editJob?.deadline ?? "")} />
@@ -506,12 +507,12 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                     className="w-24"
                     onChange={(e) => setDurationAmount(Math.max(1, Number(e.target.value || 1)))}
                   />
-                  <Select value={durationUnit} onValueChange={(v) => setDurationUnit((v as DurationUnit) || 'weeks')}>
-                    <SelectTrigger className="flex-1" aria-label="Unit of time"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {DURATION_UNITS.map((u) => <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Picker
+                    value={durationUnit}
+                    onValueChange={(v) => setDurationUnit((v as DurationUnit) || 'weeks')}
+                    options={DURATION_UNITS.map((u) => ({ value: u.value, label: u.label }))}
+                    className="flex-1" ariaLabel="Unit of time"
+                  />
                   <span className="shrink-0 text-xs text-muted-foreground">from now</span>
                 </div>
               )}
@@ -596,13 +597,10 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
               <Field label="Kind">
                 {/* Controlled, because choosing Dungeon changes which fields
                     the form shows and where the record ends up being saved. */}
-                <Select value={spotKind || NO_KIND} onValueChange={(v) => setSpotKind(!v || v === NO_KIND ? '' : v)}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NO_KIND}>Unspecified</SelectItem>
-                    {SPOT_KINDS.map((k) => <SelectItem key={k} value={k}>{k}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Picker
+                  value={spotKind} onValueChange={setSpotKind}
+                  options={[NONE, ...choices(SPOT_KINDS)]} ariaLabel="Kind"
+                />
               </Field>
             </div>
 
@@ -621,20 +619,17 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                 <Field label="Attach to an existing dungeon">
                   {/* Controlled so the form can hide the create-new fields once
                       an existing dungeon is chosen. */}
-                  <Select
-                    value={attachDungeon || NO_KIND}
-                    onValueChange={(v) => setAttachDungeon(!v || v === NO_KIND ? '' : v)}
-                  >
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NO_KIND}>Create a new dungeon</SelectItem>
-                      {dungeons.slice().sort((a, b) => a.name.localeCompare(b.name)).map((g) => (
-                        <SelectItem key={g.id} value={g.name}>
-                          {g.name}{g.x && g.y ? ' (already placed)' : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Picker
+                    value={attachDungeon} onValueChange={setAttachDungeon}
+                    ariaLabel="Attach to an existing dungeon"
+                    options={[
+                      { value: '', label: 'Create a new dungeon' },
+                      ...dungeons.slice().sort((a, b) => a.name.localeCompare(b.name)).map((g) => ({
+                        value: g.name,
+                        label: g.name + (g.x && g.y ? ' (already placed)' : ''),
+                      })),
+                    ]}
+                  />
                 </Field>
                 {!attachedDungeon && (
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -751,12 +746,10 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                   defaultValue={editDungeon?.recommended || 2} />
               </Field>
               <Field label="Difficulty">
-                <Select value={difficulty} onValueChange={(v) => setDifficulty(v ?? DIFFICULTIES[1])}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {DIFFICULTIES.map((x) => <SelectItem key={x} value={x}>{x}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Picker
+                  value={difficulty} onValueChange={(v) => setDifficulty(v || DIFFICULTIES[1])}
+                  options={choices(DIFFICULTIES)} ariaLabel="Difficulty"
+                />
               </Field>
             </div>
 
@@ -823,13 +816,11 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
           <form onSubmit={submitLedger} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Type">
-                <Select value={ledgerType} onValueChange={(v) => setLedgerType(v as LedgerEntry['type'])}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="income">Income</SelectItem>
-                    <SelectItem value="expense">Spending</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Picker
+                  value={ledgerType}
+                  onValueChange={(v) => setLedgerType((v as LedgerEntry['type']) || 'income')}
+                  options={LEDGER_TYPES} ariaLabel="Type"
+                />
               </Field>
               <Field label="Amount (septims)" htmlFor="ledger-amount">
                 <Input id="ledger-amount" name="amount" type="number" min={1} required placeholder="250" />
@@ -853,13 +844,11 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
           <form onSubmit={submitBankItem} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Movement">
-                <Select value={bankMove} onValueChange={(v) => setBankMove((v as BankItem['type']) || 'in')}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="in">Put into guild storage</SelectItem>
-                    <SelectItem value="out">Took out of guild storage</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Picker
+                  value={bankMove}
+                  onValueChange={(v) => setBankMove((v as BankItem['type']) || 'in')}
+                  options={BANK_MOVES} ariaLabel="Movement"
+                />
               </Field>
               <Field label="Quantity" htmlFor="bank-item-qty">
                 <Input id="bank-item-qty" name="qty" type="number" min={1} defaultValue={1} required />
@@ -891,13 +880,10 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
               <Input id="member-name" name="name" required placeholder="e.g. Lydia of Whiterun" />
             </Field>
             <Field label="Role">
-              <Select value={memberRole} onValueChange={(v) => setMemberRole(v || NO_ROLE)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_ROLE}>No role</SelectItem>
-                  {roles.map((r) => <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Picker
+                value={memberRole} onValueChange={setMemberRole} ariaLabel="Role"
+                options={[NONE, ...choices(roles.map((r) => r.name))]}
+              />
             </Field>
             {roles.length === 0 && (
               <p className="text-xs text-muted-foreground">
@@ -930,17 +916,15 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                 Progression (optional)
               </p>
               <Field label="Advances to">
-                <Select value={advanceRole} onValueChange={(v) => setAdvanceRole(v || NO_ROLE)}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NO_ROLE}>No progression</SelectItem>
-                    {roles
-                      .filter((r) => r.id !== editRole?.id)
-                      .map((r) => <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Picker
+                  value={advanceRole} onValueChange={setAdvanceRole} ariaLabel="Advances to"
+                  options={[
+                    NONE,
+                    ...choices(roles.filter((r) => r.id !== editRole?.id).map((r) => r.name)),
+                  ]}
+                />
               </Field>
-              {advanceRole !== NO_ROLE && (
+              {advanceRole !== '' && (
                 <Field label="Completions required" htmlFor="role-after">
                   <Input
                     id="role-after" name="advanceAfter" type="number" min={1}

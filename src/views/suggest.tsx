@@ -5,15 +5,24 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Field, NameField } from '@/components/bits';
+import { Field, NameField, Picker, choices } from '@/components/bits';
+import type { Choice } from '@/components/bits';
 import { ALL_ITEM_NAMES } from '@/items';
 import { postSuggestion } from '@/sync';
 import type { SuggestionKind, SyncCfg } from '@/types';
 
 const TAGS = ['Resource collection', 'Kill', 'Arrest', 'Guard', 'Escort', 'Delivery', 'Other'];
+
+const LEDGER_TYPES: Choice[] = [
+  { value: 'income', label: 'Income' },
+  { value: 'expense', label: 'Spending' },
+];
+const BANK_MOVES: Choice[] = [
+  { value: 'in', label: 'Put into guild storage' },
+  { value: 'out', label: 'Took out of guild storage' },
+];
 
 const SENT: Record<SuggestionKind, string> = {
   job: 'Job suggestion sent. A guild member will review it.',
@@ -133,12 +142,10 @@ export function Suggest({ cfg, memberNames }: { cfg: SyncCfg; memberNames: strin
                     <NameField id="sg-job-client" name="client" options={memberNames} placeholder="Who it's for" />
                   </Field>
                   <Field label="Type">
-                    <Select value={tag} onValueChange={(v) => setTag(v ? String(v) : TAGS[0])}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {TAGS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <Picker
+                      value={tag} onValueChange={(v) => setTag(v || TAGS[0])}
+                      options={choices(TAGS)} ariaLabel="Type"
+                    />
                   </Field>
                 </div>
 
@@ -172,13 +179,10 @@ export function Suggest({ cfg, memberNames }: { cfg: SyncCfg; memberNames: strin
               >
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Type">
-                    <Select value={ledgerType} onValueChange={(v) => setLedgerType(v ? String(v) : 'income')}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="income">Income</SelectItem>
-                        <SelectItem value="expense">Spending</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Picker
+                      value={ledgerType} onValueChange={(v) => setLedgerType(v || 'income')}
+                      options={LEDGER_TYPES} ariaLabel="Type"
+                    />
                   </Field>
                   <Field label="Amount (septims)" htmlFor="sg-bank-amount">
                     <Input id="sg-bank-amount" name="amount" type="number" min={1} required placeholder="250" />
@@ -212,13 +216,10 @@ export function Suggest({ cfg, memberNames }: { cfg: SyncCfg; memberNames: strin
               >
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Movement">
-                    <Select value={moveType} onValueChange={(v) => setMoveType(v ? String(v) : 'in')}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="in">Put into guild storage</SelectItem>
-                        <SelectItem value="out">Took out of guild storage</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Picker
+                      value={moveType} onValueChange={(v) => setMoveType(v || 'in')}
+                      options={BANK_MOVES} ariaLabel="Movement"
+                    />
                   </Field>
                   <Field label="Quantity" htmlFor="sg-item-qty">
                     <Input id="sg-item-qty" name="qty" type="number" min={1} defaultValue={1} required />

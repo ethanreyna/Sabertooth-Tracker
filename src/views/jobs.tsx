@@ -4,16 +4,22 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CollectionProgress } from '@/components/collection-progress';
 import { PayoutSplit } from '@/components/payout-split';
-import { EmptyState, NameField, PriorityBadge, StatusBadge, TonedBadge } from '@/components/bits';
+import { EmptyState, NONE, NameField, Picker, PriorityBadge, StatusBadge, TonedBadge, choices } from '@/components/bits';
+import type { Choice } from '@/components/bits';
 import { ALL_ITEM_NAMES } from '@/items';
 import { collectedByItem } from '@/sync';
 import { ago, dstr, sep } from '@/lib/format';
 import { untilLabel } from '@/lib/deadline';
 import { cn } from '@/lib/utils';
 import type { DB, JobStatus } from '@/types';
+
+const STATUSES: Choice[] = [
+  { value: 'open', label: 'Open' },
+  { value: 'claimed', label: 'Claimed' },
+  { value: 'done', label: 'Done' },
+];
 
 const SectionLabel = ({ children }: { children: React.ReactNode }) => (
   <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{children}</p>
@@ -237,8 +243,10 @@ export function Jobs({ db, q, exp, setExp, memberNames, update, readOnly, onEdit
                   <>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Status</Label>
-                    <Select
+                    <Picker
                       value={j.status}
+                      ariaLabel="Status"
+                      options={STATUSES}
                       onValueChange={(v) => {
                         if (!v) return;
                         update((d) => {
@@ -246,37 +254,25 @@ export function Jobs({ db, q, exp, setExp, memberNames, update, readOnly, onEdit
                           if (t) t.status = v as JobStatus;
                         });
                       }}
-                    >
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="open">Open</SelectItem>
-                        <SelectItem value="claimed">Claimed</SelectItem>
-                        <SelectItem value="done">Done</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    />
                   </div>
 
                   <div className="space-y-1.5">
                     <Label className="text-xs">Claimed by</Label>
-                    <Select
-                      value={j.claimedBy || '__none'}
-                      onValueChange={(v) => {
-                        const val = !v || v === '__none' ? '' : v;
-                        update((d) => {
-                          const t = d.jobs.find((x) => x.id === j.id);
-                          if (t) { t.claimedBy = val; if (val && t.status === 'open') t.status = 'claimed'; }
-                        });
-                      }}
-                    >
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none">Unassigned</SelectItem>
-                        {memberNames.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
-                        {j.claimedBy && !memberNames.includes(j.claimedBy) && (
-                          <SelectItem value={j.claimedBy}>{j.claimedBy}</SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
+                    <Picker
+                      value={j.claimedBy}
+                      ariaLabel="Claimed by"
+                      options={[
+                        NONE,
+                        ...choices(memberNames),
+                        ...(j.claimedBy && !memberNames.includes(j.claimedBy)
+                          ? [{ value: j.claimedBy, label: j.claimedBy }] : []),
+                      ]}
+                      onValueChange={(val) => update((d) => {
+                        const t = d.jobs.find((x) => x.id === j.id);
+                        if (t) { t.claimedBy = val; if (val && t.status === 'open') t.status = 'claimed'; }
+                      })}
+                    />
                   </div>
 
                   <Button variant="outline" size="sm" className="mt-auto" onClick={() => onEdit(j.id)}>
