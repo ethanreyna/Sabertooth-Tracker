@@ -3,7 +3,9 @@ import { Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { EmptyState, TonedBadge } from '@/components/bits';
+import { activeFor } from '@/views/enchants';
 import type { Tone } from '@/components/bits';
 import { ago, uid } from '@/lib/format';
 import type { BankItem, DB, Job, LedgerEntry, Suggestion, SuggestionKind } from '@/types';
@@ -12,6 +14,7 @@ const KIND_LABEL: Record<SuggestionKind, string> = {
   job: 'Job',
   ledger: 'Bank entry',
   bankItem: 'Storage item',
+  enchant: 'Enchantment',
 };
 
 const STATUS_TONE: Record<Suggestion['status'], Tone> = {
@@ -38,6 +41,14 @@ function summarize(s: Suggestion): Array<[string, string]> {
       ['Type', str(p.type) === 'expense' ? 'Spending' : 'Income'],
       ['Amount', num(p.amount).toLocaleString() + ' septims'],
       ['Description', str(p.desc)],
+    ].filter(([, v]) => v !== '') as Array<[string, string]>;
+  }
+  if (s.kind === 'enchant') {
+    return [
+      ['Whose item', str(p.who)],
+      ['Item', str(p.item)],
+      ['Enchantment', str(p.enchantment)],
+      ['Notes', str(p.notes)],
     ].filter(([, v]) => v !== '') as Array<[string, string]>;
   }
   return [
@@ -87,6 +98,22 @@ function accept(d: DB, s: Suggestion): void {
       at,
     };
     d.ledger.push(entry);
+    return;
+  }
+
+  if (s.kind === 'enchant') {
+    d.enchants.push({
+      id: uid(),
+      // The owner named in the suggestion, falling back to whoever sent it.
+      who: str(p.who) || s.by,
+      item: str(p.item),
+      enchantment: str(p.enchantment),
+      notes: str(p.notes),
+      status: 'waiting',
+      by: s.by,
+      at,
+      doneBy: '', doneAt: '',
+    });
     return;
   }
 
@@ -162,6 +189,7 @@ export function Suggestions({ db, update, memberNames }: {
   memberNames: string[];
 }) {
   const [tab, setTab] = useState('pending');
+  const [err, setErr] = useState('');
 
   const sorted = db.suggestions.slice().sort((a, b) => (b.at || '').localeCompare(a.at || ''));
   const pending = sorted.filter((s) => s.status === 'pending');
@@ -172,17 +200,39 @@ export function Suggestions({ db, update, memberNames }: {
   // about being a guess by saying "a member" when the roster is empty.
   const me = memberNames[0] || 'a member';
 
-  const decide = (id: string, ok: boolean) => update((d) => {
-    const s = d.suggestions.find((x) => x.id === id);
-    if (!s || s.status !== 'pending') return;
-    s.status = ok ? 'approved' : 'denied';
-    s.decidedBy = me;
-    s.decidedAt = new Date().toISOString();
-    if (ok) accept(d, s);
-  });
+  const decide = (id: string, ok: boolean) => {
+    const s = db.suggestions.find((x) => x.id === id);
+    if (!s) return;
+
+    // The waitlist allows one item each, and approving is how a guest's request
+    // gets onto it — so the rule has to hold here too. Left pending rather than
+    // denied: it becomes approvable again once their current item is done.
+    if (ok && s.kind === 'enchant') {
+      const who = str(s.payload.who) || s.by;
+      const held = activeFor(db.enchants, who);
+      if (held) {
+        setErr(`${who} already has ${held.item} on the enchanting list — one item each. `
+          + 'Mark that one done first, then approve this.');
+        return;
+      }
+    }
+
+    setErr('');
+    update((d) => {
+      const t = d.suggestions.find((x) => x.id === id);
+      if (!t || t.status !== 'pending') return;
+      t.status = ok ? 'approved' : 'denied';
+      t.decidedBy = me;
+      t.decidedAt = new Date().toISOString();
+      if (ok) accept(d, t);
+    });
+  };
 
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v ? String(v) : 'pending')}>
+      {err && (
+        <Alert variant="destructive" className="mb-3"><AlertDescription>{err}</AlertDescription></Alert>
+      )}
       <TabsList>
         <TabsTrigger value="pending">
           Waiting{pending.length > 0 && <span className="ml-1.5 text-muted-foreground">{pending.length}</span>}
@@ -194,7 +244,7 @@ export function Suggestions({ db, update, memberNames }: {
 
       <TabsContent value="pending" className="mt-4 space-y-3">
         {pending.length === 0
-          ? <EmptyState>Nothing waiting. Guests can propose jobs, bank entries and storage items, and they land here for approval.</EmptyState>
+          ? <EmptyState>Nothing waiting. Guests can propose jobs, bank entries, storage items and enchantments, and they land here for approval.</EmptyState>
           : pending.map((s) => <Row key={s.id} s={s} decide={decide} />)}
       </TabsContent>
 

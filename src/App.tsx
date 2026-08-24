@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Boxes, Coins, FileInput, Hammer, Inbox, LayoutDashboard, Swords, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, Settings, Shield, Skull, Sun, Users, Briefcase,
+  Boxes, Coins, FileInput, Hammer, Inbox, LayoutDashboard, Sparkles, Swords, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, Settings, Shield, Skull, Sun, Users, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,7 @@ import { Suggestions } from '@/views/suggestions';
 import { Suggest } from '@/views/suggest';
 import { Items } from '@/views/items';
 import { Run } from '@/views/run';
+import { Enchants } from '@/views/enchants';
 import { Settings as SettingsView } from '@/views/settings';
 import type { SettingsTab } from '@/views/settings';
 import { ImportDialog } from '@/components/import-dialog';
@@ -35,12 +36,12 @@ import {
 import { cn } from '@/lib/utils';
 import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
-type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'run' | 'recipes' | 'settings' | 'suggestions' | 'suggest';
+type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'run' | 'enchants' | 'recipes' | 'settings' | 'suggestions' | 'suggest';
 
 /** What a read-only guest is allowed to see. `ledger` is the market price list,
  *  which comes from the public sheet; `bank` (the guild's septims) stays hidden,
  *  and the Worker strips those transactions from a guest response entirely. */
-const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'items', 'run', 'recipes', 'settings', 'suggest'];
+const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'items', 'run', 'enchants', 'recipes', 'settings', 'suggest'];
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -57,12 +58,13 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'settings', label: 'Settings', icon: <Users /> },
   { id: 'suggestions', label: 'Suggestions', icon: <Inbox /> },
   { id: 'run', label: 'Loot Tracker', icon: <Swords /> },
+  { id: 'enchants', label: 'Enchanting', icon: <Sparkles /> },
   { id: 'suggest', label: 'Suggest', icon: <MessageSquarePlus /> },
 ];
 
 const TITLES: Record<View, string> = {
   dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', map: 'Map',
-  bank: 'Bank', ledger: 'Ledger', items: 'Item database', run: 'Loot Tracker', recipes: 'Recipes',
+  bank: 'Bank', ledger: 'Ledger', items: 'Item database', run: 'Loot Tracker', enchants: 'Enchanting waitlist', recipes: 'Recipes',
   settings: 'Settings', suggestions: 'Guest suggestions', suggest: 'Suggest a change',
 };
 
@@ -113,6 +115,9 @@ export default function App() {
   const [cfg, setCfg] = useState<SyncCfg | null>(() => loadCfg());
   const [booted, setBooted] = useState(false);
   const [offline, setOffline] = useState(false);
+  // Set when the server rejects the stored password, so the login screen can
+  // say why it is asking for one again.
+  const [authNotice, setAuthNotice] = useState('');
 
   const cfgRef = useRef<SyncCfg | null>(cfg);
   cfgRef.current = cfg;
@@ -129,7 +134,31 @@ export default function App() {
 
   useEffect(() => { applyTheme(theme); }, [theme]);
 
+  /**
+   * Forget a credential the server refuses, and go back to the login screen.
+   *
+   * Nothing renders behind that screen without a working password, so a stored
+   * one that has since been changed used to leave the app on "Loading the guild
+   * database…" with no way forward. Nothing is lost by dropping it: the server
+   * copy is the real one and a rejected password can't have written anything.
+   */
+  const staleCredential = useCallback(() => {
+    window.clearTimeout(pushT.current);
+    saveCfg(null);
+    clearLocal();
+    pendingRef.current = [];
+    versionRef.current = 0;
+    setCfg(null);
+    setBooted(false);
+    setDb(emptyDb());
+    setModal(null);
+    setAccess('member');
+    setSync('denied');
+    setAuthNotice('That password is no longer accepted — it may have been changed since you signed in.');
+  }, []);
+
   const commit = useCallback((next: DB) => {
+
     setDb(next);
     saveLocal(next);
   }, []);
@@ -155,7 +184,7 @@ export default function App() {
         commit(rebuilt);
         setSync('syncing');
       } else if (e instanceof AuthError) {
-        setSync('denied');
+        staleCredential();
       } else if (e instanceof ReadOnlyError) {
         // The server refused a write we shouldn't have offered. Drop the queued
         // edits rather than retrying forever; the next poll restores its copy.
@@ -172,7 +201,7 @@ export default function App() {
         pushT.current = window.setTimeout(() => { void flush(); }, 600);
       }
     }
-  }, [commit]);
+  }, [commit, staleCredential]);
 
   const pull = useCallback(async () => {
     const c = cfgRef.current;
@@ -187,7 +216,8 @@ export default function App() {
       setSync('synced');
       setBooted(true);
     } catch (e) {
-      if (e instanceof AuthError) { setSync('denied'); return; }
+      // Most often the password was changed while this tab was open.
+      if (e instanceof AuthError) { staleCredential(); return; }
       setSync('error');
       setOffline(true);
       // Server unreachable on first load: fall back to the last known copy so
@@ -198,7 +228,7 @@ export default function App() {
         setBooted(true);
       }
     }
-  }, [commit]);
+  }, [commit, staleCredential]);
 
   // Poll only while the tab is visible, and re-sync the moment it regains focus.
   useEffect(() => {
@@ -243,6 +273,7 @@ export default function App() {
     setOffline(false);
     setBooted(true);
     setSync('synced');
+    setAuthNotice('');
   }, [commit]);
 
   const login = useCallback((password: string) => start({ password, guest: false }), [start]);
@@ -290,7 +321,14 @@ export default function App() {
 
   // Nothing is usable without the guild password: the tracker is the shared
   // database, not a local notebook that might sync later.
-  if (!cfg) return <Login onLogin={login} onGuest={enterAsGuest} theme={theme} toggleTheme={toggleTheme} />;
+  if (!cfg) {
+    return (
+      <Login
+        onLogin={login} onGuest={enterAsGuest} notice={authNotice}
+        theme={theme} toggleTheme={toggleTheme}
+      />
+    );
+  }
   if (!booted) {
     return (
       <div className="flex min-h-svh items-center justify-center text-sm text-muted-foreground">
@@ -484,6 +522,9 @@ export default function App() {
           {view === 'ledger' && <Prices />}
           {view === 'run' && (
             <Run db={db} update={update} readOnly={readOnly} memberNames={memberNames} />
+          )}
+          {view === 'enchants' && (
+            <Enchants db={db} update={update} readOnly={readOnly} memberNames={memberNames} />
           )}
           {view === 'items' && (
             <Items

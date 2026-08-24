@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Field, NameField, Picker, choices } from '@/components/bits';
 import type { Choice } from '@/components/bits';
 import { postSuggestion } from '@/sync';
+import { ENCHANTMENTS } from '@/types';
 import type { SuggestionKind, SyncCfg } from '@/types';
 
 const TAGS = ['Resource collection', 'Kill', 'Arrest', 'Guard', 'Escort', 'Delivery', 'Other'];
@@ -27,6 +28,7 @@ const SENT: Record<SuggestionKind, string> = {
   job: 'Job suggestion sent. A guild member will review it.',
   ledger: 'Bank entry suggestion sent. A guild member will review it.',
   bankItem: 'Storage item suggestion sent. A guild member will review it.',
+  enchant: 'Enchantment request sent. A guild member will review it.',
 };
 
 /**
@@ -118,6 +120,7 @@ export function Suggest({ cfg, memberNames, itemNames }: {
           <TabsTrigger value="job">A job</TabsTrigger>
           <TabsTrigger value="ledger">A bank entry</TabsTrigger>
           <TabsTrigger value="bankItem">A storage item</TabsTrigger>
+          <TabsTrigger value="enchant">An enchantment</TabsTrigger>
         </TabsList>
 
         <TabsContent value="job" className="mt-4">
@@ -239,6 +242,51 @@ export function Suggest({ cfg, memberNames, itemNames }: {
                 {who}
                 {note}
                 {actions('Suggest this item')}
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="enchant" className="mt-4">
+          <Card>
+            <CardContent className="p-4">
+              <form
+                key={'enchant' + seq}
+                className="space-y-4"
+                onSubmit={submit('enchant', (f) => ({
+                  who: String(f.get('who') || ''),
+                  item: String(f.get('enchantItem') || ''),
+                  enchantment: String(f.get('enchantment') || ''),
+                  notes: String(f.get('enchantNotes') || ''),
+                }))}
+              >
+                <p className="text-xs text-muted-foreground">
+                  The guild's enchanter takes one item per person at a time. If whoever this is for
+                  already has something on the list, a member will hold this until it's done.
+                </p>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Whose item" htmlFor="sg-en-who">
+                    <NameField id="sg-en-who" name="who" options={memberNames} required
+                      placeholder="Pick a member or write in" />
+                  </Field>
+                  <Field label="Item" htmlFor="sg-en-item">
+                    <NameField id="sg-en-item" name="enchantItem" options={itemNames} required
+                      placeholder="Search items, or write one in" />
+                  </Field>
+                </div>
+
+                <Field label="Enchantment" htmlFor="sg-en-ench">
+                  <NameField id="sg-en-ench" name="enchantment" options={ENCHANTMENTS}
+                    placeholder="e.g. Fortify Smithing" />
+                </Field>
+
+                <Field label="Anything the enchanter should know (optional)" htmlFor="sg-en-notes">
+                  <Input id="sg-en-notes" name="enchantNotes" placeholder="Soul gem provided, charge level…" />
+                </Field>
+
+                {who}
+                {note}
+                {actions('Ask for this enchantment')}
               </form>
             </CardContent>
           </Card>

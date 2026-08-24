@@ -11,15 +11,17 @@ import { AuthError } from '@/sync';
 import type { Theme } from '@/types';
 
 /** The password gate. Nothing renders behind this until the server says yes. */
-export function Login({ onLogin, onGuest, theme, toggleTheme }: {
+export function Login({ onLogin, onGuest, notice, theme, toggleTheme }: {
   onLogin: (password: string) => Promise<void>;
   onGuest: () => Promise<void>;
+  /** Why they are back here, when they didn't ask to be. */
+  notice?: string;
   theme: Theme;
   toggleTheme: () => void;
 }) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
+  const [err, setErr] = useState(notice ?? '');
 
   const fail = (e: unknown) => {
     setErr(e instanceof AuthError

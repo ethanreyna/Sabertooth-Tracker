@@ -140,7 +140,7 @@ export interface BankItem {
   at: string;
 }
 
-export type SuggestionKind = 'job' | 'ledger' | 'bankItem';
+export type SuggestionKind = 'job' | 'ledger' | 'bankItem' | 'enchant';
 export type SuggestionStatus = 'pending' | 'approved' | 'denied';
 
 /**
@@ -216,6 +216,42 @@ export const emptyRun = (): DungeonRun => ({
   active: false, name: '', people: 1, party: [], entries: [], startedBy: '', startedAt: '',
 });
 
+/**
+ * A place in the queue for the guild's enchanter. One item per person at a
+ * time: the rule is the whole point of the list, so it is enforced when an
+ * entry is added and again when a guest's suggestion is approved.
+ */
+export interface EnchantRequest {
+  id: string;
+  /** Whose item it is, and so who holds the one active place. */
+  who: string;
+  item: string;
+  enchantment: string;
+  notes: string;
+  /** `waiting` holds their place; `done` frees it and keeps the record. */
+  status: 'waiting' | 'done';
+  /** Who put it on the list — not always the owner. */
+  by: string;
+  at: string;
+  doneBy: string;
+  doneAt: string;
+}
+
+/** Offered as suggestions; anything can be written in. */
+export const ENCHANTMENTS = [
+  'Absorb Health', 'Absorb Magicka', 'Absorb Stamina', 'Banish', 'Chaos Damage',
+  'Fear', 'Fiery Soul Trap', 'Fire Damage', 'Frost Damage', 'Paralyze', 'Shock Damage',
+  'Silent Moons', 'Soul Trap', 'Turn Undead',
+  'Fortify Alchemy', 'Fortify Alteration', 'Fortify Archery', 'Fortify Barter',
+  'Fortify Block', 'Fortify Carry Weight', 'Fortify Conjuration', 'Fortify Destruction',
+  'Fortify Health', 'Fortify Heavy Armor', 'Fortify Illusion', 'Fortify Light Armor',
+  'Fortify Lockpicking', 'Fortify Magicka', 'Fortify Magicka Regen', 'Fortify Marksman',
+  'Fortify One-Handed', 'Fortify Pickpocket', 'Fortify Restoration', 'Fortify Smithing',
+  'Fortify Sneak', 'Fortify Stamina', 'Fortify Stamina Regen', 'Fortify Two-Handed',
+  'Fortify Unarmed', 'Muffle', 'Resist Disease', 'Resist Fire', 'Resist Frost',
+  'Resist Magic', 'Resist Poison', 'Resist Shock', 'Waterbreathing',
+];
+
 export interface Member {
   id: string;
   role: string;
@@ -245,6 +281,7 @@ export interface DB {
   suggestions: Suggestion[];
   items: ItemRecord[];
   run: DungeonRun;
+  enchants: EnchantRequest[];
 }
 
 /** One row of the market price list, mirrored from the guild's Google Sheet.

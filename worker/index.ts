@@ -35,6 +35,7 @@ const EMPTY_DB = {
   members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [],
   ledger: [], bankItems: [], suggestions: [], items: [],
   run: { active: false, name: '', people: 1, party: [], entries: [], startedBy: '', startedAt: '' },
+  enchants: [],
 };
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_VISION_BYTES = 4 * 1024 * 1024;
@@ -138,12 +139,13 @@ function authRole(req: Request, env: Env): Role | 'bad' {
 // gets to set its status. Approving one is an ordinary member write.
 // ---------------------------------------------------------------------------
 
-const SUGGESTION_KINDS = new Set(['job', 'ledger', 'bankItem']);
+const SUGGESTION_KINDS = new Set(['job', 'ledger', 'bankItem', 'enchant']);
 /** Fields kept per kind, so a guest can't smuggle arbitrary keys into a record. */
 const SUGGESTION_FIELDS: Record<string, string[]> = {
   job: ['name', 'client', 'description', 'reward', 'tag'],
   ledger: ['type', 'amount', 'desc'],
   bankItem: ['type', 'item', 'qty', 'note'],
+  enchant: ['who', 'item', 'enchantment', 'notes'],
 };
 const MAX_PENDING = 200;
 const MAX_FIELD_CHARS = 400;

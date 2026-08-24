@@ -1,6 +1,6 @@
 import { DEFAULT_GUILD_CUT_PCT } from './types';
 import { coordOrEmpty, httpUrlOrEmpty } from './lib/maps';
-import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, DungeonRun, RunEntry, Job, ItemRecord, LedgerEntry, BankItem, Member, MemberEntry, Price, Role, Spot, Suggestion, SyncCfg } from './types';
+import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, DungeonRun, EnchantRequest, RunEntry, Job, ItemRecord, LedgerEntry, BankItem, Member, MemberEntry, Price, Role, Spot, Suggestion, SyncCfg } from './types';
 
 const CFG_KEY = 'sabretooth-auth';
 const LEGACY_CFG_KEY = 'sabertooth-auth'; // pre-rename; read once so nobody is logged out
@@ -407,7 +407,7 @@ export function normalizeDb(raw: unknown): DB {
       const kind = s(x.kind);
       return {
         id: s(x.id) || Math.random().toString(36).slice(2, 10),
-        kind: (kind === 'ledger' || kind === 'bankItem' ? kind : 'job') as Suggestion['kind'],
+        kind: (kind === 'ledger' || kind === 'bankItem' || kind === 'enchant' ? kind : 'job') as Suggestion['kind'],
         payload,
         by: s(x.by, 'Guest'), note: s(x.note), at: s(x.at),
         status: (status === 'approved' || status === 'denied' ? status : 'pending') as Suggestion['status'],
@@ -431,7 +431,17 @@ export function normalizeDb(raw: unknown): DB {
       };
     }).filter((i) => i.name),
     run: normRun(o.run),
+    enchants: arr(o.enchants).map((e): EnchantRequest => {
+      const x = (e || {}) as Record<string, unknown>;
+      return {
+        id: s(x.id) || Math.random().toString(36).slice(2, 10),
+        who: s(x.who), item: s(x.item), enchantment: s(x.enchantment), notes: s(x.notes),
+        status: s(x.status) === 'done' ? 'done' : 'waiting',
+        by: s(x.by), at: s(x.at), doneBy: s(x.doneBy), doneAt: s(x.doneAt),
+      };
+    }).filter((e) => e.who && e.item),
   };
+
 }
 
 /** Total collected per item name (case-insensitive), keyed by lowercased name. */
