@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Info, Search, X } from 'lucide-react';
+import { Info, Plus, Search, X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState, TonedBadge } from '@/components/bits';
-import { RECIPES, RECIPE_NOTES, STATIONS, statLabel } from '@/recipes';
+import { RECIPES, RECIPE_NOTES, statLabel } from '@/recipes';
+import { CraftPlan, usePlan } from '@/components/craft-plan';
 import { cn } from '@/lib/utils';
 
 const ALL = '__all';
@@ -15,18 +15,9 @@ const ALL = '__all';
 export function Recipes() {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState(ALL);
-  // Which forge you are standing at decides what you can make, so that is the
-  // first cut; the doc is organised the same way.
-  const [station, setStation] = useState(STATIONS[0] ?? ALL);
+  const plan = usePlan();
 
-  const inStation = useMemo(
-    () => RECIPES.filter((r) => station === ALL || r.station === station),
-    [station],
-  );
-  const categories = useMemo(
-    () => [...new Set(inStation.map((r) => r.category))],
-    [inStation],
-  );
+  const categories = useMemo(() => [...new Set(RECIPES.map((r) => r.category))], []);
 
   // Searching by ingredient is the point of this page — "what can I make with
   // leather strips" matters more than looking up a name you already know.
@@ -39,7 +30,7 @@ export function Recipes() {
     };
 
     const out: Array<{ category: string; rows: typeof RECIPES }> = [];
-    for (const r of inStation) {
+    for (const r of RECIPES) {
       if (cat !== ALL && r.category !== cat) continue;
       if (!match(r)) continue;
       const last = out[out.length - 1];
@@ -47,7 +38,7 @@ export function Recipes() {
       else out.push({ category: r.category, rows: [r] });
     }
     return out;
-  }, [q, cat, inStation]);
+  }, [q, cat]);
 
   const shown = groups.reduce((n, g) => n + g.rows.length, 0);
 
@@ -72,29 +63,12 @@ export function Recipes() {
           )}
         </div>
         <span className="ml-auto text-xs text-muted-foreground">
-          {shown} of {inStation.length} recipes
-          {station !== ALL ? ` at the ${station}` : ''}
+          {shown} of {RECIPES.length} recipes
+          {plan.planned > 0 ? ` · ${plan.planned} on the bench` : ''}
         </span>
       </div>
 
-      <Tabs
-        value={station}
-        onValueChange={(v) => { setStation(v ? String(v) : ALL); setCat(ALL); }}
-      >
-        <TabsList className="flex-wrap">
-          {STATIONS.map((st) => (
-            <TabsTrigger key={st} value={st}>
-              {st}
-              <span className="ml-1.5 text-muted-foreground">
-                {RECIPES.filter((r) => r.station === st).length}
-              </span>
-            </TabsTrigger>
-          ))}
-          <TabsTrigger value={ALL}>
-            Everything<span className="ml-1.5 text-muted-foreground">{RECIPES.length}</span>
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <CraftPlan {...plan} />
 
       <div className="flex flex-wrap gap-1.5">
         <button type="button" onClick={() => setCat(ALL)}>
@@ -123,12 +97,18 @@ export function Recipes() {
                     <TableHead className="min-w-56">Item</TableHead>
                     <TableHead className="w-24 text-right">{statLabel(g.category)}</TableHead>
                     <TableHead>Ingredients</TableHead>
+                    <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {g.rows.map((r) => (
                     <TableRow key={`${r.category}-${r.name}`}>
-                      <TableCell className="font-medium">{r.name}</TableCell>
+                      <TableCell className="font-medium">
+                        {r.name}
+                        <span className="block text-[11px] font-normal text-muted-foreground">
+                          {r.station}
+                        </span>
+                      </TableCell>
                       <TableCell className={cn('text-right tabular-nums', !r.stat && 'text-muted-foreground')}>
                         {r.stat || '—'}
                       </TableCell>
@@ -144,6 +124,16 @@ export function Recipes() {
                             </span>
                           ))}
                         </span>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost" size="icon-xs"
+                          aria-label={`Add ${r.name} to the bench`}
+                          title="Add to the bench"
+                          onClick={() => plan.add(r.name, 1)}
+                        >
+                          <Plus />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
