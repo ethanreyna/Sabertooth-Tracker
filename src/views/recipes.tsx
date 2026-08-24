@@ -5,17 +5,28 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState, TonedBadge } from '@/components/bits';
-import { RECIPES, RECIPE_NOTE, statLabel } from '@/recipes';
+import { RECIPES, RECIPE_NOTES, STATIONS, statLabel } from '@/recipes';
 import { cn } from '@/lib/utils';
 
 const ALL = '__all';
 
-const CATEGORIES = [...new Set(RECIPES.map((r) => r.category))];
-
 export function Recipes() {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState(ALL);
+  // Which forge you are standing at decides what you can make, so that is the
+  // first cut; the doc is organised the same way.
+  const [station, setStation] = useState(STATIONS[0] ?? ALL);
+
+  const inStation = useMemo(
+    () => RECIPES.filter((r) => station === ALL || r.station === station),
+    [station],
+  );
+  const categories = useMemo(
+    () => [...new Set(inStation.map((r) => r.category))],
+    [inStation],
+  );
 
   // Searching by ingredient is the point of this page — "what can I make with
   // leather strips" matters more than looking up a name you already know.
@@ -28,7 +39,7 @@ export function Recipes() {
     };
 
     const out: Array<{ category: string; rows: typeof RECIPES }> = [];
-    for (const r of RECIPES) {
+    for (const r of inStation) {
       if (cat !== ALL && r.category !== cat) continue;
       if (!match(r)) continue;
       const last = out[out.length - 1];
@@ -36,7 +47,7 @@ export function Recipes() {
       else out.push({ category: r.category, rows: [r] });
     }
     return out;
-  }, [q, cat]);
+  }, [q, cat, inStation]);
 
   const shown = groups.reduce((n, g) => n + g.rows.length, 0);
 
@@ -61,15 +72,35 @@ export function Recipes() {
           )}
         </div>
         <span className="ml-auto text-xs text-muted-foreground">
-          {shown} of {RECIPES.length} recipes
+          {shown} of {inStation.length} recipes
+          {station !== ALL ? ` at the ${station}` : ''}
         </span>
       </div>
+
+      <Tabs
+        value={station}
+        onValueChange={(v) => { setStation(v ? String(v) : ALL); setCat(ALL); }}
+      >
+        <TabsList className="flex-wrap">
+          {STATIONS.map((st) => (
+            <TabsTrigger key={st} value={st}>
+              {st}
+              <span className="ml-1.5 text-muted-foreground">
+                {RECIPES.filter((r) => r.station === st).length}
+              </span>
+            </TabsTrigger>
+          ))}
+          <TabsTrigger value={ALL}>
+            Everything<span className="ml-1.5 text-muted-foreground">{RECIPES.length}</span>
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       <div className="flex flex-wrap gap-1.5">
         <button type="button" onClick={() => setCat(ALL)}>
           <TonedBadge tone={cat === ALL ? 'blue' : 'neutral'}>All</TonedBadge>
         </button>
-        {CATEGORIES.map((c) => (
+        {categories.map((c) => (
           <button key={c} type="button" onClick={() => setCat(c)}>
             <TonedBadge tone={cat === c ? 'blue' : 'neutral'}>{c}</TonedBadge>
           </button>
@@ -123,17 +154,18 @@ export function Recipes() {
         ))
       )}
 
-      {RECIPE_NOTE && (
-        <Alert>
+      {RECIPE_NOTES.map((n) => (
+        <Alert key={n}>
           <Info />
-          <AlertDescription>{RECIPE_NOTE}</AlertDescription>
+          <AlertDescription>{n}</AlertDescription>
         </Alert>
-      )}
+      ))}
 
       <p className="text-xs text-muted-foreground">
         Transcribed once from the guild's blacksmith recipe document — this list ships with the app
-        rather than syncing, so changes to the doc need a fresh extraction. The doc's header says 97
-        recipes; it actually contains {RECIPES.length}, all of which are here.
+        rather than syncing, so changes to the doc need a fresh extraction. The doc's own headings
+        say 97 and 152 recipes; it actually holds {RECIPES.length} across both stations, and every
+        one of them is here.
       </p>
     </div>
   );
