@@ -59,15 +59,18 @@ const esc = (s: string) =>
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
   ));
 
+/** Which collection a marker belongs to, so edits land in the right place. */
+export type MapKind = 'spot' | 'dungeon';
+
 export interface MapCanvasProps {
   db: DB;
   readOnly: boolean;
   /** Clicking empty map hands back coordinates so a point can be created there. */
   onPick: (x: number, y: number) => void;
-  onOpen: (id: string) => void;
-  onDelete: (id: string) => void;
+  onOpen: (kind: MapKind, id: string) => void;
+  onDelete: (kind: MapKind, id: string) => void;
   /** Dragging a marker rewrites its coordinates — far quicker than retyping. */
-  onMove: (kind: 'spot' | 'dungeon', id: string, x: number, y: number) => void;
+  onMove: (kind: MapKind, id: string, x: number, y: number) => void;
 }
 
 export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMove }: MapCanvasProps) {
@@ -175,12 +178,12 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMo
       marker.on('popupopen', (e) => {
         const el = (e as unknown as { popup: L.Popup }).popup.getElement();
         el?.querySelector<HTMLButtonElement>('button[data-act="open"]')
-          ?.addEventListener('click', () => openRef.current(s.id));
+          ?.addEventListener('click', () => openRef.current('spot', s.id));
         el?.querySelector<HTMLButtonElement>('button[data-act="del"]')
           ?.addEventListener('click', () => {
             // Confirmed here rather than in React: the popup is Leaflet's own
             // DOM, so there is no dialog to hand this off to.
-            if (confirm(`Delete “${s.name}”?`)) deleteRef.current(s.id);
+            if (confirm(`Delete “${s.name}”?`)) deleteRef.current('spot', s.id);
           });
       });
       if (!roRef.current) {
@@ -209,14 +212,30 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMo
         `${esc(g.name)}${g.recommended ? ` · ${g.recommended}+` : ''}`,
         { direction: 'top' },
       );
+      const dbtn = 'font-size:12px;text-decoration:underline;cursor:pointer;background:none;border:0;padding:0';
       marker.bindPopup(
         `<div style="min-width:180px">
            <div style="font-weight:600">${esc(g.name)}</div>
            <div style="opacity:.7;font-size:12px">Dungeon${g.difficulty ? ' · ' + esc(g.difficulty) : ''}${g.recommended ? ` · ${g.recommended}+ recommended` : ''}</div>
            ${g.location ? `<div style="font-size:12px;margin-top:4px">${esc(g.location)}</div>` : ''}
            <div style="font-size:11px;opacity:.6;margin-top:4px">${esc(g.x)}, ${esc(g.y)}</div>
+           <div style="display:flex;gap:10px;margin-top:6px">
+             <button data-act="open" style="${dbtn};color:inherit">Open</button>
+             ${roRef.current ? '' : `<button data-act="del" style="${dbtn};color:#dc2626">Delete</button>`}
+           </div>
          </div>`,
       );
+      marker.on('popupopen', (e) => {
+        const el = (e as unknown as { popup: L.Popup }).popup.getElement();
+        el?.querySelector<HTMLButtonElement>('button[data-act="open"]')
+          ?.addEventListener('click', () => openRef.current('dungeon', g.id));
+        el?.querySelector<HTMLButtonElement>('button[data-act="del"]')
+          ?.addEventListener('click', () => {
+            if (confirm(`Delete “${g.name}”? This removes it from the Dungeons section too.`)) {
+              deleteRef.current('dungeon', g.id);
+            }
+          });
+      });
       if (!roRef.current) {
         marker.on('dragend', () => {
           const p = marker.getLatLng();

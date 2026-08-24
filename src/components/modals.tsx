@@ -21,6 +21,7 @@ import type { Barrel, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, R
 export type ModalKind = 'job' | 'barrel' | 'dungeon' | 'spot' | 'ledger' | 'member' | 'role' | 'sync';
 
 const NO_ROLE = '__none';
+const NO_KIND = '__none';
 const COLLECTION_TAG = 'Resource collection';
 const TAGS = [COLLECTION_TAG, 'Kill', 'Arrest', 'Guard', 'Escort', 'Delivery', 'Other'];
 const PRIORITIES = ['Normal', 'Low', 'High', 'Urgent'];
@@ -34,10 +35,12 @@ const toDateInput = (iso: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-export function Modals({ modal, close, roles, settings, memberNames, editRole, editJob, editBarrel, editDungeon, editSpot, newSpotAt, newSpotKind, newDungeonAt, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
+export function Modals({ modal, close, roles, settings, memberNames, editRole, editJob, editBarrel, editDungeon, editSpot, dungeons, newSpotAt, newSpotKind, newDungeonAt, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
   modal: ModalKind; close: () => void; roles: Role[]; settings: Settings; memberNames: string[];
   editRole: Role | null; editJob: Job | null; editBarrel: Barrel | null;
   editDungeon: Dungeon | null; editSpot: Spot | null;
+  /** Existing dungeons, so a point can be attached to one instead of duplicating it. */
+  dungeons: Dungeon[];
   newSpotAt: { x: string; y: string } | null;
   newSpotKind: string;
   newDungeonAt: { x: string; y: string } | null;
@@ -62,9 +65,14 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
   const [ledgerType, setLedgerType] = useState<LedgerEntry['type']>('income');
   const [memberRole, setMemberRole] = useState(roles[0]?.name ?? NO_ROLE);
   const [advanceRole, setAdvanceRole] = useState(editRole?.advanceTo || NO_ROLE);
+  const [spotKind, setSpotKind] = useState(editSpot?.kind ?? newSpotKind);
+  const [attachDungeon, setAttachDungeon] = useState('');
   const [cutPct, setCutPct] = useState(String(settings.guildCutPct));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+
+  const isDungeonKind = spotKind.trim().toLowerCase() === 'dungeon' && !editSpot;
+  const attachedDungeon = dungeons.find((g) => g.name === attachDungeon.trim()) ?? null;
 
   const cutClean = Math.min(100, Math.max(0, Math.round(Number(cutPct) || 0)));
   const cutDirty = cutPct !== '' && cutClean !== settings.guildCutPct;
@@ -216,6 +224,39 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
   const submitSpot = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+
+    // A point whose kind is Dungeon belongs in the Dungeons section, not
+    // alongside the ore veins — otherwise the same cave exists twice with two
+    // sets of notes and only one of them on the map.
+    if (spotKind.trim().toLowerCase() === 'dungeon' && !editSpot) {
+      const x = coordOrEmpty(String(f.get('x') || ''));
+      const y = coordOrEmpty(String(f.get('y') || ''));
+      const attachTo = dungeons.find((g) => g.name === attachDungeon.trim());
+      close();
+      if (attachTo) {
+        update((d) => {
+          const t = d.dungeons.find((g) => g.id === attachTo.id);
+          if (t) { t.x = x; t.y = y; }
+        });
+        return;
+      }
+      const name = String(f.get('name') || '').trim();
+      if (!name) return;
+      update((d) => {
+        d.dungeons.push({
+          id: uid(), name,
+          location: String(f.get('location') || '').trim(),
+          recommended: Math.max(0, Number(f.get('recommended') || 0)),
+          difficulty: String(f.get('difficulty') || '').trim(),
+          notes: String(f.get('notes') || ''),
+          x, y, imgs: [],
+          addedBy: String(f.get('addedBy') || '').trim(),
+          at: new Date().toISOString(),
+        });
+      });
+      return;
+    }
+
     const files = (f.getAll('shots') as File[]).filter((x) => x && x.size);
 
     let imgs = spotImgs;
@@ -235,7 +276,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
 
     const fields = {
       name: String(f.get('name') || '').trim(),
-      kind: String(f.get('kind') || '').trim() || 'Other',
+      kind: spotKind.trim() || 'Other',
       location: String(f.get('location') || '').trim(),
       yield: String(f.get('yield') || '').trim(),
       respawn: String(f.get('respawn') || '').trim(),
@@ -529,10 +570,16 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                 <Input id="sp-name" name="name" required autoFocus
                   defaultValue={editSpot?.name ?? ''} placeholder="e.g. Halted Stream iron veins" />
               </Field>
-              <Field label="Kind" htmlFor="sp-kind">
-                {/* Free text with suggestions: a written-in kind gets its own tab. */}
-                <NameField id="sp-kind" name="kind" options={SPOT_KINDS}
-                  defaultValue={editSpot?.kind ?? newSpotKind} placeholder="Ore, Hunting, Alchemy…" />
+              <Field label="Kind">
+                {/* Controlled, because choosing Dungeon changes which fields
+                    the form shows and where the record ends up being saved. */}
+                <Select value={spotKind || NO_KIND} onValueChange={(v) => setSpotKind(!v || v === NO_KIND ? '' : v)}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_KIND}>Unspecified</SelectItem>
+                    {SPOT_KINDS.map((k) => <SelectItem key={k} value={k}>{k}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </Field>
             </div>
 
@@ -542,16 +589,54 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                 placeholder="e.g. Halted Stream Camp, north of Whiterun" />
             </Field>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Yield" htmlFor="sp-yield">
-                <Input id="sp-yield" name="yield"
-                  defaultValue={editSpot?.yield ?? ''} placeholder="e.g. 8 iron veins + transmute" />
-              </Field>
-              <Field label="Respawn" htmlFor="sp-respawn">
-                <Input id="sp-respawn" name="respawn"
-                  defaultValue={editSpot?.respawn ?? ''} placeholder="e.g. every 10 days" />
-              </Field>
-            </div>
+            {isDungeonKind ? (
+              <div className="space-y-3 rounded-lg border border-sky-500/25 bg-sky-500/10 p-3">
+                <p className="text-xs text-sky-700 dark:text-sky-400">
+                  Dungeons live in the Dungeons section, so this will be saved there rather than as a
+                  gathering point — one record per cave, with its position on the map.
+                </p>
+                <Field label="Attach to an existing dungeon">
+                  {/* Controlled so the form can hide the create-new fields once
+                      an existing dungeon is chosen. */}
+                  <Select
+                    value={attachDungeon || NO_KIND}
+                    onValueChange={(v) => setAttachDungeon(!v || v === NO_KIND ? '' : v)}
+                  >
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_KIND}>Create a new dungeon</SelectItem>
+                      {dungeons.slice().sort((a, b) => a.name.localeCompare(b.name)).map((g) => (
+                        <SelectItem key={g.id} value={g.name}>
+                          {g.name}{g.x && g.y ? ' (already placed)' : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                {!attachedDungeon && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Recommended party" htmlFor="sp-rec">
+                      <Input id="sp-rec" name="recommended" type="number" min={0} placeholder="2" />
+                    </Field>
+                    <Field label="Difficulty" htmlFor="sp-diff">
+                      <NameField name="difficulty" options={DIFFICULTIES} defaultValue=""
+                        placeholder="Easy, Moderate…" id="sp-diff" />
+                    </Field>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Yield" htmlFor="sp-yield">
+                  <Input id="sp-yield" name="yield"
+                    defaultValue={editSpot?.yield ?? ''} placeholder="e.g. 8 iron veins + transmute" />
+                </Field>
+                <Field label="Respawn" htmlFor="sp-respawn">
+                  <Input id="sp-respawn" name="respawn"
+                    defaultValue={editSpot?.respawn ?? ''} placeholder="e.g. every 10 days" />
+                </Field>
+              </div>
+            )}
 
             <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">

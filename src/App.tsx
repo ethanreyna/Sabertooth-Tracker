@@ -411,8 +411,17 @@ export default function App() {
                 setNewSpotKind(addMode === 'settlement' ? 'Settlement' : '');
                 setModal('spot');
               }}
-              onOpen={(id) => { setEditSpotId(id); setModal('spot'); }}
-              onDelete={(id) => update((d) => { d.spots = d.spots.filter((sp) => sp.id !== id); })}
+              onOpen={(kind, id) => {
+                // Editing a marker opens the form for whichever collection it
+                // actually lives in, so a dungeon edit lands in Dungeons.
+                if (kind === 'dungeon') { setEditDungeonId(id); setModal('dungeon'); return; }
+                setEditSpotId(id);
+                setModal('spot');
+              }}
+              onDelete={(kind, id) => update((d) => {
+                if (kind === 'dungeon') d.dungeons = d.dungeons.filter((g) => g.id !== id);
+                else d.spots = d.spots.filter((sp) => sp.id !== id);
+              })}
               onMove={(kind, id, x, y) => update((d) => {
                 const list = kind === 'spot' ? d.spots : d.dungeons;
                 const t = list.find((r) => r.id === id);
@@ -454,6 +463,7 @@ export default function App() {
           editBarrel={db.barrels.find((b) => b.id === editBarrelId) ?? null}
           editDungeon={db.dungeons.find((g) => g.id === editDungeonId) ?? null}
           editSpot={db.spots.find((sp) => sp.id === editSpotId) ?? null}
+          dungeons={db.dungeons}
           newSpotAt={newSpotAt}
           newSpotKind={newSpotKind}
           newDungeonAt={newDungeonAt}

@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { TonedBadge } from '@/components/bits';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Spots } from '@/views/spots';
+import type { MapKind } from '@/components/map-canvas';
 import type { DB } from '@/types';
 
 // Leaflet and its CSS are ~45KB gzipped, and only this screen needs them.
@@ -32,9 +33,9 @@ export function MapView({ db, update, readOnly, placing, addMode, onAddModeChang
   update: (fn: (d: DB) => void) => void;
   readOnly: boolean;
   onPick: (x: number, y: number) => void;
-  onOpen: (id: string) => void;
-  onDelete: (id: string) => void;
-  onMove: (kind: 'spot' | 'dungeon', id: string, x: number, y: number) => void;
+  onOpen: (kind: MapKind, id: string) => void;
+  onDelete: (kind: MapKind, id: string) => void;
+  onMove: (kind: MapKind, id: string, x: number, y: number) => void;
   /** A dungeon awaiting a click to set its coordinates. */
   placing: { id: string; name: string } | null;
   onCancelPlacing: () => void;
@@ -58,7 +59,7 @@ export function MapView({ db, update, readOnly, placing, addMode, onAddModeChang
             </TabsTrigger>
           </TabsList>
         </Tabs>
-        <Spots db={db} update={update} readOnly={readOnly} onEdit={onOpen} />
+        <Spots db={db} update={update} readOnly={readOnly} onEdit={(id) => onOpen('spot', id)} />
       </div>
     );
   }
