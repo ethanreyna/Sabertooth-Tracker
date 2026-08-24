@@ -62,6 +62,85 @@ const esc = (s: string) =>
 /** Which collection a marker belongs to, so edits land in the right place. */
 export type MapKind = 'spot' | 'dungeon';
 
+/** A finished drag, waiting to be confirmed or put back. */
+export interface MoveRequest {
+  kind: MapKind;
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  /** Where it was, for the message and for putting it back. */
+  fromX: number;
+  fromY: number;
+  /** Returns the marker to where it started. */
+  revert: () => void;
+}
+
+// Markers don't drag on a plain press. Somebody reading the map shouldn't be
+// able to move a dungeon by brushing past it, so a drag has to be asked for:
+// press and hold, without wandering, and the marker unlocks and follows the
+// same gesture. Dropping it then asks before anything is written down.
+const HOLD_MS = 700;
+const HOLD_SLOP = 6; // px of wander allowed before it counts as a pan
+
+/**
+ * Makes one marker hold-to-drag. Returns a teardown for when markers are
+ * rebuilt, so the listeners don't outlive the icon they were bound to.
+ */
+function armOnHold(map: L.Map, marker: L.Marker, onArmed: () => void): () => void {
+  const icon = marker.getElement();
+  if (!icon) return () => {};
+
+  let timer: number | undefined;
+  let from: { x: number; y: number } | null = null;
+
+  const clear = () => {
+    window.clearTimeout(timer);
+    timer = undefined;
+    from = null;
+    icon.classList.remove('marker-arming');
+    document.removeEventListener('pointermove', onMove, true);
+    document.removeEventListener('pointerup', clear, true);
+    document.removeEventListener('pointercancel', clear, true);
+  };
+
+  function onMove(e: PointerEvent) {
+    if (!from) return;
+    if (Math.abs(e.clientX - from.x) > HOLD_SLOP || Math.abs(e.clientY - from.y) > HOLD_SLOP) clear();
+  }
+
+  const onDown = (e: PointerEvent) => {
+    if (e.button !== 0 || marker.dragging?.enabled()) return;
+    from = { x: e.clientX, y: e.clientY };
+    icon.classList.add('marker-arming');
+    document.addEventListener('pointermove', onMove, true);
+    document.addEventListener('pointerup', clear, true);
+    document.addEventListener('pointercancel', clear, true);
+
+    timer = window.setTimeout(() => {
+      const at = from;
+      icon.classList.remove('marker-arming');
+      if (!at) return;
+      marker.dragging?.enable();
+      icon.classList.add('marker-armed');
+      onArmed();
+      // The map is mid-press too; letting both run would pan and drag at once.
+      map.dragging.disable();
+      // Hand the gesture that is already underway to Leaflet's drag handler,
+      // so the hold flows into the drag instead of needing a second grab.
+      icon.dispatchEvent(new MouseEvent('mousedown', {
+        clientX: at.x, clientY: at.y, button: 0, bubbles: true, cancelable: true, view: window,
+      }));
+    }, HOLD_MS);
+  };
+
+  icon.addEventListener('pointerdown', onDown);
+  return () => {
+    clear();
+    icon.removeEventListener('pointerdown', onDown);
+  };
+}
+
 export interface MapCanvasProps {
   db: DB;
   readOnly: boolean;
@@ -69,11 +148,11 @@ export interface MapCanvasProps {
   onPick: (x: number, y: number) => void;
   onOpen: (kind: MapKind, id: string) => void;
   onDelete: (kind: MapKind, id: string) => void;
-  /** Dragging a marker rewrites its coordinates — far quicker than retyping. */
-  onMove: (kind: MapKind, id: string, x: number, y: number) => void;
+  /** A finished drag. Nothing is written until the request is confirmed. */
+  onMoveRequest: (req: MoveRequest) => void;
 }
 
-export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMove }: MapCanvasProps) {
+export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMoveRequest }: MapCanvasProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -84,8 +163,8 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMo
   openRef.current = onOpen;
   const deleteRef = useRef(onDelete);
   deleteRef.current = onDelete;
-  const moveRef = useRef(onMove);
-  moveRef.current = onMove;
+  const moveRef = useRef(onMoveRequest);
+  moveRef.current = onMoveRequest;
   const roRef = useRef(readOnly);
   roRef.current = readOnly;
 
@@ -150,14 +229,50 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMo
   // Redraw markers whenever the points change.
   useEffect(() => {
     const group = layerRef.current;
-    if (!group) return;
+    const map = mapRef.current;
+    if (!group || !map) return;
     group.clearLayers();
+
+    // Torn down on the next redraw: the icons these are bound to are gone by
+    // then, and a stale listener would arm a marker that no longer exists.
+    const cleanups: Array<() => void> = [];
+
+    /** Hold to unlock, drag, then confirm — the whole flow for one marker. */
+    const makeMovable = (marker: L.Marker, kind: MapKind, id: string, name: string) => {
+      if (roRef.current) return;
+      const home = marker.getLatLng();
+      // Created draggable so Leaflet builds the handler, but off until held.
+      marker.dragging?.disable();
+
+      const settle = () => {
+        marker.dragging?.disable();
+        marker.getElement()?.classList.remove('marker-armed');
+        map.dragging.enable();
+      };
+
+      marker.on('dragend', () => {
+        const p = marker.getLatLng();
+        settle();
+        const x = Math.round(p.lng);
+        const y = Math.round(p.lat);
+        if (x === Math.round(home.lng) && y === Math.round(home.lat)) return;
+        moveRef.current({
+          kind, id, name, x, y,
+          fromX: Math.round(home.lng), fromY: Math.round(home.lat),
+          revert: () => marker.setLatLng(home),
+        });
+      });
+
+      cleanups.push(armOnHold(map, marker, () => marker.closePopup()));
+      cleanups.push(settle);
+    };
 
     const placed: Spot[] = db.spots.filter((s) => s.x !== '' && s.y !== '');
     for (const s of placed) {
       // A divIcon rather than circleMarker: only L.Marker can be dragged, and
       // dragging is how a mis-placed point gets fixed.
       const marker = L.marker(L.latLng(Number(s.y), Number(s.x)), {
+        // Draggable, but only once held: see armOnHold.
         draggable: !roRef.current,
         icon: spotIcon(s.kind),
       });
@@ -186,13 +301,8 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMo
             if (confirm(`Delete “${s.name}”?`)) deleteRef.current('spot', s.id);
           });
       });
-      if (!roRef.current) {
-        marker.on('dragend', () => {
-          const p = marker.getLatLng();
-          moveRef.current('spot', s.id, Math.round(p.lng), Math.round(p.lat));
-        });
-      }
       marker.addTo(group);
+      makeMovable(marker, 'spot', s.id, s.name);
     }
 
     // Dungeons get Skyrim's own cave-mouth silhouette so they read as a
@@ -236,14 +346,11 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMo
             }
           });
       });
-      if (!roRef.current) {
-        marker.on('dragend', () => {
-          const p = marker.getLatLng();
-          moveRef.current('dungeon', g.id, Math.round(p.lng), Math.round(p.lat));
-        });
-      }
       marker.addTo(group);
+      makeMovable(marker, 'dungeon', g.id, g.name);
     }
+
+    return () => { for (const fn of cleanups) fn(); };
   }, [db.spots, db.dungeons]);
 
   return <div ref={hostRef} className="h-full w-full rounded-xl [&_.leaflet-container]:bg-muted" />;

@@ -6,7 +6,8 @@ import { Card } from '@/components/ui/card';
 import { TonedBadge } from '@/components/bits';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Spots } from '@/views/spots';
-import type { MapKind } from '@/components/map-canvas';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import type { MapKind, MoveRequest } from '@/components/map-canvas';
 import type { DB } from '@/types';
 
 // Leaflet and its CSS are ~45KB gzipped, and only this screen needs them.
@@ -43,6 +44,9 @@ export function MapView({ db, update, readOnly, placing, addMode, onAddModeChang
   onAddModeChange: (m: AddMode) => void;
 }) {
   const [tab, setTab] = useState<'map' | 'list'>('map');
+  // A dropped marker, waiting to be confirmed. Nothing is written to the record
+  // until it is: a marker knocked loose can simply be put back.
+  const [move, setMove] = useState<MoveRequest | null>(null);
   const placed = db.spots.filter((s) => s.x !== '' && s.y !== '').length;
   const unplaced = db.spots.length - placed;
 
@@ -124,7 +128,7 @@ export function MapView({ db, update, readOnly, placing, addMode, onAddModeChang
             </button>
           ))}
           <span className="ml-auto text-xs text-muted-foreground">
-            Drag a marker to move it; click one to open or delete it.
+            Hold a marker for a moment to unlock it, then drag; click one to open or delete it.
           </span>
         </div>
       )}
@@ -139,10 +143,42 @@ export function MapView({ db, update, readOnly, placing, addMode, onAddModeChang
         >
           <MapCanvas
             db={db} readOnly={readOnly}
-            onPick={onPick} onOpen={onOpen} onDelete={onDelete} onMove={onMove}
+            onPick={onPick} onOpen={onOpen} onDelete={onDelete}
+            onMoveRequest={setMove}
           />
         </Suspense>
       </Card>
+
+      {move && (
+        <Dialog
+          open
+          onOpenChange={(open) => { if (!open) { move.revert(); setMove(null); } }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Move {move.name}?</DialogTitle>
+              <DialogDescription>
+                This rewrites the coordinates on the {move.kind === 'dungeon' ? 'dungeon' : 'point'}{' '}
+                record. Cancel and it goes straight back where it was.
+              </DialogDescription>
+            </DialogHeader>
+            <dl className="grid grid-cols-[4rem_1fr] gap-x-4 gap-y-1 text-sm">
+              <dt className="text-xs text-muted-foreground">From</dt>
+              <dd className="tabular-nums">{move.fromX}, {move.fromY}</dd>
+              <dt className="text-xs text-muted-foreground">To</dt>
+              <dd className="font-medium tabular-nums">{move.x}, {move.y}</dd>
+            </dl>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { move.revert(); setMove(null); }}>
+                Put it back
+              </Button>
+              <Button onClick={() => { onMove(move.kind, move.id, move.x, move.y); setMove(null); }}>
+                Move it here
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <p className="text-xs text-muted-foreground">
         Terrain rendered from Skyrim's own LOD textures, cut into tiles and served from this site —

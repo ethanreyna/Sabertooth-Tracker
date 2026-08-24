@@ -4,10 +4,24 @@ export const KEIZAAL_MAP_URL = 'https://keizaal.com/map';
 /** UESP's Skyrim game map, which takes world coordinates in its URL. */
 const UESP_BASE = 'https://gamemap.uesp.net/sr/';
 
-/** Keeps only a plain integer (a leading minus is fine — Skyrim uses both). */
-export const coordOrEmpty = (raw: string): string => {
+/**
+ * A stored coordinate, normalised to a plain integer string (a leading minus is
+ * fine — Skyrim uses both). Empty when there is genuinely no position.
+ *
+ * Deliberately forgiving about *how* the number was written. This runs over
+ * every record on every load, so anything it rejects is blanked and then saved
+ * back blank — one strict test here can quietly erase every marker on the map.
+ * A number, or a string with a decimal point, is still a position; only what
+ * isn't a number at all is dropped.
+ */
+export const coordOrEmpty = (raw: unknown): string => {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? String(Math.round(raw)) : '';
+  if (typeof raw !== 'string') return '';
   const v = raw.trim();
-  return /^-?\d+$/.test(v) ? v : '';
+  if (v === '') return '';
+  if (/^-?\d+$/.test(v)) return v;
+  const n = Number(v);
+  return Number.isFinite(n) ? String(Math.round(n)) : '';
 };
 
 /**

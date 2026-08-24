@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Boxes, Coins, FileInput, Hammer, Inbox, LayoutDashboard, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, Settings, Shield, ShieldHalf, Skull, Sun, Users, Briefcase,
+  Boxes, Coins, FileInput, Hammer, Inbox, LayoutDashboard, Swords, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, Settings, Shield, ShieldHalf, Skull, Sun, Users, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,7 @@ import { MapView } from '@/views/map';
 import { Suggestions } from '@/views/suggestions';
 import { Suggest } from '@/views/suggest';
 import { Items } from '@/views/items';
+import { Run } from '@/views/run';
 import { ImportDialog } from '@/components/import-dialog';
 import type { Draft } from '@/lib/parse-import';
 import type { AddMode } from '@/views/map';
@@ -34,12 +35,12 @@ import {
 import { cn } from '@/lib/utils';
 import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
-type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'recipes' | 'roster' | 'roles' | 'suggestions' | 'suggest';
+type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'run' | 'recipes' | 'roster' | 'roles' | 'suggestions' | 'suggest';
 
 /** What a read-only guest is allowed to see. `ledger` is the market price list,
  *  which comes from the public sheet; `bank` (the guild's septims) stays hidden,
  *  and the Worker strips those transactions from a guest response entirely. */
-const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'items', 'recipes', 'roster', 'suggest'];
+const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'items', 'run', 'recipes', 'roster', 'suggest'];
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -48,6 +49,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'jobs', label: 'Jobs', icon: <Briefcase /> },
   { id: 'storage', label: 'Storage', icon: <Package /> },
   { id: 'dungeons', label: 'Dungeons', icon: <Skull /> },
+  { id: 'run', label: 'Dungeon run', icon: <Swords /> },
   { id: 'map', label: 'Map & Points', icon: <MapIcon /> },
   { id: 'bank', label: 'Bank', icon: <Coins /> },
   { id: 'ledger', label: 'Ledger', icon: <Scale /> },
@@ -61,7 +63,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
 
 const TITLES: Record<View, string> = {
   dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', map: 'Map & Points of Interest',
-  bank: 'Bank', ledger: 'Ledger', items: 'Item database', recipes: 'Recipes', roster: 'Roster', roles: 'Roles',
+  bank: 'Bank', ledger: 'Ledger', items: 'Item database', run: 'Dungeon run', recipes: 'Recipes', roster: 'Roster', roles: 'Roles',
   suggestions: 'Guest suggestions', suggest: 'Suggest a change',
 };
 
@@ -472,6 +474,9 @@ export default function App() {
           {view === 'suggestions' && <Suggestions db={db} update={update} memberNames={memberNames} />}
           {view === 'suggest' && <Suggest cfg={cfg} memberNames={memberNames} itemNames={itemNames} />}
           {view === 'ledger' && <Prices />}
+          {view === 'run' && (
+            <Run db={db} update={update} readOnly={readOnly} memberNames={memberNames} />
+          )}
           {view === 'items' && (
             <Items
               db={db} update={update} readOnly={readOnly}

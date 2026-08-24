@@ -180,6 +180,42 @@ export const ITEM_CATEGORIES = [
   'Soul Gem', 'Weapon', 'Armour', 'Clothing', 'Jewellery', 'Book', 'Misc',
 ];
 
+/** One thing picked up on the current dungeon run. */
+export interface RunEntry {
+  id: string;
+  kind: 'gold' | 'item';
+  /** Blank for gold. */
+  item: string;
+  /** Septims for gold, a count for items. */
+  qty: number;
+  by: string;
+  at: string;
+}
+
+/**
+ * The dungeon run in progress. There is exactly one, shared by the whole guild:
+ * everyone adds to the same pile as they go and watches the split move, which
+ * is the point — a party doesn't want a record of runs, it wants to know what
+ * each person is owed right now.
+ */
+export interface DungeonRun {
+  /** False when no run is going, which is what an empty tracker means. */
+  active: boolean;
+  /** Which dungeon, if anyone said. */
+  name: string;
+  /** How many ways the loot splits. */
+  people: number;
+  /** Who is on it, when the party bothered to name themselves. */
+  party: string[];
+  entries: RunEntry[];
+  startedBy: string;
+  startedAt: string;
+}
+
+export const emptyRun = (): DungeonRun => ({
+  active: false, name: '', people: 1, party: [], entries: [], startedBy: '', startedAt: '',
+});
+
 export interface Member {
   id: string;
   role: string;
@@ -208,6 +244,7 @@ export interface DB {
   bankItems: BankItem[];
   suggestions: Suggestion[];
   items: ItemRecord[];
+  run: DungeonRun;
 }
 
 /** One row of the market price list, mirrored from the guild's Google Sheet.

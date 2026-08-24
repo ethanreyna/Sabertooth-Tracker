@@ -136,3 +136,19 @@
   isolation: isolate;
   z-index: 0;
 }
+
+/* A marker only unlocks after a press is held, so the press needs to show that
+   something is happening — otherwise a hold that hasn't finished reads as a
+   dead control. Only filter is animated: Leaflet positions markers with
+   `transform`, and touching that would move them. */
+.marker-arming {
+  animation: marker-arming 700ms linear forwards;
+}
+@keyframes marker-arming {
+  from { filter: none; }
+  to { filter: drop-shadow(0 0 7px rgb(56 189 248 / 0.95)) brightness(1.15); }
+}
+.marker-armed {
+  filter: drop-shadow(0 0 8px rgb(56 189 248 / 1)) brightness(1.2);
+  cursor: grabbing;
+}
