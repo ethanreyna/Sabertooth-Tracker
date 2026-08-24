@@ -1,5 +1,6 @@
 import { Suspense, lazy, useState } from 'react';
-import { Info } from 'lucide-react';
+import { Info, MapPinPlus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { TonedBadge } from '@/components/bits';
@@ -18,13 +19,17 @@ const LEGEND: Array<[string, string]> = [
   ['Wood', 'bg-amber-500'],
 ];
 
-export function MapView({ db, update, readOnly, onPick, onOpen, onDelete }: {
+export function MapView({ db, update, readOnly, placing, onPick, onOpen, onDelete, onMove, onCancelPlacing }: {
   db: DB;
   update: (fn: (d: DB) => void) => void;
   readOnly: boolean;
   onPick: (x: number, y: number) => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
+  onMove: (kind: 'spot' | 'dungeon', id: string, x: number, y: number) => void;
+  /** A dungeon awaiting a click to set its coordinates. */
+  placing: { id: string; name: string } | null;
+  onCancelPlacing: () => void;
 }) {
   const [tab, setTab] = useState<'map' | 'list'>('map');
   const placed = db.spots.filter((s) => s.x !== '' && s.y !== '').length;
@@ -73,12 +78,22 @@ export function MapView({ db, update, readOnly, onPick, onOpen, onDelete }: {
         </div>
       </div>
 
-      {!readOnly && (
+      {!readOnly && placing && (
+        <Alert className="border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-400">
+          <MapPinPlus />
+          <AlertDescription className="flex flex-wrap items-center gap-2">
+            <span>Click the map to place <strong>{placing.name}</strong>.</span>
+            <Button variant="ghost" size="xs" onClick={onCancelPlacing}>Cancel</Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {!readOnly && !placing && (
         <Alert>
           <Info />
           <AlertDescription>
-            Click anywhere on the map to add a point of interest there — the coordinates are filled
-            in for you. Click a marker to open it.
+            Click the map to add a point of interest there — coordinates are filled in for you. Drag
+            any marker to correct its position, and click one to open or delete it.
           </AlertDescription>
         </Alert>
       )}
@@ -91,7 +106,10 @@ export function MapView({ db, update, readOnly, onPick, onOpen, onDelete }: {
             </div>
           }
         >
-          <MapCanvas db={db} readOnly={readOnly} onPick={onPick} onOpen={onOpen} onDelete={onDelete} />
+          <MapCanvas
+            db={db} readOnly={readOnly}
+            onPick={onPick} onOpen={onOpen} onDelete={onDelete} onMove={onMove}
+          />
         </Suspense>
       </Card>
 

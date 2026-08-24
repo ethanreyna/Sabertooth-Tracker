@@ -82,6 +82,9 @@ export interface Dungeon {
   location: string;
   recommended: number; // suggested party size
   difficulty: string;
+  /** Skyrim world coordinates, blank when nobody has placed it yet. */
+  x: string;
+  y: string;
   notes: string;
   imgs: string[]; // map screenshots (R2 URLs)
   addedBy: string;

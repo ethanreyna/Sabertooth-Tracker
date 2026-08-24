@@ -15,7 +15,7 @@ import { uid } from '@/lib/format';
 import { DURATION_UNITS, fromNow } from '@/lib/deadline';
 import type { DurationUnit } from '@/lib/deadline';
 import { SPOT_KINDS } from '@/types';
-import { KEIZAAL_MAP_URL, coordOrEmpty, httpUrlOrEmpty } from '@/lib/maps';
+import { coordOrEmpty } from '@/lib/maps';
 import type { Barrel, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, Role, Settings, Spot, SyncCfg, SyncStatus } from '@/types';
 
 export type ModalKind = 'job' | 'barrel' | 'dungeon' | 'spot' | 'ledger' | 'member' | 'role' | 'sync';
@@ -239,9 +239,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
       respawn: String(f.get('respawn') || '').trim(),
       x: coordOrEmpty(String(f.get('x') || '')),
       y: coordOrEmpty(String(f.get('y') || '')),
-      // Only http(s) accepted, so a pasted javascript: URL can't be stored and
-      // later run from the card's map button.
-      mapUrl: httpUrlOrEmpty(String(f.get('mapUrl') || '')),
+      mapUrl: '',
       notes: String(f.get('notes') || ''),
       imgs,
       addedBy: String(f.get('addedBy') || '').trim(),
@@ -285,6 +283,8 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
       recommended: Math.max(0, Number(f.get('recommended') || 0)),
       difficulty,
       notes: String(f.get('notes') || ''),
+      x: coordOrEmpty(String(f.get('x') || '')),
+      y: coordOrEmpty(String(f.get('y') || '')),
       imgs,
       addedBy: String(f.get('addedBy') || '').trim(),
     };
@@ -529,8 +529,8 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
               </Field>
               <Field label="Kind" htmlFor="sp-kind">
                 {/* Free text with suggestions: a written-in kind gets its own tab. */}
-                <NameField id="sp-kind" name="kind" options={SPOT_KINDS} required
-                  defaultValue={editSpot?.kind ?? SPOT_KINDS[0]} placeholder="Ore, Hunting, Alchemy…" />
+                <NameField id="sp-kind" name="kind" options={SPOT_KINDS}
+                  defaultValue={editSpot?.kind ?? ''} placeholder="Ore, Hunting, Alchemy…" />
               </Field>
             </div>
 
@@ -555,7 +555,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Map
               </p>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="X" htmlFor="sp-x">
                   <Input id="sp-x" name="x" inputMode="numeric"
                     defaultValue={editSpot?.x ?? newSpotAt?.x ?? ''} placeholder="-5782" />
@@ -564,10 +564,6 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                   <Input id="sp-y" name="y" inputMode="numeric"
                     defaultValue={editSpot?.y ?? newSpotAt?.y ?? ''} placeholder="23050" />
                 </Field>
-                <Field label="Keizaal map link" htmlFor="sp-mapurl">
-                  <Input id="sp-mapurl" name="mapUrl" type="url"
-                    defaultValue={editSpot?.mapUrl ?? ''} placeholder="https://keizaal.com/map…" />
-                </Field>
               </div>
               <p className="text-xs text-muted-foreground">
                 Skyrim world coordinates build a{' '}
@@ -575,13 +571,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                   UESP map
                 </a>{' '}
                 link automatically — read them off the UESP map's address bar, or from{' '}
-                <code className="text-[11px]">getpos</code> in the console. The Keizaal link is
-                optional: open{' '}
-                <a href={KEIZAAL_MAP_URL} target="_blank" rel="noreferrer" className="underline">
-                  keizaal.com/map
-                </a>
-                , find the place, and paste the address bar here.
-              </p>
+                <code className="text-[11px]">getpos</code> in the console.              </p>
             </div>
 
             <Field label="Notes" htmlFor="sp-notes">
@@ -646,6 +636,17 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                     {DIFFICULTIES.map((x) => <SelectItem key={x} value={x}>{x}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </Field>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="X" htmlFor="dg-x">
+                <Input id="dg-x" name="x" inputMode="numeric"
+                  defaultValue={editDungeon?.x ?? ''} placeholder="optional" />
+              </Field>
+              <Field label="Y" htmlFor="dg-y">
+                <Input id="dg-y" name="y" inputMode="numeric"
+                  defaultValue={editDungeon?.y ?? ''} placeholder="or place it on the map" />
               </Field>
             </div>
 

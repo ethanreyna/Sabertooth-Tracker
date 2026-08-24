@@ -37,9 +37,11 @@ export interface MapCanvasProps {
   onPick: (x: number, y: number) => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
+  /** Dragging a marker rewrites its coordinates — far quicker than retyping. */
+  onMove: (kind: 'spot' | 'dungeon', id: string, x: number, y: number) => void;
 }
 
-export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete }: MapCanvasProps) {
+export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMove }: MapCanvasProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -50,6 +52,8 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete }: Ma
   openRef.current = onOpen;
   const deleteRef = useRef(onDelete);
   deleteRef.current = onDelete;
+  const moveRef = useRef(onMove);
+  moveRef.current = onMove;
   const roRef = useRef(readOnly);
   roRef.current = readOnly;
 
@@ -119,12 +123,18 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete }: Ma
 
     const placed: Spot[] = db.spots.filter((s) => s.x !== '' && s.y !== '');
     for (const s of placed) {
-      const marker = L.circleMarker(L.latLng(Number(s.y), Number(s.x)), {
-        radius: 6,
-        color: '#0b0b0c',
-        weight: 2,
-        fillColor: colorFor(s.kind),
-        fillOpacity: 0.95,
+      // A divIcon rather than circleMarker: only L.Marker can be dragged, and
+      // dragging is how a mis-placed point gets fixed.
+      const marker = L.marker(L.latLng(Number(s.y), Number(s.x)), {
+        draggable: !roRef.current,
+        icon: L.divIcon({
+          className: '',
+          iconSize: [14, 14],
+          iconAnchor: [7, 7],
+          html: `<span style="display:block;width:14px;height:14px;border-radius:9999px;
+                   background:${colorFor(s.kind)};border:2px solid #0b0b0c;
+                   box-shadow:0 0 0 1px rgba(255,255,255,.35)"></span>`,
+        }),
       });
       marker.bindTooltip(`${esc(s.name)} · ${esc(s.kind)}`, { direction: 'top' });
       const btn = 'font-size:12px;text-decoration:underline;cursor:pointer;background:none;border:0;padding:0';
@@ -151,9 +161,52 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete }: Ma
             if (confirm(`Delete “${s.name}”?`)) deleteRef.current(s.id);
           });
       });
+      if (!roRef.current) {
+        marker.on('dragend', () => {
+          const p = marker.getLatLng();
+          moveRef.current('spot', s.id, Math.round(p.lng), Math.round(p.lat));
+        });
+      }
       marker.addTo(group);
     }
-  }, [db.spots]);
+
+    // Dungeons get Skyrim's own cave-mouth silhouette so they read as a
+    // different kind of thing from a gathering point at a glance.
+    for (const g of db.dungeons) {
+      if (g.x === '' || g.y === '') continue;
+      const marker = L.marker(L.latLng(Number(g.y), Number(g.x)), {
+        draggable: !roRef.current,
+        icon: L.divIcon({
+          className: '',
+          iconSize: [26, 26],
+          iconAnchor: [13, 22],
+          html: `<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+                   <path d="M12 2 C6 2 3 7 3 13 v8 h5 v-6 a4 4 0 0 1 8 0 v6 h5 v-8 c0-6-3-11-9-11z"
+                         fill="#111114" stroke="#e4e4e7" stroke-width="1.6" stroke-linejoin="round"/>
+                 </svg>`,
+        }),
+      });
+      marker.bindTooltip(
+        `${esc(g.name)}${g.recommended ? ` · ${g.recommended}+` : ''}`,
+        { direction: 'top' },
+      );
+      marker.bindPopup(
+        `<div style="min-width:180px">
+           <div style="font-weight:600">${esc(g.name)}</div>
+           <div style="opacity:.7;font-size:12px">Dungeon${g.difficulty ? ' · ' + esc(g.difficulty) : ''}${g.recommended ? ` · ${g.recommended}+ recommended` : ''}</div>
+           ${g.location ? `<div style="font-size:12px;margin-top:4px">${esc(g.location)}</div>` : ''}
+           <div style="font-size:11px;opacity:.6;margin-top:4px">${esc(g.x)}, ${esc(g.y)}</div>
+         </div>`,
+      );
+      if (!roRef.current) {
+        marker.on('dragend', () => {
+          const p = marker.getLatLng();
+          moveRef.current('dungeon', g.id, Math.round(p.lng), Math.round(p.lat));
+        });
+      }
+      marker.addTo(group);
+    }
+  }, [db.spots, db.dungeons]);
 
   return <div ref={hostRef} className="h-full w-full rounded-xl [&_.leaflet-container]:bg-muted" />;
 }

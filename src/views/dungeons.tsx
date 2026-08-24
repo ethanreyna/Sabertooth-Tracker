@@ -1,4 +1,4 @@
-import { ImageIcon, MapPin, Pencil, Trash2, Users } from 'lucide-react';
+import { ImageIcon, MapPin, MapPinPlus, Pencil, Trash2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState, TonedBadge } from '@/components/bits';
@@ -10,11 +10,13 @@ const DIFFICULTY_TONE: Record<string, Tone> = {
   Easy: 'green', Moderate: 'blue', Hard: 'amber', Deadly: 'red',
 };
 
-export function Dungeons({ db, update, readOnly, onEdit }: {
+export function Dungeons({ db, update, readOnly, onEdit, onPlace }: {
   db: DB;
   update: (fn: (d: DB) => void) => void;
   readOnly: boolean;
   onEdit: (id: string) => void;
+  /** Hands the dungeon to the map so the next click sets its coordinates. */
+  onPlace: (id: string) => void;
 }) {
   const dungeons = db.dungeons.slice().sort((a, b) => a.name.localeCompare(b.name));
 
@@ -71,6 +73,19 @@ export function Dungeons({ db, update, readOnly, onEdit }: {
             </p>
 
             {g.notes && <p className="text-xs whitespace-pre-wrap">{g.notes}</p>}
+
+            {!readOnly && (
+              <Button
+                variant={g.x && g.y ? 'ghost' : 'outline'} size="xs" className="self-start"
+                onClick={() => onPlace(g.id)}
+              >
+                <MapPinPlus />
+                {g.x && g.y ? `On the map at ${g.x}, ${g.y} — move` : 'Place on map'}
+              </Button>
+            )}
+            {readOnly && g.x && g.y && (
+              <p className="text-xs text-muted-foreground">On the map at {g.x}, {g.y}</p>
+            )}
 
             <div className="mt-auto flex items-center gap-2 pt-1">
               <span className="text-xs text-muted-foreground">

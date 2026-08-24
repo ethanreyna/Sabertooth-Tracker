@@ -75,6 +75,7 @@ export default function App() {
   const [editDungeonId, setEditDungeonId] = useState<string | null>(null);
   const [editSpotId, setEditSpotId] = useState<string | null>(null);
   const [newSpotAt, setNewSpotAt] = useState<{ x: string; y: string } | null>(null);
+  const [placingDungeonId, setPlacingDungeonId] = useState<string | null>(null);
   const [access, setAccess] = useState<AccessRole>('member');
   const [sync, setSync] = useState<SyncStatus>('syncing');
   const [theme, setTheme] = useState<Theme>(() => loadTheme());
@@ -235,6 +236,13 @@ export default function App() {
 
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
 
+  const placingDungeon = placingDungeonId
+    ? (() => {
+        const g = db.dungeons.find((x) => x.id === placingDungeonId);
+        return g ? { id: g.id, name: g.name } : null;
+      })()
+    : null;
+
   const memberNames = db.members.map((m) => m.name);
   const income = db.ledger.filter((l) => l.type === 'income').reduce((s, l) => s + Number(l.amount || 0), 0);
   const spend = db.ledger.filter((l) => l.type === 'expense').reduce((s, l) => s + Number(l.amount || 0), 0);
@@ -367,14 +375,36 @@ export default function App() {
             <Dungeons
               db={db} update={update} readOnly={readOnly}
               onEdit={(id) => { setEditDungeonId(id); setModal('dungeon'); }}
+              onPlace={(id) => { setPlacingDungeonId(id); setView('map'); }}
             />
           )}
           {view === 'map' && (
             <MapView
               db={db} update={update} readOnly={readOnly}
-              onPick={(x, y) => { setNewSpotAt({ x: String(x), y: String(y) }); setModal('spot'); }}
+              placing={placingDungeon}
+              onCancelPlacing={() => setPlacingDungeonId(null)}
+              onPick={(x, y) => {
+                // While placing a dungeon a click sets its coordinates instead
+                // of starting a new point — 36 dungeons is two clicks each.
+                if (placingDungeonId) {
+                  const id = placingDungeonId;
+                  setPlacingDungeonId(null);
+                  update((d) => {
+                    const t = d.dungeons.find((g) => g.id === id);
+                    if (t) { t.x = String(x); t.y = String(y); }
+                  });
+                  return;
+                }
+                setNewSpotAt({ x: String(x), y: String(y) });
+                setModal('spot');
+              }}
               onOpen={(id) => { setEditSpotId(id); setModal('spot'); }}
               onDelete={(id) => update((d) => { d.spots = d.spots.filter((sp) => sp.id !== id); })}
+              onMove={(kind, id, x, y) => update((d) => {
+                const list = kind === 'spot' ? d.spots : d.dungeons;
+                const t = list.find((r) => r.id === id);
+                if (t) { t.x = String(x); t.y = String(y); }
+              })}
             />
           )}
           {view === 'bank' && <Bank db={db} income={income} spend={spend} />}

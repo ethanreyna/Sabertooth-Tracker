@@ -290,6 +290,7 @@ export function normalizeDb(raw: unknown): DB {
         name: s(x.name), location: s(x.location),
         recommended: Math.max(0, n(x.recommended, 1)),
         difficulty: s(x.difficulty), notes: s(x.notes),
+        x: coordOrEmpty(s(x.x)), y: coordOrEmpty(s(x.y)),
         imgs: arr(x.imgs).map((u) => s(u)).filter(Boolean),
         addedBy: s(x.addedBy), at: s(x.at),
       };
