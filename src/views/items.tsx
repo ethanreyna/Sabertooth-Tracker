@@ -1,16 +1,181 @@
 import { useMemo, useState } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Download, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState, TonedBadge } from '@/components/bits';
 import { ITEMS } from '@/items';
+import { catalogueName, isTradeable, priceOf, tidyCategory } from '@/lib/prices';
+import { usePrices } from '@/views/prices';
+import { uid } from '@/lib/format';
+import type { Price } from '@/types';
 import { cn } from '@/lib/utils';
 import type { DB } from '@/types';
 
 const ALL = '__all';
+
+const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+
+/** One row of the price list that could become an item. */
+interface Candidate {
+  name: string;
+  category: string;
+  each: number;
+}
+
+/**
+ * Priced rows that aren't in the item list yet.
+ *
+ * Deliberately narrow. The price sheet is the only record of Keizaal's own
+ * items, so it is worth mining — but it also holds section headers, notes and
+ * rows covering several things at once, and a catalogue full of those is worse
+ * than one that is merely incomplete. Only rows that name one thing and carry a
+ * price the guild would actually charge get this far (see isTradeable), and
+ * anything already known, built in or added, is dropped here.
+ */
+function candidates(prices: Price[], known: Set<string>): Candidate[] {
+  const seen = new Set<string>();
+  const out: Candidate[] = [];
+  for (const row of prices) {
+    if (!isTradeable(row)) continue;
+    const name = catalogueName(row);
+    const key = norm(name);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    if (known.has(key)) continue;
+    const m = priceOf(row);
+    out.push({ name, category: tidyCategory(row), each: m ? m.each : 0 });
+  }
+  return out;
+}
+
+function ImportFromLedger({ known, close, onAdd }: {
+  known: Set<string>;
+  close: () => void;
+  onAdd: (picked: Candidate[]) => void;
+}) {
+  const { prices, busy, load } = usePrices();
+  const [q, setQ] = useState('');
+  const [dropped, setDropped] = useState<Set<string>>(() => new Set());
+
+  const found = useMemo(() => candidates(prices, known), [prices, known]);
+
+  const needle = q.trim().toLowerCase();
+  const shown = found.filter(
+    (c) => !needle || c.name.toLowerCase().includes(needle) || c.category.toLowerCase().includes(needle),
+  );
+
+  const groups = useMemo(() => {
+    const by = new Map<string, Candidate[]>();
+    for (const c of shown) by.set(c.category, [...(by.get(c.category) ?? []), c]);
+    return [...by.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [shown]);
+
+  const isOn = (c: Candidate) => !dropped.has(norm(c.name));
+  const toggle = (c: Candidate, on: boolean) => setDropped((prev) => {
+    const next = new Set(prev);
+    if (on) next.delete(norm(c.name));
+    else next.add(norm(c.name));
+    return next;
+  });
+  const toggleGroup = (list: Candidate[], on: boolean) => setDropped((prev) => {
+    const next = new Set(prev);
+    for (const c of list) {
+      if (on) next.delete(norm(c.name));
+      else next.add(norm(c.name));
+    }
+    return next;
+  });
+
+  const picked = found.filter(isOn);
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) close(); }}>
+      <DialogContent className="max-h-[calc(100vh-4rem)] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Add items from the Ledger</DialogTitle>
+          <DialogDescription>
+            Everything the price list names and prices, that the item list doesn’t have yet.
+            Rows without a price, and rows covering several items at once, are left out — the
+            sheet has plenty of both. Untick anything that shouldn’t be an item.
+          </DialogDescription>
+        </DialogHeader>
+
+        {prices.length === 0 ? (
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              No price list loaded in this browser yet.
+            </p>
+            <Button disabled={busy} onClick={() => void load(false)}>
+              {busy ? 'Pulling…' : 'Pull the price list'}
+            </Button>
+          </div>
+        ) : found.length === 0 ? (
+          <p className="py-4 text-sm text-muted-foreground">
+            Nothing to add — every priced item in the Ledger is already on the item list.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <Input
+              placeholder="Filter these…" value={q} onChange={(e) => setQ(e.target.value)}
+              className="h-8"
+            />
+
+            <div className="space-y-4">
+              {groups.map(([cat, list]) => {
+                const allOn = list.every(isOn);
+                return (
+                  <div key={cat}>
+                    <Label className="flex items-center gap-2 border-b pb-1.5 text-xs font-semibold">
+                      <Checkbox
+                        checked={allOn}
+                        onCheckedChange={(v) => toggleGroup(list, v === true)}
+                      />
+                      {cat}
+                      <span className="font-normal text-muted-foreground">{list.length}</span>
+                    </Label>
+                    <div className="grid gap-x-4 sm:grid-cols-2">
+                      {list.map((c) => (
+                        <Label
+                          key={c.name}
+                          className="flex items-center gap-2 py-1 text-sm font-normal"
+                        >
+                          <Checkbox
+                            checked={isOn(c)}
+                            onCheckedChange={(v) => toggle(c, v === true)}
+                          />
+                          <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                            {c.each ? Math.round(c.each).toLocaleString() : '—'}
+                          </span>
+                        </Label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={close}>Cancel</Button>
+          <Button
+            disabled={picked.length === 0}
+            onClick={() => { onAdd(picked); close(); }}
+          >
+            Add {picked.length} item{picked.length === 1 ? '' : 's'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 /** Rows the table shows: the built-in catalogue and the guild's own additions,
  *  merged, with only the latter editable. */
@@ -46,6 +211,7 @@ export function Items({ db, update, readOnly, onEdit }: {
 }) {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState(ALL);
+  const [importing, setImporting] = useState(false);
 
   const all = useMemo(() => rows(db), [db]);
   const cats = useMemo(
@@ -130,12 +296,33 @@ export function Items({ db, update, readOnly, onEdit }: {
           placeholder="Search items" value={q} onChange={(e) => setQ(e.target.value)}
           className="h-8 w-64 max-sm:w-full"
         />
+        {!readOnly && (
+          <Button variant="outline" size="sm" onClick={() => setImporting(true)}>
+            <Download />Add from Ledger
+          </Button>
+        )}
         <p className="text-xs text-muted-foreground">
           {all.length} items — {ITEMS.length} built in, {customCount} added by the guild.
           Everything here is offered wherever items are picked: collection jobs, item rewards
           and guild storage.
         </p>
       </div>
+
+      {importing && (
+        <ImportFromLedger
+          known={new Set(all.map((r) => norm(r.name)))}
+          close={() => setImporting(false)}
+          onAdd={(picked) => update((d) => {
+            const at = new Date().toISOString();
+            for (const c of picked) {
+              d.items.push({
+                id: uid(), name: c.name, category: c.category,
+                notes: '', addedBy: '', at,
+              });
+            }
+          })}
+        />
+      )}
 
       {all.length === 0 ? (
         <EmptyState>No items yet.</EmptyState>

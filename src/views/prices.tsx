@@ -5,11 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState, TonedBadge } from '@/components/bits';
+import { Barter } from '@/views/barter';
 import { fetchPrices, loadPrices } from '@/sync';
 import { ago } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { Price, SyncCfg } from '@/types';
+import type { Price } from '@/types';
 
 const SHEET_URL =
   'https://docs.google.com/spreadsheets/d/1i5_O_jqz2wPBBNUzjCk0gwMRBIdVdnbIc0BG1S-KMWQ/edit';
@@ -79,23 +81,23 @@ function PriceTable({ rows, labels }: { rows: Price[]; labels: string[] }) {
   );
 }
 
-export function Prices() {
+/**
+ * One pull of the sheet, shared by everything that needs prices: the list, the
+ * barter tool, and the item importer on the Items page.
+ */
+export function usePrices() {
   const cached = loadPrices();
   const [prices, setPrices] = useState<Price[]>(cached?.prices ?? []);
   const [syncedAt, setSyncedAt] = useState(cached?.syncedAt ?? '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [q, setQ] = useState('');
-  const [tab, setTab] = useState(ALL);
-
-  // Prices come from the sheet, not the guild database — a guest-safe read.
-  const cfg: SyncCfg = { password: '', guest: true };
 
   const load = useCallback(async (force: boolean) => {
     setBusy(true);
     setErr('');
     try {
-      const res = await fetchPrices(cfg, force);
+      // Prices come from the sheet, not the guild database — a guest-safe read.
+      const res = await fetchPrices({ password: '', guest: true }, force);
       setPrices(res.prices);
       setSyncedAt(res.syncedAt);
     } catch (e) {
@@ -110,6 +112,13 @@ export function Prices() {
     if (!cached) void load(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  return { prices, syncedAt, busy, err, load };
+}
+
+function PriceList({ prices, syncedAt, busy, err, load }: ReturnType<typeof usePrices>) {
+  const [q, setQ] = useState('');
+  const [tab, setTab] = useState(ALL);
 
   const tabs = useMemo(() => {
     const seen: string[] = [];
@@ -230,5 +239,31 @@ export function Prices() {
         shown under a column it didn't come from.
       </p>
     </div>
+  );
+}
+
+/** The Ledger: the guild's price list, and the barter tool that reads it. */
+export function Prices() {
+  const [tab, setTab] = useState<'prices' | 'barter'>('prices');
+  const priced = usePrices();
+
+  return (
+    <Tabs value={tab} onValueChange={(v) => setTab(v === 'barter' ? 'barter' : 'prices')}>
+      <TabsList>
+        <TabsTrigger value="prices">
+          Prices{priced.prices.length > 0 && (
+            <span className="ml-1.5 text-muted-foreground">{priced.prices.length}</span>
+          )}
+        </TabsTrigger>
+        <TabsTrigger value="barter">Barter</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="prices" className="mt-4">
+        <PriceList {...priced} />
+      </TabsContent>
+      <TabsContent value="barter" className="mt-4">
+        <Barter prices={priced.prices} />
+      </TabsContent>
+    </Tabs>
   );
 }
