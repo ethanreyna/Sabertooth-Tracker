@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { GLYPH_PATHS, glyphFor } from '@/components/map-glyphs';
 import type { DB, Spot } from '@/types';
 
 // The tile pyramid was cut from Skyrim's own LOD textures, so these numbers are
@@ -25,24 +26,23 @@ const KIND_COLOR: Record<string, string> = {
 };
 const colorFor = (kind: string) => KIND_COLOR[kind.toLowerCase()] ?? '#a1a1aa';
 
-// Silhouettes in the spirit of Skyrim's own map markers: a cave mouth for
-// anything you go into, a gabled house for anywhere people live.
-const CAVE_PATH = 'M12 2 C6 2 3 7 3 13 v8 h5 v-6 a4 4 0 0 1 8 0 v6 h5 v-8 c0-6-3-11-9-11z';
-const HOUSE_PATH = 'M12 2 2 11 h3 v11 h6 v-6 h2 v6 h6 V11 h3z';
-
-const glyph = (path: string, size: number) =>
-  `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">
-     <path d="${path}" fill="#111114" stroke="#e4e4e7" stroke-width="1.6" stroke-linejoin="round"/>
+const glyphSvg = (path: string, size: number) =>
+  `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"
+        style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.65))">
+     <path d="${path}" fill="#111114" stroke="#e4e4e7" stroke-width="1.5" stroke-linejoin="round"/>
    </svg>`;
 
-/** Dungeon and Settlement points get a glyph; everything else stays a dot. */
+/** Kinds with a silhouette get one; the resource kinds stay coloured dots. */
 function spotIcon(kind: string): L.DivIcon {
-  const k = kind.trim().toLowerCase();
-  if (k === 'dungeon') {
-    return L.divIcon({ className: '', iconSize: [24, 24], iconAnchor: [12, 20], html: glyph(CAVE_PATH, 24) });
-  }
-  if (k === 'settlement' || k === 'city' || k === 'town') {
-    return L.divIcon({ className: '', iconSize: [24, 24], iconAnchor: [12, 20], html: glyph(HOUSE_PATH, 24) });
+  const path = glyphFor(kind);
+  if (path) {
+    const size = /^(city|capital|hold)$/i.test(kind.trim()) ? 28 : 24;
+    return L.divIcon({
+      className: '',
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size - 4],
+      html: glyphSvg(path, size),
+    });
   }
   return L.divIcon({
     className: '',
@@ -202,10 +202,7 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMo
           className: '',
           iconSize: [26, 26],
           iconAnchor: [13, 22],
-          html: `<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
-                   <path d="M12 2 C6 2 3 7 3 13 v8 h5 v-6 a4 4 0 0 1 8 0 v6 h5 v-8 c0-6-3-11-9-11z"
-                         fill="#111114" stroke="#e4e4e7" stroke-width="1.6" stroke-linejoin="round"/>
-                 </svg>`,
+          html: glyphSvg(GLYPH_PATHS.dungeon, 26),
         }),
       });
       marker.bindTooltip(

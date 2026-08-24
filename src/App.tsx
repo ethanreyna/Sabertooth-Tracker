@@ -18,6 +18,7 @@ import { Roles } from '@/views/roles';
 import { Dungeons } from '@/views/dungeons';
 import { Recipes } from '@/views/recipes';
 import { MapView } from '@/views/map';
+import type { AddMode } from '@/views/map';
 import { emptyDb } from '@/data';
 import { applyTheme, loadTheme } from '@/theme';
 import {
@@ -76,6 +77,9 @@ export default function App() {
   const [editSpotId, setEditSpotId] = useState<string | null>(null);
   const [newSpotAt, setNewSpotAt] = useState<{ x: string; y: string } | null>(null);
   const [placingDungeonId, setPlacingDungeonId] = useState<string | null>(null);
+  const [newDungeonAt, setNewDungeonAt] = useState<{ x: string; y: string } | null>(null);
+  const [newSpotKind, setNewSpotKind] = useState('');
+  const [addMode, setAddMode] = useState<AddMode>('point');
   const [access, setAccess] = useState<AccessRole>('member');
   const [sync, setSync] = useState<SyncStatus>('syncing');
   const [theme, setTheme] = useState<Theme>(() => loadTheme());
@@ -383,9 +387,11 @@ export default function App() {
               db={db} update={update} readOnly={readOnly}
               placing={placingDungeon}
               onCancelPlacing={() => setPlacingDungeonId(null)}
+              addMode={addMode}
+              onAddModeChange={setAddMode}
               onPick={(x, y) => {
-                // While placing a dungeon a click sets its coordinates instead
-                // of starting a new point — 36 dungeons is two clicks each.
+                // Placing an existing dungeon wins over adding a new anything:
+                // that flow was started deliberately from its card.
                 if (placingDungeonId) {
                   const id = placingDungeonId;
                   setPlacingDungeonId(null);
@@ -395,7 +401,14 @@ export default function App() {
                   });
                   return;
                 }
-                setNewSpotAt({ x: String(x), y: String(y) });
+                const at = { x: String(x), y: String(y) };
+                if (addMode === 'dungeon') {
+                  setNewDungeonAt(at);
+                  setModal('dungeon');
+                  return;
+                }
+                setNewSpotAt(at);
+                setNewSpotKind(addMode === 'settlement' ? 'Settlement' : '');
                 setModal('spot');
               }}
               onOpen={(id) => { setEditSpotId(id); setModal('spot'); }}
@@ -431,7 +444,7 @@ export default function App() {
             setModal(null);
             setEditRoleId(null); setEditJobId(null);
             setEditBarrelId(null); setEditDungeonId(null); setEditSpotId(null);
-            setNewSpotAt(null);
+            setNewSpotAt(null); setNewDungeonAt(null); setNewSpotKind('');
           }}
           roles={db.roles}
           settings={db.settings}
@@ -442,6 +455,8 @@ export default function App() {
           editDungeon={db.dungeons.find((g) => g.id === editDungeonId) ?? null}
           editSpot={db.spots.find((sp) => sp.id === editSpotId) ?? null}
           newSpotAt={newSpotAt}
+          newSpotKind={newSpotKind}
+          newDungeonAt={newDungeonAt}
           update={update}
           setJobsView={() => setView('jobs')}
           cfg={cfg}

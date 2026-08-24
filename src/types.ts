@@ -115,7 +115,9 @@ export interface Spot {
 /** Offered as suggestions; members can write in anything, and the page's tabs
  *  are built from whatever kinds actually exist. */
 export const SPOT_KINDS = [
-  'Ore', 'Hunting', 'Alchemy', 'Fishing', 'Wood', 'Dungeon', 'Settlement', 'Other',
+  'Ore', 'Hunting', 'Alchemy', 'Fishing', 'Wood',
+  'City', 'Settlement', 'Dungeon', 'Tower', 'Fort', 'Mine', 'Dock', 'Farm', 'Mill',
+  'Camp', 'Grove', 'Stone', 'Other',
 ];
 
 export interface LedgerEntry {

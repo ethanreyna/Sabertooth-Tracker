@@ -1,5 +1,5 @@
 import { Suspense, lazy, useState } from 'react';
-import { Info, MapPinPlus } from 'lucide-react';
+import { MapPinPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
@@ -11,6 +11,14 @@ import type { DB } from '@/types';
 // Leaflet and its CSS are ~45KB gzipped, and only this screen needs them.
 const MapCanvas = lazy(() => import('@/components/map-canvas'));
 
+export type AddMode = 'point' | 'dungeon' | 'settlement';
+
+const ADDS: Array<[AddMode, string]> = [
+  ['point', 'Point of interest'],
+  ['dungeon', 'Dungeon'],
+  ['settlement', 'Settlement'],
+];
+
 const LEGEND: Array<[string, string]> = [
   ['Ore', 'bg-zinc-400'],
   ['Hunting', 'bg-red-500'],
@@ -19,7 +27,7 @@ const LEGEND: Array<[string, string]> = [
   ['Wood', 'bg-amber-500'],
 ];
 
-export function MapView({ db, update, readOnly, placing, onPick, onOpen, onDelete, onMove, onCancelPlacing }: {
+export function MapView({ db, update, readOnly, placing, addMode, onAddModeChange, onPick, onOpen, onDelete, onMove, onCancelPlacing }: {
   db: DB;
   update: (fn: (d: DB) => void) => void;
   readOnly: boolean;
@@ -30,6 +38,8 @@ export function MapView({ db, update, readOnly, placing, onPick, onOpen, onDelet
   /** A dungeon awaiting a click to set its coordinates. */
   placing: { id: string; name: string } | null;
   onCancelPlacing: () => void;
+  addMode: AddMode;
+  onAddModeChange: (m: AddMode) => void;
 }) {
   const [tab, setTab] = useState<'map' | 'list'>('map');
   const placed = db.spots.filter((s) => s.x !== '' && s.y !== '').length;
@@ -102,13 +112,17 @@ export function MapView({ db, update, readOnly, placing, onPick, onOpen, onDelet
       )}
 
       {!readOnly && !placing && (
-        <Alert>
-          <Info />
-          <AlertDescription>
-            Click the map to add a point of interest there — coordinates are filled in for you. Drag
-            any marker to correct its position, and click one to open or delete it.
-          </AlertDescription>
-        </Alert>
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2">
+          <span className="text-xs text-muted-foreground">A click on the map adds:</span>
+          {ADDS.map(([value, label]) => (
+            <button key={value} type="button" onClick={() => onAddModeChange(value)}>
+              <TonedBadge tone={addMode === value ? 'blue' : 'neutral'}>{label}</TonedBadge>
+            </button>
+          ))}
+          <span className="ml-auto text-xs text-muted-foreground">
+            Drag a marker to move it; click one to open or delete it.
+          </span>
+        </div>
       )}
 
       <Card className="min-h-96 flex-1 overflow-hidden p-0">

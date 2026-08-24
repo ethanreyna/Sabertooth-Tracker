@@ -34,11 +34,13 @@ const toDateInput = (iso: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-export function Modals({ modal, close, roles, settings, memberNames, editRole, editJob, editBarrel, editDungeon, editSpot, newSpotAt, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
+export function Modals({ modal, close, roles, settings, memberNames, editRole, editJob, editBarrel, editDungeon, editSpot, newSpotAt, newSpotKind, newDungeonAt, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
   modal: ModalKind; close: () => void; roles: Role[]; settings: Settings; memberNames: string[];
   editRole: Role | null; editJob: Job | null; editBarrel: Barrel | null;
   editDungeon: Dungeon | null; editSpot: Spot | null;
   newSpotAt: { x: string; y: string } | null;
+  newSpotKind: string;
+  newDungeonAt: { x: string; y: string } | null;
   update: (fn: (d: DB) => void) => void; setJobsView: () => void;
   cfg: SyncCfg | null; sync: SyncStatus; offline: boolean; readOnly: boolean; onLogout: () => void;
 }) {
@@ -530,7 +532,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
               <Field label="Kind" htmlFor="sp-kind">
                 {/* Free text with suggestions: a written-in kind gets its own tab. */}
                 <NameField id="sp-kind" name="kind" options={SPOT_KINDS}
-                  defaultValue={editSpot?.kind ?? ''} placeholder="Ore, Hunting, Alchemy…" />
+                  defaultValue={editSpot?.kind ?? newSpotKind} placeholder="Ore, Hunting, Alchemy…" />
               </Field>
             </div>
 
@@ -642,11 +644,11 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="X" htmlFor="dg-x">
                 <Input id="dg-x" name="x" inputMode="numeric"
-                  defaultValue={editDungeon?.x ?? ''} placeholder="optional" />
+                  defaultValue={editDungeon?.x ?? newDungeonAt?.x ?? ''} placeholder="optional" />
               </Field>
               <Field label="Y" htmlFor="dg-y">
                 <Input id="dg-y" name="y" inputMode="numeric"
-                  defaultValue={editDungeon?.y ?? ''} placeholder="or place it on the map" />
+                  defaultValue={editDungeon?.y ?? newDungeonAt?.y ?? ''} placeholder="or place it on the map" />
               </Field>
             </div>
 
