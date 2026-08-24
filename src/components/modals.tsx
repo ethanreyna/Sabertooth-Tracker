@@ -11,15 +11,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { MapPinPlus } from 'lucide-react';
 import { Field, NameField } from '@/components/bits';
 import { ItemPicker } from '@/components/item-picker';
+import { ALL_ITEM_NAMES } from '@/items';
 import { uploadImage } from '@/sync';
 import { uid } from '@/lib/format';
 import { DURATION_UNITS, fromNow } from '@/lib/deadline';
 import type { DurationUnit } from '@/lib/deadline';
 import { SPOT_KINDS } from '@/types';
 import { coordOrEmpty } from '@/lib/maps';
-import type { Barrel, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, Role, Settings, Spot, SyncCfg, SyncStatus } from '@/types';
+import type { BankItem, Barrel, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, Role, Settings, Spot, SyncCfg, SyncStatus } from '@/types';
 
-export type ModalKind = 'job' | 'barrel' | 'dungeon' | 'spot' | 'ledger' | 'member' | 'role' | 'sync';
+export type ModalKind = 'job' | 'barrel' | 'dungeon' | 'spot' | 'ledger' | 'bankItem' | 'member' | 'role' | 'sync';
 
 const NO_ROLE = '__none';
 const NO_KIND = '__none';
@@ -67,6 +68,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
   const [durationAmount, setDurationAmount] = useState(1);
   const [durationUnit, setDurationUnit] = useState<DurationUnit>('weeks');
   const [ledgerType, setLedgerType] = useState<LedgerEntry['type']>('income');
+  const [bankMove, setBankMove] = useState<BankItem['type']>('in');
   const [memberRole, setMemberRole] = useState(roles[0]?.name ?? NO_ROLE);
   const [advanceRole, setAdvanceRole] = useState(editRole?.advanceTo || NO_ROLE);
   const [spotKind, setSpotKind] = useState(editSpot?.kind ?? newSpotKind);
@@ -99,6 +101,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
     dungeon: editDungeon ? 'Edit dungeon' : 'Add a dungeon',
     spot: editSpot ? 'Edit point of interest' : 'Add a point of interest',
     ledger: 'Record a ledger entry',
+    bankItem: 'Log a storage item',
     member: 'Add a member',
     role: editRole ? 'Edit role' : 'Create a role',
     sync: 'Guild database',
@@ -362,7 +365,23 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
     update((d) => { d.ledger.push(l); });
   };
 
+  const submitBankItem = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const b: BankItem = {
+      id: uid(), type: bankMove,
+      item: String(f.get('item') || '').trim(),
+      qty: Math.max(1, Math.round(Number(f.get('qty') || 1))),
+      by: String(f.get('by') || '').trim(),
+      note: String(f.get('note') || '').trim(),
+      at: new Date().toISOString(),
+    };
+    close();
+    update((d) => { d.bankItems.push(b); });
+  };
+
   const submitMember = (e: FormEvent<HTMLFormElement>) => {
+
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     const m: Member = {
@@ -830,7 +849,43 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
           </form>
         )}
 
+        {modal === 'bankItem' && (
+          <form onSubmit={submitBankItem} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Movement">
+                <Select value={bankMove} onValueChange={(v) => setBankMove((v as BankItem['type']) || 'in')}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="in">Put into guild storage</SelectItem>
+                    <SelectItem value="out">Took out of guild storage</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Quantity" htmlFor="bank-item-qty">
+                <Input id="bank-item-qty" name="qty" type="number" min={1} defaultValue={1} required />
+              </Field>
+            </div>
+
+            <Field label="Item" htmlFor="bank-item-name">
+              <NameField id="bank-item-name" name="item" options={ALL_ITEM_NAMES} required
+                placeholder="Search Skyrim items, or write one in" />
+            </Field>
+
+            <Field label="Where it went (optional)" htmlFor="bank-item-note">
+              <Input id="bank-item-note" name="note" placeholder="e.g. Left barrel, Sabretooth hall" />
+            </Field>
+
+            <Field label="Logged by" htmlFor="bank-item-by">
+              <NameField id="bank-item-by" name="by" options={memberNames} required
+                defaultValue={memberNames[0] || ''} placeholder="Pick a member or write in" />
+            </Field>
+
+            {footer('Log it')}
+          </form>
+        )}
+
         {modal === 'member' && (
+
           <form onSubmit={submitMember} className="space-y-4">
             <Field label="Name" htmlFor="member-name">
               <Input id="member-name" name="name" required placeholder="e.g. Lydia of Whiterun" />

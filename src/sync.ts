@@ -1,6 +1,6 @@
 import { DEFAULT_GUILD_CUT_PCT } from './types';
 import { coordOrEmpty, httpUrlOrEmpty } from './lib/maps';
-import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, MemberEntry, Price, Role, Spot, SyncCfg } from './types';
+import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, Job, LedgerEntry, BankItem, Member, MemberEntry, Price, Role, Spot, Suggestion, SyncCfg } from './types';
 
 const CFG_KEY = 'sabretooth-auth';
 const LEGACY_CFG_KEY = 'sabertooth-auth'; // pre-rename; read once so nobody is logged out
@@ -170,6 +170,29 @@ export async function fetchPrices(cfg: SyncCfg, force = false): Promise<{ prices
   return out;
 }
 
+/**
+ * Proposes a record. This is the one write a guest may make, and the Worker
+ * only ever appends it as pending — a member has to approve it.
+ */
+export async function postSuggestion(
+  cfg: SyncCfg,
+  kind: Suggestion['kind'],
+  payload: Record<string, string | number>,
+  by: string,
+  note: string,
+): Promise<void> {
+  const r = await fetch('/api/suggest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...auth(cfg) },
+    body: JSON.stringify({ kind, payload, by, note }),
+  });
+  if (r.status === 401) throw new AuthError();
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    throw new Error(s(j.error) || 'Could not send that suggestion (' + r.status + ').');
+  }
+}
+
 /** Uploads a screenshot to R2 and returns the URL to store on the barrel. */
 export async function uploadImage(cfg: SyncCfg, file: File): Promise<string> {
   const r = await fetch('/api/upload', {
@@ -310,6 +333,34 @@ export function normalizeDb(raw: unknown): DB {
         addedBy: s(x.addedBy), at: s(x.at),
       };
     }).filter((sp) => sp.name),
+    bankItems: arr(o.bankItems).map((b): BankItem => {
+      const x = (b || {}) as Record<string, unknown>;
+      return {
+        id: s(x.id) || Math.random().toString(36).slice(2, 10),
+        type: s(x.type) === 'out' ? 'out' : 'in',
+        item: s(x.item), qty: Math.max(0, n(x.qty, 1)),
+        by: s(x.by), note: s(x.note), at: s(x.at),
+      };
+    }).filter((b) => b.item),
+    suggestions: arr(o.suggestions).map((g): Suggestion => {
+      const x = (g || {}) as Record<string, unknown>;
+      const status = s(x.status);
+      const raw = (x.payload && typeof x.payload === 'object' ? x.payload : {}) as Record<string, unknown>;
+      const payload: Record<string, string | number> = {};
+      for (const [k, v] of Object.entries(raw)) {
+        if (typeof v === 'number' && Number.isFinite(v)) payload[k] = v;
+        else if (typeof v === 'string' && v.trim()) payload[k] = v.trim();
+      }
+      const kind = s(x.kind);
+      return {
+        id: s(x.id) || Math.random().toString(36).slice(2, 10),
+        kind: (kind === 'ledger' || kind === 'bankItem' ? kind : 'job') as Suggestion['kind'],
+        payload,
+        by: s(x.by, 'Guest'), note: s(x.note), at: s(x.at),
+        status: (status === 'approved' || status === 'denied' ? status : 'pending') as Suggestion['status'],
+        decidedBy: s(x.decidedBy), decidedAt: s(x.decidedAt),
+      };
+    }),
     ledger: arr(o.ledger).map((l): LedgerEntry => {
       const x = (l || {}) as Record<string, unknown>;
       return {

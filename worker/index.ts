@@ -24,11 +24,12 @@ type Role = 'member' | 'guest';
 
 /** Sections a guest never receives. The UI hides them too, but stripping them
  *  server-side means an anonymous caller can't just read them off /api/db. */
-const GUEST_HIDDEN = ['ledger'] as const;
+const GUEST_HIDDEN = ['ledger', 'bankItems', 'suggestions'] as const;
 
 const EMPTY_DB = {
   settings: { guildCutPct: 20 },
-  members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [], ledger: [],
+  members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [],
+  ledger: [], bankItems: [], suggestions: [],
 };
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_DB_BYTES = 8 * 1024 * 1024;
@@ -59,6 +60,28 @@ function authRole(req: Request, env: Env): Role | 'bad' {
   if (env.GUILD_PASSWORD && secretEquals(m[1], env.GUILD_PASSWORD)) return 'member';
   return 'bad';
 }
+
+// ---------------------------------------------------------------------------
+// Guest suggestions
+//
+// The one thing a guest may write. It is a separate endpoint rather than a
+// relaxed PUT because the Worker then controls exactly what changes: a
+// suggestion is appended, nothing existing is touched, and the guest never
+// gets to set its status. Approving one is an ordinary member write.
+// ---------------------------------------------------------------------------
+
+const SUGGESTION_KINDS = new Set(['job', 'ledger', 'bankItem']);
+/** Fields kept per kind, so a guest can't smuggle arbitrary keys into a record. */
+const SUGGESTION_FIELDS: Record<string, string[]> = {
+  job: ['name', 'client', 'description', 'reward', 'tag'],
+  ledger: ['type', 'amount', 'desc'],
+  bankItem: ['type', 'item', 'qty', 'note'],
+};
+const MAX_PENDING = 200;
+const MAX_FIELD_CHARS = 400;
+
+const clampText = (v: unknown, max = MAX_FIELD_CHARS) =>
+  typeof v === 'string' ? v.trim().slice(0, max) : '';
 
 /** Strips member-only sections so a guest never receives them at all. */
 function redactForGuest(db: unknown): unknown {
@@ -322,6 +345,70 @@ async function handleApi(req: Request, env: Env, url: URL): Promise<Response> {
   const role = authRole(req, env);
   if (role === 'bad') {
     return json({ error: 'unauthorized' }, 401);
+  }
+
+  // The single write a guest is allowed. Checked before the read-only gate,
+  // and it can only ever append a pending suggestion.
+  if (url.pathname === '/api/suggest' && req.method === 'POST') {
+    await ensureSchema(env);
+
+    let body: { kind?: unknown; payload?: unknown; by?: unknown; note?: unknown };
+    try {
+      body = await req.json();
+    } catch {
+      return json({ error: 'invalid json' }, 400);
+    }
+
+    const kind = clampText(body.kind, 20);
+    if (!SUGGESTION_KINDS.has(kind)) return json({ error: 'unknown kind' }, 400);
+
+    const raw = (body.payload && typeof body.payload === 'object' ? body.payload : {}) as Record<string, unknown>;
+    const payload: Record<string, string | number> = {};
+    for (const key of SUGGESTION_FIELDS[kind]) {
+      const v = raw[key];
+      if (typeof v === 'number' && Number.isFinite(v)) payload[key] = v;
+      else {
+        const text = clampText(v);
+        if (text) payload[key] = text;
+      }
+    }
+    if (Object.keys(payload).length === 0) return json({ error: 'nothing to suggest' }, 400);
+
+    const suggestion = {
+      id: crypto.randomUUID().slice(0, 8),
+      kind,
+      payload,
+      by: clampText(body.by, 60) || 'Guest',
+      note: clampText(body.note, 600),
+      at: new Date().toISOString(),
+      status: 'pending',
+      decidedBy: '',
+      decidedAt: '',
+    };
+
+    // Read-modify-write, retried: a member saving at the same moment would
+    // otherwise lose whichever write landed second.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const doc = await readDoc(env);
+      const db = (doc.db && typeof doc.db === 'object' ? doc.db : {}) as Record<string, unknown>;
+      const list = Array.isArray(db.suggestions) ? db.suggestions : [];
+      const pending = list.filter((s) => (s as { status?: string }).status === 'pending');
+      if (pending.length >= MAX_PENDING) {
+        return json({ error: 'too many suggestions are already waiting' }, 429);
+      }
+      db.suggestions = [...list, suggestion];
+
+      const data = JSON.stringify(db);
+      if (data.length > MAX_DB_BYTES) return json({ error: 'database too large' }, 413);
+
+      const row = await env.DB.prepare(
+        `UPDATE doc SET data = ?1, version = version + 1, updated_at = ?2
+         WHERE id = 1 AND version = ?3 RETURNING version`,
+      ).bind(data, new Date().toISOString(), doc.version).first<{ version: number }>();
+
+      if (row) return json({ ok: true, id: suggestion.id, version: row.version });
+    }
+    return json({ error: 'the database was busy — try again' }, 409);
   }
 
   // Guests get reads only. Enforced here, not just hidden in the UI.

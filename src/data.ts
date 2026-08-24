@@ -4,7 +4,7 @@ import type { DB } from './types';
 const d = (days: number) => new Date(Date.now() - days * 864e5).toISOString();
 const f = (days: number) => new Date(Date.now() + days * 864e5).toISOString();
 
-export const emptyDb = (): DB => ({ settings: { guildCutPct: DEFAULT_GUILD_CUT_PCT }, members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [], ledger: [] });
+export const emptyDb = (): DB => ({ settings: { guildCutPct: DEFAULT_GUILD_CUT_PCT }, members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [], ledger: [], bankItems: [], suggestions: [] });
 
 /** Sensible starting ranks, offered when the roster has no roles yet. The
  *  Initiate -> Saberblooded track mirrors the guild's blooding process. */
@@ -114,4 +114,10 @@ export const demoDb = (): DB => ({
     { id: 'l3', type: 'income', amount: 100, desc: 'Barrel rent — Waxillius, 2 weeks', by: 'Zahir Alazar', at: d(4) },
     { id: 'l4', type: 'expense', amount: 600, desc: 'Guild hall repairs after the troll incident', by: 'Zahir Alazar', at: d(7) },
   ],
+  bankItems: [
+    { id: 'bi1', type: 'in', item: 'Iron Ingot', qty: 24, by: 'Karina', note: 'Left barrel, guild hall', at: d(3) },
+    { id: 'bi2', type: 'out', item: 'Iron Ingot', qty: 6, by: 'Hide the Mute', note: 'Forging arrowheads', at: d(1) },
+    { id: 'bi3', type: 'in', item: 'Health Potion', qty: 10, by: 'Soul in Sap', note: '', at: d(2) },
+  ],
+  suggestions: [],
 });

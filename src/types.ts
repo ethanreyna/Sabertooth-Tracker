@@ -129,6 +129,38 @@ export interface LedgerEntry {
   at: string;
 }
 
+/** A deposit into, or withdrawal from, the guild's item store. */
+export interface BankItem {
+  id: string;
+  type: 'in' | 'out';
+  item: string;
+  qty: number;
+  by: string;
+  note: string;
+  at: string;
+}
+
+export type SuggestionKind = 'job' | 'ledger' | 'bankItem';
+export type SuggestionStatus = 'pending' | 'approved' | 'denied';
+
+/**
+ * Something a guest has proposed. Guests can append these through a dedicated
+ * endpoint but cannot edit anything else, so a suggestion is a request rather
+ * than a change: a member has to approve it before it becomes a real record.
+ */
+export interface Suggestion {
+  id: string;
+  kind: SuggestionKind;
+  /** The proposed record's fields, shaped by `kind`. */
+  payload: Record<string, string | number>;
+  by: string;
+  note: string;
+  at: string;
+  status: SuggestionStatus;
+  decidedBy: string;
+  decidedAt: string;
+}
+
 export interface Member {
   id: string;
   role: string;
@@ -154,6 +186,8 @@ export interface DB {
   dungeons: Dungeon[];
   spots: Spot[];
   ledger: LedgerEntry[];
+  bankItems: BankItem[];
+  suggestions: Suggestion[];
 }
 
 /** One row of the market price list, mirrored from the guild's Google Sheet.

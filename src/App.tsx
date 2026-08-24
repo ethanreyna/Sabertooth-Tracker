@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Coins, Hammer, LayoutDashboard, Map as MapIcon, Moon, Package, Scale, Settings, Shield, ShieldHalf, Skull, Sun, Users, Briefcase,
+  Coins, Hammer, Inbox, LayoutDashboard, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, Settings, Shield, ShieldHalf, Skull, Sun, Users, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,8 @@ import { Roles } from '@/views/roles';
 import { Dungeons } from '@/views/dungeons';
 import { Recipes } from '@/views/recipes';
 import { MapView } from '@/views/map';
+import { Suggestions } from '@/views/suggestions';
+import { Suggest } from '@/views/suggest';
 import type { AddMode } from '@/views/map';
 import type { MapKind } from '@/components/map-canvas';
 import { emptyDb } from '@/data';
@@ -28,12 +30,12 @@ import {
 import { cn } from '@/lib/utils';
 import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
-type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'recipes' | 'roster' | 'roles';
+type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'recipes' | 'roster' | 'roles' | 'suggestions' | 'suggest';
 
 /** What a read-only guest is allowed to see. `ledger` is the market price list,
  *  which comes from the public sheet; `bank` (the guild's septims) stays hidden,
  *  and the Worker strips those transactions from a guest response entirely. */
-const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'recipes', 'roster'];
+const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'recipes', 'roster', 'suggest'];
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -48,21 +50,25 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'recipes', label: 'Recipes', icon: <Hammer /> },
   { id: 'roster', label: 'Roster', icon: <Users /> },
   { id: 'roles', label: 'Roles', icon: <ShieldHalf /> },
+  { id: 'suggestions', label: 'Suggestions', icon: <Inbox /> },
+  { id: 'suggest', label: 'Suggest', icon: <MessageSquarePlus /> },
 ];
 
 const TITLES: Record<View, string> = {
   dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', map: 'Map & Points of Interest',
   bank: 'Bank', ledger: 'Ledger', recipes: 'Recipes', roster: 'Roster', roles: 'Roles',
+  suggestions: 'Guest suggestions', suggest: 'Suggest a change',
 };
 
-const ACTIONS: Partial<Record<View, { label: string; modal: ModalKind }>> = {
-  jobs: { label: 'New job', modal: 'job' },
-  storage: { label: 'New storage', modal: 'barrel' },
-  dungeons: { label: 'New dungeon', modal: 'dungeon' },
-  map: { label: 'New point', modal: 'spot' },
-  bank: { label: 'New entry', modal: 'ledger' },
-  roster: { label: 'Add member', modal: 'member' },
-  roles: { label: 'New role', modal: 'role' },
+/** Header buttons per view. Bank has two, one per tab. */
+const ACTIONS: Partial<Record<View, Array<{ label: string; modal: ModalKind }>>> = {
+  jobs: [{ label: 'New job', modal: 'job' }],
+  storage: [{ label: 'New storage', modal: 'barrel' }],
+  dungeons: [{ label: 'New dungeon', modal: 'dungeon' }],
+  map: [{ label: 'New point', modal: 'spot' }],
+  bank: [{ label: 'New item', modal: 'bankItem' }, { label: 'New entry', modal: 'ledger' }],
+  roster: [{ label: 'Add member', modal: 'member' }],
+  roles: [{ label: 'New role', modal: 'role' }],
 };
 
 export default function App() {
@@ -275,8 +281,13 @@ export default function App() {
   }
 
   const readOnly = access !== 'member';
-  const nav = readOnly ? NAV.filter((n) => GUEST_VIEWS.includes(n.id)) : NAV;
-  const action = readOnly ? undefined : ACTIONS[view];
+  // 'suggest' is the guest's write path and 'suggestions' the members' inbox
+  // for it, so each side sees exactly one of the pair.
+  const nav = readOnly
+    ? NAV.filter((n) => GUEST_VIEWS.includes(n.id))
+    : NAV.filter((n) => n.id !== 'suggest');
+  const actions = readOnly ? undefined : ACTIONS[view];
+  const pending = db.suggestions.filter((s) => s.status === 'pending').length;
 
   return (
     <div className="flex h-svh overflow-hidden">
@@ -305,7 +316,13 @@ export default function App() {
                   : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground',
               )}
             >
-              {n.icon}{n.label}
+              {n.icon}
+              <span className="min-w-0 flex-1 truncate text-left">{n.label}</span>
+              {n.id === 'suggestions' && pending > 0 && (
+                <span className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-amber-700 dark:text-amber-400">
+                  {pending}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -343,7 +360,9 @@ export default function App() {
                 className="h-8 w-56 max-sm:w-32"
               />
             )}
-            {action && <Button size="sm" onClick={() => setModal(action.modal)}>{action.label}</Button>}
+            {actions?.map((a) => (
+              <Button key={a.modal} size="sm" onClick={() => setModal(a.modal)}>{a.label}</Button>
+            ))}
           </div>
         </header>
 
@@ -434,7 +453,11 @@ export default function App() {
               })}
             />
           )}
-          {view === 'bank' && <Bank db={db} income={income} spend={spend} />}
+          {view === 'bank' && (
+            <Bank db={db} income={income} spend={spend} readOnly={readOnly} update={update} />
+          )}
+          {view === 'suggestions' && <Suggestions db={db} update={update} memberNames={memberNames} />}
+          {view === 'suggest' && <Suggest cfg={cfg} memberNames={memberNames} />}
           {view === 'ledger' && <Prices />}
           {view === 'recipes' && <Recipes />}
           {view === 'roster' && <Roster db={db} update={update} readOnly={readOnly} />}
