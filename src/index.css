@@ -128,3 +128,11 @@
     @apply font-sans;
     }
 }
+/* Leaflet stacks its panes and controls up to z-index 1000, which would render
+   the map above dialogs (z-50) and the sidebar. Giving the container its own
+   stacking context keeps those values scoped inside it. */
+.leaflet-container {
+  position: relative;
+  isolation: isolate;
+  z-index: 0;
+}

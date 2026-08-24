@@ -86,15 +86,22 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen }: MapCanvasPro
     }).addTo(map);
 
     layerRef.current = L.layerGroup().addTo(map);
-    map.fitBounds(bounds);
-    map.setZoom(2);
+    // Explicit view rather than fitBounds: the container is a flex child, so at
+    // mount it may still have no height and fitBounds would pick a wild zoom.
+    map.setView(L.latLng(0, 0), 2);
 
     map.on('click', (e: L.LeafletMouseEvent) => {
       if (roRef.current) return;
       pickRef.current(Math.round(e.latlng.lng), Math.round(e.latlng.lat));
     });
 
+    // Leaflet caches the container size, so it has to be told when the flex
+    // layout settles or the tile grid is computed against the wrong box.
+    const ro = new ResizeObserver(() => map.invalidateSize());
+    ro.observe(host);
+
     return () => {
+      ro.disconnect();
       map.remove();
       mapRef.current = null;
       layerRef.current = null;
