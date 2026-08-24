@@ -52,11 +52,11 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'bank', label: 'Bank', icon: <Coins /> },
   { id: 'ledger', label: 'Ledger', icon: <Scale /> },
   { id: 'recipes', label: 'Recipes', icon: <Hammer /> },
+  { id: 'dungeons', label: 'Dungeons', icon: <Skull /> },
   { id: 'items', label: 'Items', icon: <Boxes /> },
   { id: 'settings', label: 'Settings', icon: <Users /> },
   { id: 'suggestions', label: 'Suggestions', icon: <Inbox /> },
   { id: 'run', label: 'Loot Tracker', icon: <Swords /> },
-  { id: 'dungeons', label: 'Dungeons', icon: <Skull /> },
   { id: 'suggest', label: 'Suggest', icon: <MessageSquarePlus /> },
 ];
 
