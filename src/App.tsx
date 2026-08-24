@@ -19,6 +19,7 @@ import { Dungeons } from '@/views/dungeons';
 import { Recipes } from '@/views/recipes';
 import { MapView } from '@/views/map';
 import type { AddMode } from '@/views/map';
+import type { MapKind } from '@/components/map-canvas';
 import { emptyDb } from '@/data';
 import { applyTheme, loadTheme } from '@/theme';
 import {
@@ -76,7 +77,9 @@ export default function App() {
   const [editDungeonId, setEditDungeonId] = useState<string | null>(null);
   const [editSpotId, setEditSpotId] = useState<string | null>(null);
   const [newSpotAt, setNewSpotAt] = useState<{ x: string; y: string } | null>(null);
-  const [placingDungeonId, setPlacingDungeonId] = useState<string | null>(null);
+  // A record awaiting a map click to set its coordinates. Kinded, so the click
+  // writes to the collection the record actually lives in.
+  const [placingTarget, setPlacingTarget] = useState<{ kind: MapKind; id: string } | null>(null);
   const [newDungeonAt, setNewDungeonAt] = useState<{ x: string; y: string } | null>(null);
   const [newSpotKind, setNewSpotKind] = useState('');
   const [addMode, setAddMode] = useState<AddMode>('point');
@@ -240,10 +243,11 @@ export default function App() {
 
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
 
-  const placingDungeon = placingDungeonId
+  const placing = placingTarget
     ? (() => {
-        const g = db.dungeons.find((x) => x.id === placingDungeonId);
-        return g ? { id: g.id, name: g.name } : null;
+        const list = placingTarget.kind === 'dungeon' ? db.dungeons : db.spots;
+        const r = list.find((x) => x.id === placingTarget.id);
+        return r ? { id: r.id, name: r.name, kind: placingTarget.kind } : null;
       })()
     : null;
 
@@ -379,24 +383,25 @@ export default function App() {
             <Dungeons
               db={db} update={update} readOnly={readOnly}
               onEdit={(id) => { setEditDungeonId(id); setModal('dungeon'); }}
-              onPlace={(id) => { setPlacingDungeonId(id); setView('map'); }}
+              onPlace={(id) => { setPlacingTarget({ kind: 'dungeon', id }); setView('map'); }}
             />
           )}
           {view === 'map' && (
             <MapView
               db={db} update={update} readOnly={readOnly}
-              placing={placingDungeon}
-              onCancelPlacing={() => setPlacingDungeonId(null)}
+              placing={placing}
+              onCancelPlacing={() => setPlacingTarget(null)}
               addMode={addMode}
               onAddModeChange={setAddMode}
               onPick={(x, y) => {
-                // Placing an existing dungeon wins over adding a new anything:
-                // that flow was started deliberately from its card.
-                if (placingDungeonId) {
-                  const id = placingDungeonId;
-                  setPlacingDungeonId(null);
+                // Repositioning an existing record wins over adding a new
+                // anything: that flow was started deliberately.
+                if (placingTarget) {
+                  const { kind, id } = placingTarget;
+                  setPlacingTarget(null);
                   update((d) => {
-                    const t = d.dungeons.find((g) => g.id === id);
+                    const list = kind === 'dungeon' ? d.dungeons : d.spots;
+                    const t = list.find((r) => r.id === id);
                     if (t) { t.x = String(x); t.y = String(y); }
                   });
                   return;
@@ -473,6 +478,12 @@ export default function App() {
           sync={sync}
           offline={offline}
           readOnly={readOnly}
+          onPickOnMap={(kind, id) => {
+            // Close the dialog and hand the next map click to this record.
+            setModal(null); setEditSpotId(null); setEditDungeonId(null);
+            setPlacingTarget({ kind, id });
+            setView('map');
+          }}
           onLogout={logout}
         />
       )}

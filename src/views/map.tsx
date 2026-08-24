@@ -37,7 +37,7 @@ export function MapView({ db, update, readOnly, placing, addMode, onAddModeChang
   onDelete: (kind: MapKind, id: string) => void;
   onMove: (kind: MapKind, id: string, x: number, y: number) => void;
   /** A dungeon awaiting a click to set its coordinates. */
-  placing: { id: string; name: string } | null;
+  placing: { id: string; name: string; kind: MapKind } | null;
   onCancelPlacing: () => void;
   addMode: AddMode;
   onAddModeChange: (m: AddMode) => void;
@@ -106,7 +106,10 @@ export function MapView({ db, update, readOnly, placing, addMode, onAddModeChang
         <Alert className="border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-400">
           <MapPinPlus />
           <AlertDescription className="flex flex-wrap items-center gap-2">
-            <span>Click the map to place <strong>{placing.name}</strong>.</span>
+            <span>
+              Click the map to place <strong>{placing.name}</strong>
+              {placing.kind === 'dungeon' ? ' (dungeon)' : ''}.
+            </span>
             <Button variant="ghost" size="xs" onClick={onCancelPlacing}>Cancel</Button>
           </AlertDescription>
         </Alert>

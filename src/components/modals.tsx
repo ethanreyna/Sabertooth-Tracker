@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { MapPinPlus } from 'lucide-react';
 import { Field, NameField } from '@/components/bits';
 import { ItemPicker } from '@/components/item-picker';
 import { uploadImage } from '@/sync';
@@ -35,12 +36,15 @@ const toDateInput = (iso: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-export function Modals({ modal, close, roles, settings, memberNames, editRole, editJob, editBarrel, editDungeon, editSpot, dungeons, newSpotAt, newSpotKind, newDungeonAt, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
+export function Modals({ modal, close, roles, settings, memberNames, editRole, editJob, editBarrel, editDungeon, editSpot, dungeons, onPickOnMap, newSpotAt, newSpotKind, newDungeonAt, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
   modal: ModalKind; close: () => void; roles: Role[]; settings: Settings; memberNames: string[];
   editRole: Role | null; editJob: Job | null; editBarrel: Barrel | null;
   editDungeon: Dungeon | null; editSpot: Spot | null;
   /** Existing dungeons, so a point can be attached to one instead of duplicating it. */
   dungeons: Dungeon[];
+  /** Hands the next map click to this record, so a marker can be repositioned
+   *  without deleting and re-adding it. */
+  onPickOnMap: (kind: 'spot' | 'dungeon', id: string) => void;
   newSpotAt: { x: string; y: string } | null;
   newSpotKind: string;
   newDungeonAt: { x: string; y: string } | null;
@@ -651,6 +655,17 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                   <Input id="sp-y" name="y" inputMode="numeric"
                     defaultValue={editSpot?.y ?? newSpotAt?.y ?? ''} placeholder="23050" />
                 </Field>
+                {editSpot && (
+                  <Field label="Reposition">
+                    <Button
+                      type="button" variant="outline"
+                      onClick={() => onPickOnMap('spot', editSpot.id)}
+                    >
+                      <MapPinPlus />
+                      Pick on map
+                    </Button>
+                  </Field>
+                )}
               </div>
               <p className="text-xs text-muted-foreground">
                 Skyrim world coordinates build a{' '}
@@ -726,7 +741,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
               </Field>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <Field label="X" htmlFor="dg-x">
                 <Input id="dg-x" name="x" inputMode="numeric"
                   defaultValue={editDungeon?.x ?? newDungeonAt?.x ?? ''} placeholder="optional" />
@@ -735,6 +750,17 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                 <Input id="dg-y" name="y" inputMode="numeric"
                   defaultValue={editDungeon?.y ?? newDungeonAt?.y ?? ''} placeholder="or place it on the map" />
               </Field>
+              {editDungeon && (
+                <Field label="Reposition">
+                  <Button
+                    type="button" variant="outline"
+                    onClick={() => onPickOnMap('dungeon', editDungeon.id)}
+                  >
+                    <MapPinPlus />
+                    Pick on map
+                  </Button>
+                </Field>
+              )}
             </div>
 
             <Field label="Notes" htmlFor="dg-notes">
