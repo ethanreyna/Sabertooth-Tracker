@@ -17,6 +17,11 @@ binding = "ASSETS"
 not_found_handling = "single-page-application"
 run_worker_first = ["/api/*"]
 
+# Reads text off an imported screenshot (/api/vision). Optional: without it the
+# importer falls back to pasting the post's text.
+[ai]
+binding = "AI"
+
 # Guild database. Created with:  pnpm cf:d1:create
 [[d1_databases]]
 binding = "DB"

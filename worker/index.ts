@@ -5,6 +5,7 @@
 //   GET  /api/db        -> { db, version }
 //   PUT  /api/db        -> { version }        body: { db, version }   409 on stale version
 //   POST /api/upload    -> { url }            body: raw image bytes
+//   POST /api/vision    -> { text }           body: raw image bytes (members only)
 //   GET  /api/img/:key  -> the image          (public: <img src> can't send headers)
 //
 // Everything except /api/img/* requires `Authorization: Bearer <guild password>`.
@@ -15,6 +16,9 @@ interface Env {
   DB: D1Database;
   IMAGES: R2Bucket;
   ASSETS: Fetcher;
+  /** Workers AI, used to read text off a screenshot. Optional: without the
+   *  binding the importer still works, people just paste the text instead. */
+  AI?: { run: (model: string, input: unknown) => Promise<unknown> };
   GUILD_PASSWORD: string;
   PRICES_SHEET_ID?: string;
   PRICES_SHEET_TABS?: string;
@@ -29,9 +33,72 @@ const GUEST_HIDDEN = ['ledger', 'bankItems', 'suggestions'] as const;
 const EMPTY_DB = {
   settings: { guildCutPct: 20 },
   members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [],
-  ledger: [], bankItems: [], suggestions: [],
+  ledger: [], bankItems: [], suggestions: [], items: [],
 };
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_VISION_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Tried in order; the first that the account can run and that returns text
+ * wins. They take their image differently — the chat-shaped ones want a data
+ * URL in a message, the image-to-text ones want raw bytes — so each carries
+ * how to call it.
+ *
+ * llama-3.2-vision is deliberately absent: Cloudflare gates it behind a
+ * one-time acceptance of Meta's licence, which is the account owner's
+ * agreement to give, not ours to give for them. Mistral Small reads a Discord
+ * screenshot cleanly and carries no such gate.
+ */
+const VISION_MODELS: Array<{ id: string; shape: 'chat' | 'bytes' }> = [
+  { id: '@cf/mistralai/mistral-small-3.1-24b-instruct', shape: 'chat' },
+  { id: '@cf/moondream/moondream3.1-9B-A2B', shape: 'bytes' },
+];
+
+const base64 = (buf: ArrayBuffer) => {
+  const bytes = new Uint8Array(buf);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
+};
+
+function visionInput(shape: 'chat' | 'bytes', buf: ArrayBuffer, ct: string, prompt: string): unknown {
+  if (shape === 'chat') {
+    return {
+      max_tokens: 1024,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: `data:${ct};base64,${base64(buf)}` } },
+        ],
+      }],
+    };
+  }
+  return { image: [...new Uint8Array(buf)], prompt, max_tokens: 1024 };
+}
+
+/** Workers AI models disagree about which key holds the answer. */
+function visionText(out: unknown): string {
+  const o = (out || {}) as Record<string, unknown>;
+  const direct = o.description ?? o.response ?? o.text ?? o.result;
+  if (typeof direct === 'string') return direct.trim();
+  const choice = (o.choices as Array<{ message?: { content?: unknown } }> | undefined)?.[0];
+  const content = choice?.message?.content;
+  if (typeof content === 'string') return content.trim();
+  if (Array.isArray(content)) {
+    return content
+      .map((c) => (typeof c === 'string' ? c : String((c as { text?: unknown })?.text ?? '')))
+      .join('')
+      .trim();
+  }
+  return '';
+}
+const VISION_PROMPT =
+  'Transcribe every line of text in this screenshot exactly as written, in reading order. '
+  + 'Keep labels, colons, numbers and item names exactly. Output only the transcription, '
+  + 'one line per line of text, with no commentary.';
 const MAX_DB_BYTES = 8 * 1024 * 1024;
 
 const json = (body: unknown, status = 200) =>
@@ -463,7 +530,38 @@ async function handleApi(req: Request, env: Env, url: URL): Promise<Response> {
     return json({ error: 'method not allowed' }, 405);
   }
 
+  // Reads the text off a screenshot so a Discord post can be imported without
+  // retyping it. Sits behind the read-only gate on purpose: it costs the
+  // account real quota, so a guest can't spend it.
+  if (url.pathname === '/api/vision' && req.method === 'POST') {
+    if (!env.AI) return json({ error: 'no-vision' }, 501);
+
+    const ct = (req.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+    if (!ct.startsWith('image/')) return json({ error: 'expected an image' }, 415);
+
+    const buf = await req.arrayBuffer();
+    if (!buf.byteLength) return json({ error: 'empty body' }, 400);
+    if (buf.byteLength > MAX_VISION_BYTES) return json({ error: 'screenshot too large (4MB max)' }, 413);
+
+    let lastError = '';
+    for (const model of VISION_MODELS) {
+      try {
+        const out = await env.AI.run(model.id, visionInput(model.shape, buf, ct, VISION_PROMPT));
+        const text = visionText(out);
+        if (text) return json({ text, model: model.id });
+        lastError = 'the model returned nothing';
+      } catch (e) {
+        // Models come and go and some need the account to opt in, so a failure
+        // here moves to the next rather than ending the import.
+        lastError = e instanceof Error ? e.message : String(e);
+      }
+    }
+    return json({ error: lastError || 'could not read that screenshot' }, 502);
+  }
+
   if (url.pathname === '/api/upload' && req.method === 'POST') {
+
+
     const ct = (req.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
     if (!ct.startsWith('image/')) return json({ error: 'expected an image' }, 415);
 

@@ -1,6 +1,6 @@
 import { DEFAULT_GUILD_CUT_PCT } from './types';
 import { coordOrEmpty, httpUrlOrEmpty } from './lib/maps';
-import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, Job, LedgerEntry, BankItem, Member, MemberEntry, Price, Role, Spot, Suggestion, SyncCfg } from './types';
+import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, Job, ItemRecord, LedgerEntry, BankItem, Member, MemberEntry, Price, Role, Spot, Suggestion, SyncCfg } from './types';
 
 const CFG_KEY = 'sabretooth-auth';
 const LEGACY_CFG_KEY = 'sabertooth-auth'; // pre-rename; read once so nobody is logged out
@@ -193,7 +193,32 @@ export async function postSuggestion(
   }
 }
 
+/** Raised when the Worker has no AI binding, so the caller can say to paste
+ *  the text instead of showing it as a failure. */
+export class NoVisionError extends Error {
+  constructor() {
+    super('no vision binding');
+    this.name = 'NoVisionError';
+  }
+}
+
+/** Reads the text off a screenshot of a job-board or storage post. */
+export async function readScreenshot(cfg: SyncCfg, file: File): Promise<string> {
+  const r = await fetch('/api/vision', {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'application/octet-stream', ...auth(cfg) },
+    body: file,
+  });
+  if (r.status === 401) throw new AuthError();
+  if (r.status === 403) throw new ReadOnlyError();
+  if (r.status === 501) throw new NoVisionError();
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(s(j.error) || 'Could not read that screenshot (' + r.status + ').');
+  return s(j.text);
+}
+
 /** Uploads a screenshot to R2 and returns the URL to store on the barrel. */
+
 export async function uploadImage(cfg: SyncCfg, file: File): Promise<string> {
   const r = await fetch('/api/upload', {
     method: 'POST',
@@ -369,6 +394,14 @@ export function normalizeDb(raw: unknown): DB {
         amount: n(x.amount), desc: s(x.desc), by: s(x.by), at: s(x.at),
       };
     }),
+    items: arr(o.items).map((i): ItemRecord => {
+      const x = (i || {}) as Record<string, unknown>;
+      return {
+        id: s(x.id) || Math.random().toString(36).slice(2, 10),
+        name: s(x.name), category: s(x.category), notes: s(x.notes),
+        addedBy: s(x.addedBy), at: s(x.at),
+      };
+    }).filter((i) => i.name),
   };
 }
 

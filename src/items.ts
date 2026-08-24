@@ -2,6 +2,8 @@
 // game has thousands of records) but covers everything a guild realistically
 // asks members to gather. Members can still type in a custom item name.
 
+import type { ItemRecord } from './types';
+
 export interface ItemDef {
   name: string;
   cat: string;
@@ -142,18 +144,39 @@ export const ITEMS: ItemDef[] = [
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
 
-/** Substring search over the catalogue, prefix matches ranked first. */
-export function searchItems(q: string, limit = 40): ItemDef[] {
+/**
+ * The list every picker searches: the built-in records above plus whatever the
+ * guild has added to its own item database. A custom entry with the same name
+ * as a built-in wins, so a guild can correct a category without us editing the
+ * catalogue.
+ */
+export function catalogue(custom: ItemRecord[]): ItemDef[] {
+  const byName = new Map<string, ItemDef>();
+  for (const it of ITEMS) byName.set(norm(it.name), it);
+  for (const c of custom) {
+    const name = c.name.trim();
+    if (!name) continue;
+    byName.set(norm(name), { name, cat: c.category.trim() || 'Custom' });
+  }
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Substring search over a catalogue, prefix matches ranked first. */
+export function searchItems(q: string, limit = 40, list: ItemDef[] = ITEMS): ItemDef[] {
   const n = norm(q);
-  if (!n) return ITEMS.slice(0, limit);
+  if (!n) return list.slice(0, limit);
   const starts: ItemDef[] = [];
   const contains: ItemDef[] = [];
-  for (const it of ITEMS) {
+  for (const it of list) {
     const nn = norm(it.name);
     if (nn.startsWith(n)) starts.push(it);
     else if (nn.includes(n)) contains.push(it);
   }
   return [...starts, ...contains].slice(0, limit);
 }
+
+/** True when the name is already in `list`, however it was capitalised. */
+export const inCatalogue = (list: ItemDef[], name: string): boolean =>
+  list.some((i) => norm(i.name) === norm(name));
 
 export const ALL_ITEM_NAMES = ITEMS.map((i) => i.name);

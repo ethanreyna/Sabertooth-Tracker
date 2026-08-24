@@ -8,7 +8,7 @@ import { CollectionProgress } from '@/components/collection-progress';
 import { PayoutSplit } from '@/components/payout-split';
 import { EmptyState, NONE, NameField, Picker, PriorityBadge, StatusBadge, TonedBadge, choices } from '@/components/bits';
 import type { Choice } from '@/components/bits';
-import { ALL_ITEM_NAMES } from '@/items';
+import { catalogue } from '@/items';
 import { collectedByItem } from '@/sync';
 import { ago, dstr, sep } from '@/lib/format';
 import { untilLabel } from '@/lib/deadline';
@@ -31,6 +31,7 @@ export function Jobs({ db, q, exp, setExp, memberNames, update, readOnly, onEdit
   memberNames: string[]; update: (fn: (d: DB) => void) => void;
   readOnly: boolean; onEdit: (jobId: string) => void;
 }) {
+  const itemNames = catalogue(db.items).map((i) => i.name);
   const ql = q.toLowerCase();
   const jobs = db.jobs
     .slice()
@@ -205,7 +206,7 @@ export function Jobs({ db, q, exp, setExp, memberNames, update, readOnly, onEdit
                               name="item" required placeholder="Item collected"
                               options={[
                                 ...j.items.map((t) => t.item),
-                                ...ALL_ITEM_NAMES.filter(
+                                ...itemNames.filter(
                                   (nm) => !j.items.some((t) => t.item.toLowerCase() === nm.toLowerCase()),
                                 ),
                               ]}

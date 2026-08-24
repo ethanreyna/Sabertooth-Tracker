@@ -44,3 +44,24 @@ export function untilLabel(iso: string): { text: string; overdue: boolean; soon:
     soon: !overdue && abs <= 3 * 864e5,
   };
 }
+
+/**
+ * Reads a time limit written the way the job board writes it — "3 days",
+ * "complete weekly (hand in on Saturday)", "2 weeks" — into the amount/unit
+ * pair the form uses. Returns null when it can't tell, which leaves the
+ * importer's time limit blank rather than inventing one.
+ */
+export function durationFromText(text: string): { amount: number; unit: DurationUnit } | null {
+  const t = text.toLowerCase();
+  if (!t.trim()) return null;
+
+  const m = /(\d+)\s*(hour|day|week|month)/.exec(t);
+  if (m) return { amount: Math.max(1, Number(m[1]) || 1), unit: (m[2] + 's') as DurationUnit };
+
+  if (/\bdaily\b|\beach day\b/.test(t)) return { amount: 1, unit: 'days' };
+  if (/\bweekly\b|\beach week\b/.test(t)) return { amount: 1, unit: 'weeks' };
+  if (/\bmonthly\b/.test(t)) return { amount: 1, unit: 'months' };
+  if (/\btomorrow\b/.test(t)) return { amount: 1, unit: 'days' };
+
+  return null;
+}

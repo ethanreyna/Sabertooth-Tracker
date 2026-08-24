@@ -9,7 +9,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Field, NameField, Picker, choices } from '@/components/bits';
 import type { Choice } from '@/components/bits';
-import { ALL_ITEM_NAMES } from '@/items';
 import { postSuggestion } from '@/sync';
 import type { SuggestionKind, SyncCfg } from '@/types';
 
@@ -35,7 +34,9 @@ const SENT: Record<SuggestionKind, string> = {
  * each submission is appended as a pending suggestion that a member approves or
  * denies, so the guest never needs (or gets) write access to the records.
  */
-export function Suggest({ cfg, memberNames }: { cfg: SyncCfg; memberNames: string[] }) {
+export function Suggest({ cfg, memberNames, itemNames }: {
+  cfg: SyncCfg; memberNames: string[]; itemNames: string[];
+}) {
   const [tab, setTab] = useState<SuggestionKind>('job');
   const [tag, setTag] = useState(TAGS[0]);
   const [ledgerType, setLedgerType] = useState('income');
@@ -227,7 +228,7 @@ export function Suggest({ cfg, memberNames }: { cfg: SyncCfg; memberNames: strin
                 </div>
 
                 <Field label="Item" htmlFor="sg-item-name">
-                  <NameField id="sg-item-name" name="item" options={ALL_ITEM_NAMES} required
+                  <NameField id="sg-item-name" name="item" options={itemNames} required
                     placeholder="Search Skyrim items, or write one in" />
                 </Field>
 

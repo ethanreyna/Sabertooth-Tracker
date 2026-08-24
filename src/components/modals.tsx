@@ -11,16 +11,18 @@ import { MapPinPlus } from 'lucide-react';
 import { Field, NONE, NameField, Picker, choices } from '@/components/bits';
 import type { Choice } from '@/components/bits';
 import { ItemPicker } from '@/components/item-picker';
-import { ALL_ITEM_NAMES } from '@/items';
+import { catalogue } from '@/items';
 import { uploadImage } from '@/sync';
 import { uid } from '@/lib/format';
 import { DURATION_UNITS, fromNow } from '@/lib/deadline';
 import type { DurationUnit } from '@/lib/deadline';
-import { SPOT_KINDS } from '@/types';
+import { ITEM_CATEGORIES, SPOT_KINDS } from '@/types';
 import { coordOrEmpty } from '@/lib/maps';
-import type { BankItem, Barrel, CollectionTarget, DB, Dungeon, Job, LedgerEntry, Member, Role, Settings, Spot, SyncCfg, SyncStatus } from '@/types';
+import type { BankItem, Barrel, CollectionTarget, DB, Dungeon, ItemRecord, Job, LedgerEntry, Member, Role, Settings, Spot, SyncCfg, SyncStatus } from '@/types';
+import { durationFromText } from '@/lib/deadline';
+import type { BarrelDraft, JobDraft } from '@/lib/parse-import';
 
-export type ModalKind = 'job' | 'barrel' | 'dungeon' | 'spot' | 'ledger' | 'bankItem' | 'member' | 'role' | 'sync';
+export type ModalKind = 'job' | 'barrel' | 'dungeon' | 'spot' | 'ledger' | 'bankItem' | 'item' | 'import' | 'member' | 'role' | 'sync';
 
 const DEADLINE_MODES: Choice[] = [
   { value: 'none', label: 'No time limit' },
@@ -48,10 +50,16 @@ const toDateInput = (iso: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-export function Modals({ modal, close, roles, settings, memberNames, editRole, editJob, editBarrel, editDungeon, editSpot, dungeons, onPickOnMap, newSpotAt, newSpotKind, newDungeonAt, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
+export function Modals({ modal, close, roles, settings, memberNames, editRole, editJob, editBarrel, editDungeon, editSpot, editItem, customItems, draftJob, draftBarrel, dungeons, onPickOnMap, newSpotAt, newSpotKind, newDungeonAt, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
   modal: ModalKind; close: () => void; roles: Role[]; settings: Settings; memberNames: string[];
   editRole: Role | null; editJob: Job | null; editBarrel: Barrel | null;
-  editDungeon: Dungeon | null; editSpot: Spot | null;
+  editDungeon: Dungeon | null; editSpot: Spot | null; editItem: ItemRecord | null;
+  /** The guild's own item records, merged with the built-in catalogue for the
+   *  item pickers so a job can ask for something the guild added. */
+  customItems: ItemRecord[];
+  /** A record read off a pasted job-board post, seeding a new form. */
+  draftJob: JobDraft | null;
+  draftBarrel: BarrelDraft | null;
   /** Existing dungeons, so a point can be attached to one instead of duplicating it. */
   dungeons: Dungeon[];
   /** Hands the next map click to this record, so a marker can be repositioned
@@ -63,27 +71,38 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
   update: (fn: (d: DB) => void) => void; setJobsView: () => void;
   cfg: SyncCfg | null; sync: SyncStatus; offline: boolean; readOnly: boolean; onLogout: () => void;
 }) {
-  const [tag, setTag] = useState(editJob?.tag ?? TAGS[0]);
+  const items = catalogue(customItems);
+  const itemNames = items.map((i) => i.name);
+
+  const [tag, setTag] = useState(editJob?.tag ?? (draftJob?.items.length ? COLLECTION_TAG : TAGS[0]));
   // Resource-collection jobs are collection jobs by definition, so the box is
   // on by default for that tag. Still overridable for the odd exception.
-  const [collection, setCollection] = useState(editJob ? editJob.collection : TAGS[0] === COLLECTION_TAG);
-  const [paid, setPaid] = useState(editBarrel?.paid ?? false);
-  const [guildMember, setGuildMember] = useState(editBarrel?.guildMember ?? true);
+  const [collection, setCollection] = useState(
+    editJob ? editJob.collection : draftJob ? draftJob.items.length > 0 : TAGS[0] === COLLECTION_TAG,
+  );
+  const [paid, setPaid] = useState(editBarrel?.paid ?? draftBarrel?.paid ?? false);
+  const [guildMember, setGuildMember] = useState(editBarrel?.guildMember ?? draftBarrel?.guildMember ?? true);
   const [difficulty, setDifficulty] = useState(editDungeon?.difficulty || DIFFICULTIES[1]);
   const [dungeonImgs, setDungeonImgs] = useState<string[]>(editDungeon?.imgs ?? []);
   const [spotImgs, setSpotImgs] = useState<string[]>(editSpot?.imgs ?? []);
-  const [targets, setTargets] = useState<CollectionTarget[]>(editJob?.items ?? []);
-  const [itemRewards, setItemRewards] = useState<CollectionTarget[]>(editJob?.itemRewards ?? []);
+  const [targets, setTargets] = useState<CollectionTarget[]>(editJob?.items ?? draftJob?.items ?? []);
+  const [itemRewards, setItemRewards] = useState<CollectionTarget[]>(editJob?.itemRewards ?? draftJob?.itemRewards ?? []);
   const [priority, setPriority] = useState(editJob?.priority ?? PRIORITIES[0]);
-  const [deadlineMode, setDeadlineMode] = useState<'none' | 'date' | 'in'>(editJob?.deadline ? 'date' : 'none');
-  const [durationAmount, setDurationAmount] = useState(1);
-  const [durationUnit, setDurationUnit] = useState<DurationUnit>('weeks');
+  // An imported "3 days" or "complete weekly" seeds the time limit; anything
+  // it can't read leaves the form on "no time limit" rather than guessing.
+  const imported = draftJob ? durationFromText(draftJob.deadlineText) : null;
+  const [deadlineMode, setDeadlineMode] = useState<'none' | 'date' | 'in'>(
+    editJob?.deadline ? 'date' : imported ? 'in' : 'none',
+  );
+  const [durationAmount, setDurationAmount] = useState(imported?.amount ?? 1);
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>(imported?.unit ?? 'weeks');
   const [ledgerType, setLedgerType] = useState<LedgerEntry['type']>('income');
   const [bankMove, setBankMove] = useState<BankItem['type']>('in');
   const [memberRole, setMemberRole] = useState(roles[0]?.name ?? '');
   const [advanceRole, setAdvanceRole] = useState(editRole?.advanceTo ?? '');
   const [spotKind, setSpotKind] = useState(editSpot?.kind ?? newSpotKind);
   const [attachDungeon, setAttachDungeon] = useState('');
+  const [itemCategory, setItemCategory] = useState(editItem?.category || ITEM_CATEGORIES[0]);
   const [cutPct, setCutPct] = useState(String(settings.guildCutPct));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -112,6 +131,9 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
     dungeon: editDungeon ? 'Edit dungeon' : 'Add a dungeon',
     spot: editSpot ? 'Edit point of interest' : 'Add a point of interest',
     ledger: 'Record a ledger entry',
+    item: editItem ? 'Edit item' : 'Add an item',
+    // Handled by its own dialog; listed so the map of titles stays total.
+    import: 'Import from the job board',
     bankItem: 'Log a storage item',
     member: 'Add a member',
     role: editRole ? 'Edit role' : 'Create a role',
@@ -391,7 +413,37 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
     update((d) => { d.bankItems.push(b); });
   };
 
+  const submitItem = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const name = String(f.get('name') || '').trim();
+    const category = itemCategory.trim();
+    const notes = String(f.get('notes') || '').trim();
+
+    // Adding a name the guild already lists would leave two records competing
+    // for the same picker entry, so an existing one is updated instead.
+    const clash = customItems.find(
+      (i) => i.id !== editItem?.id && i.name.trim().toLowerCase() === name.toLowerCase(),
+    );
+    const targetId = editItem?.id ?? clash?.id ?? null;
+
+    close();
+    update((d) => {
+      const found = targetId ? d.items.find((i) => i.id === targetId) : null;
+      if (found) {
+        found.name = name; found.category = category; found.notes = notes;
+        return;
+      }
+      d.items.push({
+        id: uid(), name, category, notes,
+        addedBy: memberNames[0] || '',
+        at: new Date().toISOString(),
+      });
+    });
+  };
+
   const submitMember = (e: FormEvent<HTMLFormElement>) => {
+
 
     e.preventDefault();
     const f = new FormData(e.currentTarget);
@@ -431,13 +483,13 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
         {modal === 'job' && (
           <form onSubmit={submitJob} className="space-y-4">
             <Field label="Job name" htmlFor="job-name">
-              <Input id="job-name" name="name" required defaultValue={editJob?.name ?? ""} placeholder="e.g. Clear the Valtheim towers" />
+              <Input id="job-name" name="name" required defaultValue={editJob?.name ?? draftJob?.name ?? ""} placeholder="e.g. Clear the Valtheim towers" />
             </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Posted for (client)" htmlFor="job-client">
                 <NameField id="job-client" name="client" options={memberNames} required
-                  defaultValue={editJob?.client ?? ""} placeholder="Pick a member or write anyone in" />
+                  defaultValue={editJob?.client ?? draftJob?.client ?? ""} placeholder="Pick a member or write anyone in" />
               </Field>
               <Field label="Posted by" htmlFor="job-poster">
                 <NameField id="job-poster" name="postedBy" options={memberNames} required
@@ -447,10 +499,10 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Contact / where found" htmlFor="job-contact">
-                <Input id="job-contact" name="contact" defaultValue={editJob?.contact ?? ""} placeholder="e.g. Bannered Mare, evenings" />
+                <Input id="job-contact" name="contact" defaultValue={editJob?.contact ?? draftJob?.contact ?? ""} placeholder="e.g. Bannered Mare, evenings" />
               </Field>
               <Field label="Faction association" htmlFor="job-faction">
-                <Input id="job-faction" name="faction" defaultValue={editJob?.faction ?? ""} placeholder="e.g. Companions (optional)" />
+                <Input id="job-faction" name="faction" defaultValue={editJob?.faction ?? draftJob?.faction ?? ""} placeholder="e.g. Companions (optional)" />
               </Field>
             </div>
 
@@ -467,7 +519,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
             </div>
 
             <Field label="Description" htmlFor="job-desc">
-              <Textarea id="job-desc" name="description" rows={3} defaultValue={editJob?.description ?? ""} placeholder="What the client needs done" />
+              <Textarea id="job-desc" name="description" rows={3} defaultValue={editJob?.description ?? draftJob?.description ?? ""} placeholder="What the client needs done" />
             </Field>
 
             {/* Reward: septims, items, or both. */}
@@ -476,11 +528,11 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                 Reward
               </p>
               <Field label="Septims" htmlFor="job-reward">
-                <Input id="job-reward" name="reward" type="number" min={0} defaultValue={editJob?.reward ? String(editJob.reward) : ""} placeholder="500" />
+                <Input id="job-reward" name="reward" type="number" min={0} defaultValue={editJob?.reward ? String(editJob.reward) : draftJob?.reward ? String(draftJob.reward) : ""} placeholder="500" />
               </Field>
               <div className="space-y-1.5">
                 <Label className="text-xs">Item rewards</Label>
-                <ItemPicker targets={itemRewards} setTargets={setItemRewards} label="Search items to offer…" />
+                <ItemPicker targets={itemRewards} setTargets={setItemRewards} catalogue={items} label="Search items to offer…" />
               </div>
             </div>
 
@@ -528,7 +580,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Items to collect
                 </p>
-                <ItemPicker targets={targets} setTargets={setTargets} />
+                <ItemPicker targets={targets} setTargets={setTargets} catalogue={items} />
                 <p className="text-xs text-muted-foreground">
                   Any septim reward is split by how much of these totals each member delivers, after
                   the guild’s 25% cut.
@@ -545,10 +597,10 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Renter" htmlFor="barrel-owner">
                 <NameField id="barrel-owner" name="owner" options={memberNames} required
-                  defaultValue={editBarrel?.owner ?? (memberNames[0] || '')} placeholder="Pick a member or write in" />
+                  defaultValue={editBarrel?.owner ?? draftBarrel?.owner ?? (memberNames[0] || '')} placeholder="Pick a member or write in" />
               </Field>
               <Field label="Weekly rate (septims)" htmlFor="barrel-rate">
-                <Input id="barrel-rate" name="rate" type="number" min={0} defaultValue={editBarrel?.rate ?? 50} />
+                <Input id="barrel-rate" name="rate" type="number" min={0} defaultValue={editBarrel?.rate ?? draftBarrel?.rate ?? 50} />
               </Field>
             </div>
 
@@ -562,7 +614,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
             </div>
 
             <Field label="Location notes" htmlFor="barrel-notes">
-              <Input id="barrel-notes" name="notes" defaultValue={editBarrel?.notes ?? ''} placeholder="e.g. Riverwood, behind the smithy" />
+              <Input id="barrel-notes" name="notes" defaultValue={editBarrel?.notes ?? draftBarrel?.notes ?? ''} placeholder="e.g. Riverwood, behind the smithy" />
             </Field>
 
             <Field label={editBarrel?.img ? 'Replace location screenshot' : 'Location screenshot'} htmlFor="barrel-shot">
@@ -856,7 +908,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
             </div>
 
             <Field label="Item" htmlFor="bank-item-name">
-              <NameField id="bank-item-name" name="item" options={ALL_ITEM_NAMES} required
+              <NameField id="bank-item-name" name="item" options={itemNames} required
                 placeholder="Search Skyrim items, or write one in" />
             </Field>
 
@@ -873,7 +925,37 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
           </form>
         )}
 
+        {modal === 'item' && (
+          <form onSubmit={submitItem} className="space-y-4">
+            <Field label="Item name" htmlFor="item-name">
+              <Input
+                id="item-name" name="name" required autoFocus
+                defaultValue={editItem?.name ?? ''} placeholder="e.g. Frost Salts"
+              />
+            </Field>
+            <Field label="Category">
+              <Picker
+                value={itemCategory} onValueChange={setItemCategory}
+                options={choices(ITEM_CATEGORIES)} ariaLabel="Category"
+              />
+            </Field>
+            <Field label="Notes (optional)" htmlFor="item-notes">
+              <Textarea
+                id="item-notes" name="notes" rows={2}
+                defaultValue={editItem?.notes ?? ''}
+                placeholder="Where it comes from, who buys it, anything worth knowing"
+              />
+            </Field>
+            <p className="text-xs text-muted-foreground">
+              Added items show up everywhere items are picked — collection jobs, item rewards
+              and guild storage.
+            </p>
+            {footer(editItem ? 'Save item' : 'Add item')}
+          </form>
+        )}
+
         {modal === 'member' && (
+
 
           <form onSubmit={submitMember} className="space-y-4">
             <Field label="Name" htmlFor="member-name">

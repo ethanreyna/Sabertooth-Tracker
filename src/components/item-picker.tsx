@@ -5,18 +5,21 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { searchItems } from '@/items';
+import type { ItemDef } from '@/items';
 import type { CollectionTarget } from '@/types';
 
 /** Searchable Skyrim-item combobox that builds a collection job's shopping list. */
-export function ItemPicker({ targets, setTargets, label = 'Search Skyrim items…' }: {
+export function ItemPicker({ targets, setTargets, catalogue, label = 'Search Skyrim items…' }: {
   targets: CollectionTarget[];
   setTargets: (fn: (t: CollectionTarget[]) => CollectionTarget[]) => void;
+  /** Built-in records plus whatever the guild has added to its item list. */
+  catalogue: ItemDef[];
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
-  const results = useMemo(() => searchItems(query, 50), [query]);
+  const results = useMemo(() => searchItems(query, 50, catalogue), [query, catalogue]);
   const typed = query.trim();
   const alreadyListed = (name: string) => targets.some((t) => t.item.toLowerCase() === name.toLowerCase());
   const exactInCatalogue = results.some((r) => r.name.toLowerCase() === typed.toLowerCase());

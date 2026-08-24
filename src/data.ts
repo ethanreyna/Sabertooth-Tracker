@@ -4,7 +4,7 @@ import type { DB } from './types';
 const d = (days: number) => new Date(Date.now() - days * 864e5).toISOString();
 const f = (days: number) => new Date(Date.now() + days * 864e5).toISOString();
 
-export const emptyDb = (): DB => ({ settings: { guildCutPct: DEFAULT_GUILD_CUT_PCT }, members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [], ledger: [], bankItems: [], suggestions: [] });
+export const emptyDb = (): DB => ({ settings: { guildCutPct: DEFAULT_GUILD_CUT_PCT }, members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [], ledger: [], bankItems: [], suggestions: [], items: [] });
 
 /** Sensible starting ranks, offered when the roster has no roles yet. The
  *  Initiate -> Saberblooded track mirrors the guild's blooding process. */
@@ -120,4 +120,5 @@ export const demoDb = (): DB => ({
     { id: 'bi3', type: 'in', item: 'Health Potion', qty: 10, by: 'Soul in Sap', note: '', at: d(2) },
   ],
   suggestions: [],
+  items: [],
 });

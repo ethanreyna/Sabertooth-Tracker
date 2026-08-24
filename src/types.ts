@@ -161,6 +161,25 @@ export interface Suggestion {
   decidedAt: string;
 }
 
+/** An item the guild knows about. The built-in catalogue in items.ts covers the
+ *  common Skyrim records; these are the guild's own additions, kept in the
+ *  database so everyone's pickers offer the same list. */
+export interface ItemRecord {
+  id: string;
+  name: string;
+  category: string;
+  notes: string;
+  addedBy: string;
+  at: string;
+}
+
+/** Offered when adding an item. Free text is allowed â the tabs on the item
+ *  list are built from whatever categories actually exist. */
+export const ITEM_CATEGORIES = [
+  'Ore', 'Ingot', 'Leather', 'Wood', 'Alchemy', 'Food', 'Drink', 'Potion',
+  'Soul Gem', 'Weapon', 'Armour', 'Clothing', 'Jewellery', 'Book', 'Misc',
+];
+
 export interface Member {
   id: string;
   role: string;
@@ -188,6 +207,7 @@ export interface DB {
   ledger: LedgerEntry[];
   bankItems: BankItem[];
   suggestions: Suggestion[];
+  items: ItemRecord[];
 }
 
 /** One row of the market price list, mirrored from the guild's Google Sheet.

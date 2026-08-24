@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Coins, Hammer, Inbox, LayoutDashboard, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, Settings, Shield, ShieldHalf, Skull, Sun, Users, Briefcase,
+  Boxes, Coins, FileInput, Hammer, Inbox, LayoutDashboard, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, Settings, Shield, ShieldHalf, Skull, Sun, Users, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,9 +20,13 @@ import { Recipes } from '@/views/recipes';
 import { MapView } from '@/views/map';
 import { Suggestions } from '@/views/suggestions';
 import { Suggest } from '@/views/suggest';
+import { Items } from '@/views/items';
+import { ImportDialog } from '@/components/import-dialog';
+import type { Draft } from '@/lib/parse-import';
 import type { AddMode } from '@/views/map';
 import type { MapKind } from '@/components/map-canvas';
 import { emptyDb } from '@/data';
+import { catalogue } from '@/items';
 import { applyTheme, loadTheme } from '@/theme';
 import {
   AuthError, ConflictError, ReadOnlyError, clearLocal, loadCfg, loadLocal, pullDb, pushDb, saveCfg, saveLocal,
@@ -30,12 +34,12 @@ import {
 import { cn } from '@/lib/utils';
 import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
-type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'recipes' | 'roster' | 'roles' | 'suggestions' | 'suggest';
+type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'recipes' | 'roster' | 'roles' | 'suggestions' | 'suggest';
 
 /** What a read-only guest is allowed to see. `ledger` is the market price list,
  *  which comes from the public sheet; `bank` (the guild's septims) stays hidden,
  *  and the Worker strips those transactions from a guest response entirely. */
-const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'recipes', 'roster', 'suggest'];
+const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'items', 'recipes', 'roster', 'suggest'];
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -47,6 +51,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'map', label: 'Map & Points', icon: <MapIcon /> },
   { id: 'bank', label: 'Bank', icon: <Coins /> },
   { id: 'ledger', label: 'Ledger', icon: <Scale /> },
+  { id: 'items', label: 'Items', icon: <Boxes /> },
   { id: 'recipes', label: 'Recipes', icon: <Hammer /> },
   { id: 'roster', label: 'Roster', icon: <Users /> },
   { id: 'roles', label: 'Roles', icon: <ShieldHalf /> },
@@ -56,19 +61,20 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
 
 const TITLES: Record<View, string> = {
   dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', map: 'Map & Points of Interest',
-  bank: 'Bank', ledger: 'Ledger', recipes: 'Recipes', roster: 'Roster', roles: 'Roles',
+  bank: 'Bank', ledger: 'Ledger', items: 'Item database', recipes: 'Recipes', roster: 'Roster', roles: 'Roles',
   suggestions: 'Guest suggestions', suggest: 'Suggest a change',
 };
 
 /** Header buttons per view. Bank has two, one per tab. */
-const ACTIONS: Partial<Record<View, Array<{ label: string; modal: ModalKind }>>> = {
-  jobs: [{ label: 'New job', modal: 'job' }],
-  storage: [{ label: 'New storage', modal: 'barrel' }],
+const ACTIONS: Partial<Record<View, Array<{ label: string; modal: ModalKind; variant?: 'outline' }>>> = {
+  jobs: [{ label: 'Import', modal: 'import', variant: 'outline' }, { label: 'New job', modal: 'job' }],
+  storage: [{ label: 'Import', modal: 'import', variant: 'outline' }, { label: 'New storage', modal: 'barrel' }],
   dungeons: [{ label: 'New dungeon', modal: 'dungeon' }],
   map: [{ label: 'New point', modal: 'spot' }],
   bank: [{ label: 'New item', modal: 'bankItem' }, { label: 'New entry', modal: 'ledger' }],
   roster: [{ label: 'Add member', modal: 'member' }],
   roles: [{ label: 'New role', modal: 'role' }],
+  items: [{ label: 'Add item', modal: 'item' }],
 };
 
 export default function App() {
@@ -82,6 +88,10 @@ export default function App() {
   const [editBarrelId, setEditBarrelId] = useState<string | null>(null);
   const [editDungeonId, setEditDungeonId] = useState<string | null>(null);
   const [editSpotId, setEditSpotId] = useState<string | null>(null);
+  const [editItemId, setEditItemId] = useState<string | null>(null);
+  // A job or storage record read off a pasted board post, waiting to be
+  // reviewed in the normal form. Never saved straight from the importer.
+  const [draft, setDraft] = useState<Draft | null>(null);
   const [newSpotAt, setNewSpotAt] = useState<{ x: string; y: string } | null>(null);
   // A record awaiting a map click to set its coordinates. Kinded, so the click
   // writes to the collection the record actually lives in.
@@ -258,6 +268,7 @@ export default function App() {
     : null;
 
   const memberNames = db.members.map((m) => m.name);
+  const itemNames = catalogue(db.items).map((i) => i.name);
   const income = db.ledger.filter((l) => l.type === 'income').reduce((s, l) => s + Number(l.amount || 0), 0);
   const spend = db.ledger.filter((l) => l.type === 'expense').reduce((s, l) => s + Number(l.amount || 0), 0);
 
@@ -361,7 +372,9 @@ export default function App() {
               />
             )}
             {actions?.map((a) => (
-              <Button key={a.modal} size="sm" onClick={() => setModal(a.modal)}>{a.label}</Button>
+              <Button key={a.modal} size="sm" variant={a.variant} onClick={() => setModal(a.modal)}>
+                {a.modal === 'import' && <FileInput />}{a.label}
+              </Button>
             ))}
           </div>
         </header>
@@ -457,8 +470,14 @@ export default function App() {
             <Bank db={db} income={income} spend={spend} readOnly={readOnly} update={update} />
           )}
           {view === 'suggestions' && <Suggestions db={db} update={update} memberNames={memberNames} />}
-          {view === 'suggest' && <Suggest cfg={cfg} memberNames={memberNames} />}
+          {view === 'suggest' && <Suggest cfg={cfg} memberNames={memberNames} itemNames={itemNames} />}
           {view === 'ledger' && <Prices />}
+          {view === 'items' && (
+            <Items
+              db={db} update={update} readOnly={readOnly}
+              onEdit={(id) => { setEditItemId(id); setModal('item'); }}
+            />
+          )}
           {view === 'recipes' && <Recipes />}
           {view === 'roster' && <Roster db={db} update={update} readOnly={readOnly} />}
           {view === 'roles' && (
@@ -472,15 +491,30 @@ export default function App() {
         </div>
       </main>
 
+      {modal === 'import' && !readOnly && (
+        <ImportDialog
+          cfg={cfg}
+          close={() => setModal(null)}
+          onUse={(d) => {
+            // Straight into the record's own form, so it gets the same
+            // validation and review as anything typed by hand.
+            setDraft(d);
+            setModal(d.kind === 'barrel' ? 'barrel' : 'job');
+          }}
+        />
+      )}
+
       {/* Guests get the connection dialog (to sign out) but no editing dialogs. */}
-      {modal && (!readOnly || modal === 'sync') && (
+      {modal && modal !== 'import' && (!readOnly || modal === 'sync') && (
+
         <Modals
-          key={`${modal}:${editRoleId ?? editJobId ?? editBarrelId ?? editDungeonId ?? editSpotId ?? 'new'}`}
+          key={`${modal}:${editRoleId ?? editJobId ?? editBarrelId ?? editDungeonId ?? editSpotId ?? editItemId ?? (draft ? 'draft' : 'new')}`}
           modal={modal}
           close={() => {
             setModal(null);
             setEditRoleId(null); setEditJobId(null);
             setEditBarrelId(null); setEditDungeonId(null); setEditSpotId(null);
+            setEditItemId(null); setDraft(null);
             setNewSpotAt(null); setNewDungeonAt(null); setNewSpotKind('');
           }}
           roles={db.roles}
@@ -491,6 +525,10 @@ export default function App() {
           editBarrel={db.barrels.find((b) => b.id === editBarrelId) ?? null}
           editDungeon={db.dungeons.find((g) => g.id === editDungeonId) ?? null}
           editSpot={db.spots.find((sp) => sp.id === editSpotId) ?? null}
+          editItem={db.items.find((i) => i.id === editItemId) ?? null}
+          customItems={db.items}
+          draftJob={draft?.kind === 'job' ? draft : null}
+          draftBarrel={draft?.kind === 'barrel' ? draft : null}
           dungeons={db.dungeons}
           newSpotAt={newSpotAt}
           newSpotKind={newSpotKind}
