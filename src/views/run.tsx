@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Coins, Flag, Minus, Package, Plus, Trash2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,8 +8,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { EmptyState, Field, NameField, TonedBadge } from '@/components/bits';
 import { catalogue } from '@/items';
 import { ago, sep, uid } from '@/lib/format';
+import { loadRun, saveRun } from '@/lib/run-store';
 import { emptyRun } from '@/types';
-import type { DB, RunEntry } from '@/types';
+import type { DB, DungeonRun, RunEntry } from '@/types';
 
 /** What each person is owed, and what the split can't divide. */
 interface Share {
@@ -52,15 +53,32 @@ function Stat({ label, value, sub, icon }: {
   );
 }
 
-export function Run({ db, update, readOnly, memberNames }: {
+/**
+ * A party's running tally while they are in a dungeon.
+ *
+ * Unlike everything else here this never reaches the server: it is one
+ * person's scratch pad for one trip, not a record the guild keeps. So it is
+ * kept in this browser, works signed in as a guest, and needs no permission to
+ * use — but it is also yours alone, and clearing site data clears it.
+ */
+export function Run({ db, memberNames }: {
   db: DB;
-  update: (fn: (d: DB) => void) => void;
-  readOnly: boolean;
   memberNames: string[];
 }) {
-  const run = db.run;
+  const [run, setRun] = useState<DungeonRun>(() => loadRun());
   const [goldSeq, setGoldSeq] = useState(0);
   const [itemSeq, setItemSeq] = useState(0);
+
+  /** Every change goes through here, so nothing can be changed without being
+   *  written down — a reload mid-dungeon shouldn't lose the tally. */
+  const edit = useCallback((fn: (r: DungeonRun) => void) => {
+    setRun((prev) => {
+      const next: DungeonRun = JSON.parse(JSON.stringify(prev));
+      fn(next);
+      saveRun(next);
+      return next;
+    });
+  }, []);
 
   const itemNames = catalogue(db.items).map((i) => i.name);
 
@@ -69,17 +87,16 @@ export function Run({ db, update, readOnly, memberNames }: {
   const goldShare = split(gold, run.people);
   const log = run.entries.slice().sort((a, b) => (b.at || '').localeCompare(a.at || ''));
 
-  const start = () => update((d) => {
-    d.run = {
-      ...emptyRun(),
+  const start = () => edit((r) => {
+    Object.assign(r, emptyRun(), {
       active: true,
       people: 1,
       startedBy: memberNames[0] || '',
       startedAt: new Date().toISOString(),
-    };
+    });
   });
 
-  const setPeople = (n: number) => update((d) => { d.run.people = Math.max(1, Math.min(24, n)); });
+  const setPeople = (n: number) => edit((r) => { r.people = Math.max(1, Math.min(24, n)); });
 
   const addGold = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -89,8 +106,8 @@ export function Run({ db, update, readOnly, memberNames }: {
     const by = String(f.get('by') || '').trim();
     e.currentTarget.reset();
     setGoldSeq((n) => n + 1);
-    update((d) => {
-      d.run.entries.push({ id: uid(), kind: 'gold', item: '', qty, by, at: new Date().toISOString() });
+    edit((r) => {
+      r.entries.push({ id: uid(), kind: 'gold', item: '', qty, by, at: new Date().toISOString() });
     });
   };
 
@@ -103,8 +120,8 @@ export function Run({ db, update, readOnly, memberNames }: {
     const by = String(f.get('by') || '').trim();
     e.currentTarget.reset();
     setItemSeq((n) => n + 1);
-    update((d) => {
-      d.run.entries.push({ id: uid(), kind: 'item', item, qty, by, at: new Date().toISOString() });
+    edit((r) => {
+      r.entries.push({ id: uid(), kind: 'item', item, qty, by, at: new Date().toISOString() });
     });
   };
 
@@ -113,13 +130,11 @@ export function Run({ db, update, readOnly, memberNames }: {
       <div className="mx-auto max-w-2xl space-y-4">
         <EmptyState>
           No run in progress. Start one when the party goes in, add gold and loot as you find it,
-          and the split updates as you go.
+          and the split updates as you go. This one is yours alone — it stays in this browser.
         </EmptyState>
-        {!readOnly && (
-          <div className="flex justify-center">
-            <Button onClick={start}><Flag />Start a run</Button>
-          </div>
-        )}
+        <div className="flex justify-center">
+          <Button onClick={start}><Flag />Start a run</Button>
+        </div>
       </div>
     );
   }
@@ -130,11 +145,10 @@ export function Run({ db, update, readOnly, memberNames }: {
         <div className="min-w-56 flex-1">
           <Input
             value={run.name}
-            disabled={readOnly}
             placeholder="Which dungeon? (optional)"
             onChange={(e) => {
               const v = e.target.value;
-              update((d) => { d.run.name = v; });
+              edit((r) => { r.name = v; });
             }}
             className="h-9 font-medium"
           />
@@ -143,18 +157,16 @@ export function Run({ db, update, readOnly, memberNames }: {
         {run.startedAt && (
           <span className="text-xs text-muted-foreground">started {ago(run.startedAt)}</span>
         )}
-        {!readOnly && (
-          <Button
-            variant="outline" size="sm"
-            onClick={() => {
-              if (confirm('Finish this run? The tally is cleared once everyone is paid out.')) {
-                update((d) => { d.run = emptyRun(); });
-              }
-            }}
-          >
-            <Flag />Finish run
-          </Button>
-        )}
+        <Button
+          variant="outline" size="sm"
+          onClick={() => {
+            if (confirm('Finish this run? The tally is cleared once everyone is paid out.')) {
+              edit((r) => { Object.assign(r, emptyRun()); });
+            }
+          }}
+        >
+          <Flag />Finish run
+        </Button>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -166,7 +178,7 @@ export function Run({ db, update, readOnly, memberNames }: {
             <div className="mt-1 flex items-center gap-2">
               <Button
                 variant="outline" size="icon-xs" aria-label="One fewer person"
-                disabled={readOnly || run.people <= 1}
+                disabled={run.people <= 1}
                 onClick={() => setPeople(run.people - 1)}
               >
                 <Minus />
@@ -174,7 +186,7 @@ export function Run({ db, update, readOnly, memberNames }: {
               <span className="min-w-8 text-center text-2xl font-bold tabular-nums">{run.people}</span>
               <Button
                 variant="outline" size="icon-xs" aria-label="One more person"
-                disabled={readOnly || run.people >= 24}
+                disabled={run.people >= 24}
                 onClick={() => setPeople(run.people + 1)}
               >
                 <Plus />
@@ -190,8 +202,7 @@ export function Run({ db, update, readOnly, memberNames }: {
         />
       </div>
 
-      {!readOnly && (
-        <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-2">
           <Card>
             <CardContent className="p-4">
               <form key={`gold${goldSeq}`} onSubmit={addGold} className="space-y-3">
@@ -233,8 +244,7 @@ export function Run({ db, update, readOnly, memberNames }: {
               </form>
             </CardContent>
           </Card>
-        </div>
-      )}
+      </div>
 
       {items.length > 0 && (
         <div>
@@ -286,7 +296,7 @@ export function Run({ db, update, readOnly, memberNames }: {
                   <TableHead>Item</TableHead>
                   <TableHead className="w-36">Found by</TableHead>
                   <TableHead className="w-24 text-right">Amount</TableHead>
-                  {!readOnly && <TableHead className="w-10" />}
+                  <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -302,18 +312,16 @@ export function Run({ db, update, readOnly, memberNames }: {
                     </TableCell>
                     <TableCell className="text-muted-foreground">{e.by || '—'}</TableCell>
                     <TableCell className="text-right font-semibold tabular-nums">{sep(e.qty)}</TableCell>
-                    {!readOnly && (
-                      <TableCell>
-                        <Button
-                          variant="ghost" size="icon-xs" aria-label="Remove"
-                          onClick={() => update((d) => {
-                            d.run.entries = d.run.entries.filter((x) => x.id !== e.id);
-                          })}
-                        >
-                          <Trash2 />
-                        </Button>
-                      </TableCell>
-                    )}
+                    <TableCell>
+                      <Button
+                        variant="ghost" size="icon-xs" aria-label="Remove"
+                        onClick={() => edit((r) => {
+                          r.entries = r.entries.filter((x) => x.id !== e.id);
+                        })}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -324,7 +332,8 @@ export function Run({ db, update, readOnly, memberNames }: {
 
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5">
         <Package />
-        Everyone on the run sees the same tally — add loot as you find it and the split moves with it.
+        Kept in this browser only — nobody else sees it and it never reaches the guild database.
+        It survives a reload, but not clearing your site data.
       </p>
     </div>
   );

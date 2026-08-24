@@ -1,6 +1,6 @@
 import { DEFAULT_GUILD_CUT_PCT } from './types';
 import { coordOrEmpty, httpUrlOrEmpty } from './lib/maps';
-import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, DungeonRun, EnchantRequest, RunEntry, Job, ItemRecord, LedgerEntry, BankItem, Member, MemberEntry, Price, Role, Spot, Suggestion, SyncCfg } from './types';
+import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, Job, ItemRecord, LedgerEntry, BankItem, Member, MemberEntry, Price, Role, Spot, Suggestion, SyncCfg } from './types';
 
 const CFG_KEY = 'sabretooth-auth';
 const LEGACY_CFG_KEY = 'sabertooth-auth'; // pre-rename; read once so nobody is logged out
@@ -67,33 +67,6 @@ export function saveLocal(db: DB): void {
   } catch {
     /* quota — the server copy is authoritative anyway */
   }
-}
-
-/** The run in progress. Absent means no run, not a broken record. */
-function normRun(raw: unknown): DungeonRun {
-  const x = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-  const entries = arr(x.entries).map((e): RunEntry => {
-    const r = (e || {}) as Record<string, unknown>;
-    return {
-      id: s(r.id) || Math.random().toString(36).slice(2, 10),
-      kind: s(r.kind) === 'item' ? 'item' : 'gold',
-      item: s(r.item),
-      qty: Math.max(0, n(r.qty)),
-      by: s(r.by),
-      at: s(r.at),
-    };
-  }).filter((e) => e.kind === 'gold' || e.item !== '');
-
-  return {
-    active: x.active === true,
-    name: s(x.name),
-    // At least one, always: the split divides by this.
-    people: Math.max(1, Math.round(n(x.people, 1)) || 1),
-    party: arr(x.party).map((v) => s(v)).filter(Boolean),
-    entries,
-    startedBy: s(x.startedBy),
-    startedAt: s(x.startedAt),
-  };
 }
 
 /** Drop the offline cache (on sign-out, so the next user sees nothing stale). */
@@ -430,7 +403,6 @@ export function normalizeDb(raw: unknown): DB {
         addedBy: s(x.addedBy), at: s(x.at),
       };
     }).filter((i) => i.name),
-    run: normRun(o.run),
     enchants: arr(o.enchants).map((e): EnchantRequest => {
       const x = (e || {}) as Record<string, unknown>;
       return {

@@ -193,10 +193,9 @@ export interface RunEntry {
 }
 
 /**
- * The run being tracked. There is exactly one, shared by the whole guild:
- * everyone adds to the same pile as they go and watches the split move, which
- * is the point — a party doesn't want a record of runs, it wants to know what
- * each person is owed right now.
+ * The run being tracked. Kept in the browser rather than the guild database:
+ * it is scratch working for one party while they are inside, not a record the
+ * roster needs to see, and it is thrown away once the loot is split.
  */
 export interface DungeonRun {
   /** False when no run is going, which is what an empty tracker means. */
@@ -280,7 +279,6 @@ export interface DB {
   bankItems: BankItem[];
   suggestions: Suggestion[];
   items: ItemRecord[];
-  run: DungeonRun;
   enchants: EnchantRequest[];
 }
 

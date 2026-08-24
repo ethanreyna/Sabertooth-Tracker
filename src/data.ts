@@ -1,10 +1,10 @@
-import { DEFAULT_GUILD_CUT_PCT, emptyRun } from './types';
+import { DEFAULT_GUILD_CUT_PCT } from './types';
 import type { DB } from './types';
 
 const d = (days: number) => new Date(Date.now() - days * 864e5).toISOString();
 const f = (days: number) => new Date(Date.now() + days * 864e5).toISOString();
 
-export const emptyDb = (): DB => ({ settings: { guildCutPct: DEFAULT_GUILD_CUT_PCT }, members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [], ledger: [], bankItems: [], suggestions: [], items: [], run: emptyRun(), enchants: [] });
+export const emptyDb = (): DB => ({ settings: { guildCutPct: DEFAULT_GUILD_CUT_PCT }, members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [], ledger: [], bankItems: [], suggestions: [], items: [], enchants: [] });
 
 /** Sensible starting ranks, offered when the roster has no roles yet. The
  *  Initiate -> Saberblooded track mirrors the guild's blooding process. */
@@ -121,6 +121,5 @@ export const demoDb = (): DB => ({
   ],
   suggestions: [],
   items: [],
-  run: emptyRun(),
   enchants: [],
 });

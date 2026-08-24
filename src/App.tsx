@@ -520,9 +520,7 @@ export default function App() {
           {view === 'suggestions' && <Suggestions db={db} update={update} memberNames={memberNames} />}
           {view === 'suggest' && <Suggest cfg={cfg} memberNames={memberNames} itemNames={itemNames} />}
           {view === 'ledger' && <Prices />}
-          {view === 'run' && (
-            <Run db={db} update={update} readOnly={readOnly} memberNames={memberNames} />
-          )}
+          {view === 'run' && <Run db={db} memberNames={memberNames} />}
           {view === 'enchants' && (
             <Enchants db={db} update={update} readOnly={readOnly} memberNames={memberNames} />
           )}
