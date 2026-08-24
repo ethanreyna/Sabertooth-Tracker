@@ -6,10 +6,18 @@ import type { DB, Spot } from '@/types';
 
 // The tile pyramid was cut from Skyrim's own LOD textures, so these numbers are
 // exact rather than eyeballed: the world spans cells -64..+63 at 4096 units per
-// cell, and the pyramid tops out at 256 * 2^MAX_ZOOM pixels across.
+// cell, and the pyramid tops out at 256 * 2^TILE_ZOOM pixels across.
 const WORLD_MIN = -262144;
 const WORLD_MAX = 262144;
-const MAX_ZOOM = 5;
+/** Deepest level the pyramid actually holds: 256 * 2^5 = 8192px across. */
+const TILE_ZOOM = 5;
+/**
+ * How far the view goes. Past TILE_ZOOM Leaflet upscales the deepest tiles, so
+ * the terrain softens but the map keeps zooming — which is what placing a
+ * marker on the right side of a river needs. Cutting real tiles at this depth
+ * would be four times the files per level, and the pyramid ships in the repo.
+ */
+const MAX_ZOOM = 8;
 const TILE_URL = '/tiles/skyrim/{z}/{x}/{y}.jpg';
 
 // pixel = 2^z * (world / 2048 + 128), and y is negated because image rows run
@@ -18,11 +26,10 @@ const SCALE = 1 / 2048;
 const OFFSET = 128;
 
 const KIND_COLOR: Record<string, string> = {
-  ore: '#a1a1aa',
+  ore: '#eab308',
   hunting: '#ef4444',
   alchemy: '#22c55e',
-  fishing: '#0ea5e9',
-  wood: '#f59e0b',
+  crafting: '#3b82f6',
 };
 const colorFor = (kind: string) => KIND_COLOR[kind.toLowerCase()] ?? '#a1a1aa';
 
@@ -196,6 +203,9 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMo
       tileSize: 256,
       minZoom: 0,
       maxZoom: MAX_ZOOM,
+      // Beyond this there are no tiles to fetch; Leaflet stretches z5 instead
+      // of asking for 404s.
+      maxNativeZoom: TILE_ZOOM,
       noWrap: true,
       bounds,
       // The LOD textures don't fill every cell, so edge tiles are legitimately

@@ -115,7 +115,7 @@ export interface Spot {
 /** Offered as suggestions; members can write in anything, and the page's tabs
  *  are built from whatever kinds actually exist. */
 export const SPOT_KINDS = [
-  'Ore', 'Hunting', 'Alchemy', 'Fishing', 'Wood',
+  'Ore', 'Hunting', 'Alchemy', 'Crafting',
   'City', 'Settlement', 'Dungeon', 'Tower', 'Fort', 'Mine', 'Dock', 'Farm', 'Mill',
   'Camp', 'Grove', 'Stone', 'Other',
 ];
@@ -180,7 +180,7 @@ export const ITEM_CATEGORIES = [
   'Soul Gem', 'Weapon', 'Armour', 'Clothing', 'Jewellery', 'Book', 'Misc',
 ];
 
-/** One thing picked up on the current dungeon run. */
+/** One thing picked up on the current run. */
 export interface RunEntry {
   id: string;
   kind: 'gold' | 'item';
@@ -193,7 +193,7 @@ export interface RunEntry {
 }
 
 /**
- * The dungeon run in progress. There is exactly one, shared by the whole guild:
+ * The run being tracked. There is exactly one, shared by the whole guild:
  * everyone adds to the same pile as they go and watches the split move, which
  * is the point — a party doesn't want a record of runs, it wants to know what
  * each person is owed right now.

@@ -22,11 +22,10 @@ const ADDS: Array<[AddMode, string]> = [
 ];
 
 const LEGEND: Array<[string, string]> = [
-  ['Ore', 'bg-zinc-400'],
+  ['Ore', 'bg-yellow-500'],
   ['Hunting', 'bg-red-500'],
   ['Alchemy', 'bg-emerald-500'],
-  ['Fishing', 'bg-sky-500'],
-  ['Wood', 'bg-amber-500'],
+  ['Crafting', 'bg-blue-500'],
 ];
 
 export function MapView({ db, update, readOnly, placing, addMode, onAddModeChange, onPick, onOpen, onDelete, onMove, onCancelPlacing }: {

@@ -40,7 +40,7 @@ export const GLYPH_PATHS: Record<string, string> = {
 };
 
 /** Kinds that keep a plain coloured dot rather than a silhouette. */
-const DOT_KINDS = new Set(['ore', 'hunting', 'alchemy', 'fishing', 'wood', 'other', '']);
+const DOT_KINDS = new Set(['ore', 'hunting', 'alchemy', 'crafting', 'other', '']);
 
 /** Synonyms, so a written-in kind still finds a sensible glyph. */
 const ALIASES: Record<string, string> = {

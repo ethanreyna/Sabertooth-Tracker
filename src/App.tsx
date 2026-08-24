@@ -49,7 +49,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'jobs', label: 'Jobs', icon: <Briefcase /> },
   { id: 'storage', label: 'Storage', icon: <Package /> },
   { id: 'dungeons', label: 'Dungeons', icon: <Skull /> },
-  { id: 'run', label: 'Dungeon run', icon: <Swords /> },
+  { id: 'run', label: 'Loot Tracker', icon: <Swords /> },
   { id: 'map', label: 'Map & Points', icon: <MapIcon /> },
   { id: 'bank', label: 'Bank', icon: <Coins /> },
   { id: 'ledger', label: 'Ledger', icon: <Scale /> },
@@ -63,7 +63,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
 
 const TITLES: Record<View, string> = {
   dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', map: 'Map & Points of Interest',
-  bank: 'Bank', ledger: 'Ledger', items: 'Item database', run: 'Dungeon run', recipes: 'Recipes', roster: 'Roster', roles: 'Roles',
+  bank: 'Bank', ledger: 'Ledger', items: 'Item database', run: 'Loot Tracker', recipes: 'Recipes', roster: 'Roster', roles: 'Roles',
   suggestions: 'Guest suggestions', suggest: 'Suggest a change',
 };
 
