@@ -8,10 +8,14 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Spots } from '@/views/spots';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { MapKind, MoveRequest } from '@/components/map-canvas';
+import { ChunkBoundary } from '@/components/chunk-boundary';
+import { lazyChunk } from '@/lib/lazy-chunk';
 import type { DB } from '@/types';
 
 // Leaflet and its CSS are ~45KB gzipped, and only this screen needs them.
-const MapCanvas = lazy(() => import('@/components/map-canvas'));
+// Wrapped, because a tab open across a deploy asks for a chunk that no longer
+// exists — see lazyChunk.
+const MapCanvas = lazy(lazyChunk(() => import('@/components/map-canvas')));
 
 export type AddMode = 'point' | 'dungeon' | 'settlement';
 
@@ -133,19 +137,21 @@ export function MapView({ db, update, readOnly, placing, addMode, onAddModeChang
       )}
 
       <Card className="min-h-96 flex-1 overflow-hidden p-0">
-        <Suspense
-          fallback={
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              Loading the map…
-            </div>
-          }
-        >
-          <MapCanvas
-            db={db} readOnly={readOnly}
-            onPick={onPick} onOpen={onOpen} onDelete={onDelete}
-            onMoveRequest={setMove}
-          />
-        </Suspense>
+        <ChunkBoundary what="The map">
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                Loading the map…
+              </div>
+            }
+          >
+            <MapCanvas
+              db={db} readOnly={readOnly}
+              onPick={onPick} onOpen={onOpen} onDelete={onDelete}
+              onMoveRequest={setMove}
+            />
+          </Suspense>
+        </ChunkBoundary>
       </Card>
 
       {move && (
