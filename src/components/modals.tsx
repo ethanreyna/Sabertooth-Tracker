@@ -11,6 +11,7 @@ import { MapPinPlus } from 'lucide-react';
 import { Field, NONE, NameField, Picker, choices } from '@/components/bits';
 import type { Choice } from '@/components/bits';
 import { ItemPicker } from '@/components/item-picker';
+import { MapThumb } from '@/components/map-thumb';
 import { catalogue } from '@/items';
 import { uploadImage } from '@/sync';
 import { uid } from '@/lib/format';
@@ -102,6 +103,9 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
   const [advanceRole, setAdvanceRole] = useState(editRole?.advanceTo ?? '');
   const [spotKind, setSpotKind] = useState(editSpot?.kind ?? newSpotKind);
   const [attachDungeon, setAttachDungeon] = useState('');
+  // Mirrored so the map preview follows what is typed, not just what is saved.
+  const [dgX, setDgX] = useState(editDungeon?.x ?? newDungeonAt?.x ?? '');
+  const [dgY, setDgY] = useState(editDungeon?.y ?? newDungeonAt?.y ?? '');
   const [itemCategory, setItemCategory] = useState(editItem?.category || ITEM_CATEGORIES[0]);
   const [cutPct, setCutPct] = useState(String(settings.guildCutPct));
   const [busy, setBusy] = useState(false);
@@ -807,12 +811,12 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
 
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="X" htmlFor="dg-x">
-                <Input id="dg-x" name="x" inputMode="numeric"
-                  defaultValue={editDungeon?.x ?? newDungeonAt?.x ?? ''} placeholder="optional" />
+                <Input id="dg-x" name="x" inputMode="numeric" value={dgX}
+                  onChange={(e) => setDgX(e.target.value)} placeholder="optional" />
               </Field>
               <Field label="Y" htmlFor="dg-y">
-                <Input id="dg-y" name="y" inputMode="numeric"
-                  defaultValue={editDungeon?.y ?? newDungeonAt?.y ?? ''} placeholder="or place it on the map" />
+                <Input id="dg-y" name="y" inputMode="numeric" value={dgY}
+                  onChange={(e) => setDgY(e.target.value)} placeholder="or place it on the map" />
               </Field>
               {editDungeon && (
                 <Field label="Reposition">
@@ -826,6 +830,9 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                 </Field>
               )}
             </div>
+
+            {/* What those numbers actually mean, without leaving the form. */}
+            <MapThumb x={dgX} y={dgY} zoom={5} radius={2} className="h-44 rounded-lg border" />
 
             <Field label="Notes" htmlFor="dg-notes">
               <Textarea id="dg-notes" name="notes" rows={3}

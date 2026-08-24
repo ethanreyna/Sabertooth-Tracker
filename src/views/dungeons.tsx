@@ -2,6 +2,7 @@ import { ImageIcon, MapPin, MapPinPlus, Pencil, Trash2, Users } from 'lucide-rea
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState, TonedBadge } from '@/components/bits';
+import { MapThumb } from '@/components/map-thumb';
 import type { Tone } from '@/components/bits';
 import { ago } from '@/lib/format';
 import type { DB } from '@/types';
@@ -32,7 +33,12 @@ export function Dungeons({ db, update, readOnly, onEdit, onPlace }: {
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {dungeons.map((g) => (
         <Card key={g.id} className="flex flex-col overflow-hidden py-0">
-          {g.imgs.length > 0 ? (
+          {/* Once a dungeon is on the map it has a picture for free: a crop of
+              the guild map with the marker on it. Beats asking anyone to go and
+              screenshot their own map, and it can't fall out of date. */}
+          {g.x && g.y ? (
+            <MapThumb x={g.x} y={g.y} zoom={4} className="h-40 border-b" alt={`${g.name} on the map`} />
+          ) : g.imgs.length > 0 ? (
             <div className={g.imgs.length > 1 ? 'grid grid-cols-2 gap-px bg-border' : ''}>
               {g.imgs.slice(0, 4).map((src, i) => (
                 <a key={src} href={src} target="_blank" rel="noreferrer" className="block">
@@ -46,7 +52,21 @@ export function Dungeons({ db, update, readOnly, onEdit, onPlace }: {
           ) : (
             <div className="flex h-40 flex-col items-center justify-center gap-1.5 border-b bg-muted/40 text-muted-foreground">
               <ImageIcon className="size-6" />
-              <span className="text-xs">No map screenshot</span>
+              <span className="text-xs">Not on the map yet</span>
+            </div>
+          )}
+
+          {/* Uploaded shots stay reachable when the map crop has the header. */}
+          {g.x && g.y && g.imgs.length > 0 && (
+            <div className="flex gap-1 border-b bg-muted/30 p-1.5">
+              {g.imgs.slice(0, 6).map((src, i) => (
+                <a key={src} href={src} target="_blank" rel="noreferrer" className="block">
+                  <img
+                    src={src} alt={`${g.name} screenshot ${i + 1}`} loading="lazy"
+                    className="size-10 rounded object-cover"
+                  />
+                </a>
+              ))}
             </div>
           )}
 
