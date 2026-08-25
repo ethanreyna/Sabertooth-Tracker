@@ -1,0 +1,31 @@
+# Local-development copy of wrangler.toml with the [ai] binding left out.
+# Workers AI has no local simulator, so with the binding present `wrangler dev`
+# opens a Cloudflare login page before it will start. Without it the worker
+# runs fully locally and the screenshot importer falls back to pasted text
+# (worker/index.ts already types AI as optional).
+#
+# Run with:  pnpm dev:api:offline
+# If a binding changes in wrangler.toml, mirror it here.
+
+name = "sabretooth-tracker"
+main = "worker/index.ts"
+compatibility_date = "2025-09-01"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sabertooth"
+database_id = "eacd0c6a-5091-47f4-a8be-145a9109c047"
+
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "sabertooth-images"
+
+[vars]
+PRICES_SHEET_ID = "1i5_O_jqz2wPBBNUzjCk0gwMRBIdVdnbIc0BG1S-KMWQ"
+PRICES_SHEET_TABS = "2094851253:BARS/ORES/WOOD,684884568:ARMOR/WEAPONS/TOOLS,963198346:BOOKS AND MAGIC,1241328953:TAILORING,339112539:FOOD,1812320419:ALCHEMY INGREDIENTS,0:POTIONS,1874240246:Copy of Sheet1"

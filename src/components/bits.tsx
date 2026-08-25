@@ -71,7 +71,16 @@ export function NameField({ name, options, defaultValue = '', required, placehol
       <Combobox
         items={options}
         inputValue={value}
-        onInputValueChange={(v) => setValue(String(v ?? ''))}
+        onInputValueChange={(v, details) => {
+          // Base UI treats unmatched text as a mistake and wipes it when focus
+          // leaves or the popup closes. Here written-in text is a legitimate
+          // value — the whole point of this field — so only changes the user
+          // actually made get through: typing, picking an item, or pressing
+          // the clear button. The automatic resets are ignored.
+          const { reason } = details;
+          if (reason !== 'input-change' && reason !== 'item-press' && reason !== 'clear-press') return;
+          setValue(String(v ?? ''));
+        }}
         openOnInputClick
       >
         <ComboboxInput id={id} placeholder={placeholder} required={required} autoComplete="off" />
