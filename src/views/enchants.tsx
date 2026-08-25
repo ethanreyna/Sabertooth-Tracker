@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState, Field, NameField, TonedBadge } from '@/components/bits';
 import { catalogue } from '@/items';
 import { ago, uid } from '@/lib/format';
-import { ENCHANTMENTS } from '@/types';
+import { enchantmentNames } from '@/lib/enchantments';
 import type { DB, EnchantRequest } from '@/types';
 
 /** The one they are already waiting on, if any. The whole rule lives here so
@@ -32,6 +32,7 @@ export function Enchants({ db, update, readOnly, memberNames }: {
   const [editErr, setEditErr] = useState('');
 
   const itemNames = catalogue(db.items).map((i) => i.name);
+  const enchNames = enchantmentNames(db);
 
   // The array itself is the queue: entries were always appended in date order,
   // and keeping position in the array (rather than sorting by a timestamp)
@@ -267,7 +268,7 @@ export function Enchants({ db, update, readOnly, memberNames }: {
                     placeholder="Search items, or write one in" />
                 </Field>
                 <Field label="Enchantment" htmlFor="en-ench">
-                  <NameField id="en-ench" name="enchantment" options={ENCHANTMENTS}
+                  <NameField id="en-ench" name="enchantment" options={enchNames}
                     placeholder="e.g. Fortify Magicka I" />
                 </Field>
               </div>
@@ -359,7 +360,7 @@ export function Enchants({ db, update, readOnly, memberNames }: {
                   defaultValue={editing.item} placeholder="Search items, or write one in" />
               </Field>
               <Field label="Enchantment" htmlFor="en-edit-ench">
-                <NameField id="en-edit-ench" name="enchantment" options={ENCHANTMENTS}
+                <NameField id="en-edit-ench" name="enchantment" options={enchNames}
                   defaultValue={editing.enchantment} placeholder="e.g. Fortify Magicka I" />
               </Field>
               <Field label="Notes (optional)" htmlFor="en-edit-notes">

@@ -17,13 +17,13 @@ import { uploadImage } from '@/sync';
 import { uid } from '@/lib/format';
 import { DURATION_UNITS, fromNow } from '@/lib/deadline';
 import type { DurationUnit } from '@/lib/deadline';
-import { ITEM_CATEGORIES, SPOT_KINDS } from '@/types';
+import { ENCHANTMENT_TIERS, ITEM_CATEGORIES, SPOT_KINDS } from '@/types';
 import { coordOrEmpty } from '@/lib/maps';
-import type { BankItem, Barrel, CollectionTarget, DB, Dungeon, ItemRecord, Job, LedgerEntry, Member, Role, Settings, Spot, SyncCfg, SyncStatus } from '@/types';
+import type { BankItem, Barrel, CollectionTarget, DB, Dungeon, EnchantmentRecord, ItemRecord, Job, LedgerEntry, Member, Role, Settings, Spot, SyncCfg, SyncStatus } from '@/types';
 import { durationFromText } from '@/lib/deadline';
 import type { BarrelDraft, JobDraft } from '@/lib/parse-import';
 
-export type ModalKind = 'job' | 'barrel' | 'dungeon' | 'spot' | 'ledger' | 'bankItem' | 'item' | 'import' | 'member' | 'role' | 'sync';
+export type ModalKind = 'job' | 'barrel' | 'dungeon' | 'spot' | 'ledger' | 'bankItem' | 'item' | 'enchantment' | 'import' | 'member' | 'role' | 'sync';
 
 const DEADLINE_MODES: Choice[] = [
   { value: 'none', label: 'No time limit' },
@@ -51,10 +51,11 @@ const toDateInput = (iso: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-export function Modals({ modal, close, roles, settings, memberNames, editRole, editJob, editBarrel, editDungeon, editSpot, editItem, customItems, draftJob, draftBarrel, dungeons, onPickOnMap, newSpotAt, newSpotKind, newDungeonAt, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
+export function Modals({ modal, close, roles, settings, memberNames, editRole, editJob, editBarrel, editDungeon, editSpot, editItem, editEnchantment, customItems, draftJob, draftBarrel, dungeons, onPickOnMap, newSpotAt, newSpotKind, newDungeonAt, update, setJobsView, cfg, sync, offline, readOnly, onLogout }: {
   modal: ModalKind; close: () => void; roles: Role[]; settings: Settings; memberNames: string[];
   editRole: Role | null; editJob: Job | null; editBarrel: Barrel | null;
   editDungeon: Dungeon | null; editSpot: Spot | null; editItem: ItemRecord | null;
+  editEnchantment: EnchantmentRecord | null;
   /** The guild's own item records, merged with the built-in catalogue for the
    *  item pickers so a job can ask for something the guild added. */
   customItems: ItemRecord[];
@@ -136,6 +137,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
     spot: editSpot ? 'Edit point of interest' : 'Add a point of interest',
     ledger: 'Record a ledger entry',
     item: editItem ? 'Edit item' : 'Add an item',
+    enchantment: editEnchantment ? 'Edit enchantment' : 'Add an enchantment',
     // Handled by its own dialog; listed so the map of titles stays total.
     import: 'Import from the job board',
     bankItem: 'Log a storage item',
@@ -448,7 +450,27 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
     });
   };
 
+  const submitEnchantment = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const name = String(f.get('name') || '').trim();
+    if (!name) return;
+    const fields = {
+      name,
+      tier: String(f.get('tier') || '').trim(),
+      cost: String(f.get('cost') || '').trim(),
+      notes: String(f.get('notes') || '').trim(),
+    };
+    close();
+    update((d) => {
+      const found = editEnchantment ? d.enchantments.find((x) => x.id === editEnchantment.id) : null;
+      if (found) { Object.assign(found, fields); return; }
+      d.enchantments.push({ id: uid(), ...fields, addedBy: '', at: new Date().toISOString() });
+    });
+  };
+
   const submitMember = (e: FormEvent<HTMLFormElement>) => {
+
 
 
     e.preventDefault();
@@ -965,7 +987,47 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
           </form>
         )}
 
+        {modal === 'enchantment' && (
+          <form onSubmit={submitEnchantment} className="space-y-4">
+            <Field label="Enchantment" htmlFor="ench-name">
+              <Input
+                id="ench-name" name="name" required autoFocus
+                defaultValue={editEnchantment?.name ?? ''}
+                placeholder="e.g. Fortify Smithing I (+15 Smithing)"
+              />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Tier">
+                <NameField
+                  name="tier" options={ENCHANTMENT_TIERS} id="ench-tier"
+                  defaultValue={editEnchantment?.tier ?? ENCHANTMENT_TIERS[0] ?? ''}
+                  placeholder="Novice, Advanced…"
+                />
+              </Field>
+              <Field label="Cost" htmlFor="ench-cost">
+                <Input
+                  id="ench-cost" name="cost"
+                  defaultValue={editEnchantment?.cost ?? ''}
+                  placeholder="e.g. 80 filled soul gems"
+                />
+              </Field>
+            </div>
+            <Field label="Notes (optional)" htmlFor="ench-notes">
+              <Textarea
+                id="ench-notes" name="notes" rows={2}
+                defaultValue={editEnchantment?.notes ?? ''}
+                placeholder="What it needs, who can do it, anything worth knowing"
+              />
+            </Field>
+            <p className="text-xs text-muted-foreground">
+              Added enchantments show up on the waitlist form and on guest requests.
+            </p>
+            {footer(editEnchantment ? 'Save enchantment' : 'Add enchantment')}
+          </form>
+        )}
+
         {modal === 'member' && (
+
 
 
           <form onSubmit={submitMember} className="space-y-4">

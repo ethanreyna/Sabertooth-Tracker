@@ -242,24 +242,44 @@ export interface EnchantRequest {
  * Grows as new tiers unlock. Costs: Novice (I) 80 filled soul gems,
  * Advanced (II) 160.
  */
-export const ENCHANTMENTS = [
-  // Novice — 80 filled soul gems
-  'Fortify Magicka I (+20 Magicka)',
-  'Fortify Stamina I (+20 Stamina)',
-  'Fortify Magicka Regen I (+40% Regen)',
-  'Fortify Stamina Regen I (+20% Regen)',
-  'Fortify Health Regen I (+10% Regen)',
-  'Fortify Carry Weight I (+25 Carry Weight)',
-  // Advanced — 160 filled soul gems
-  'Fortify Magicka II (+30 Magicka)',
-  'Fortify Stamina II (+30 Stamina)',
-  'Fortify Magicka Regen II (+60% Regen)',
-  'Fortify Stamina Regen II (+30% Regen)',
-  'Fortify Health Regen II (+20% Regen)',
-  'Fortify Carry Weight II (+30 Carry Weight)',
-  'Water Breathing II (Breathe Underwater)',
-  'Soul Trap II (Allows soul capture)',
+export interface EnchantmentDef {
+  name: string;
+  /** Novice, Advanced, … — what the enchanter has unlocked. */
+  tier: string;
+  /** What it costs to have done, as the guild quotes it. */
+  cost: string;
+}
+
+export const ENCHANTMENTS: EnchantmentDef[] = [
+  { name: 'Fortify Magicka I (+20 Magicka)', tier: 'Novice', cost: '80 filled soul gems' },
+  { name: 'Fortify Stamina I (+20 Stamina)', tier: 'Novice', cost: '80 filled soul gems' },
+  { name: 'Fortify Magicka Regen I (+40% Regen)', tier: 'Novice', cost: '80 filled soul gems' },
+  { name: 'Fortify Stamina Regen I (+20% Regen)', tier: 'Novice', cost: '80 filled soul gems' },
+  { name: 'Fortify Health Regen I (+10% Regen)', tier: 'Novice', cost: '80 filled soul gems' },
+  { name: 'Fortify Carry Weight I (+25 Carry Weight)', tier: 'Novice', cost: '80 filled soul gems' },
+  { name: 'Fortify Magicka II (+30 Magicka)', tier: 'Advanced', cost: '160 filled soul gems' },
+  { name: 'Fortify Stamina II (+30 Stamina)', tier: 'Advanced', cost: '160 filled soul gems' },
+  { name: 'Fortify Magicka Regen II (+60% Regen)', tier: 'Advanced', cost: '160 filled soul gems' },
+  { name: 'Fortify Stamina Regen II (+30% Regen)', tier: 'Advanced', cost: '160 filled soul gems' },
+  { name: 'Fortify Health Regen II (+20% Regen)', tier: 'Advanced', cost: '160 filled soul gems' },
+  { name: 'Fortify Carry Weight II (+30 Carry Weight)', tier: 'Advanced', cost: '160 filled soul gems' },
+  { name: 'Water Breathing II (Breathe Underwater)', tier: 'Advanced', cost: '160 filled soul gems' },
+  { name: 'Soul Trap II (Allows soul capture)', tier: 'Advanced', cost: '160 filled soul gems' },
 ];
+
+/** Tiers already in use; write-ins are allowed for whatever unlocks next. */
+export const ENCHANTMENT_TIERS = [...new Set(ENCHANTMENTS.map((e) => e.tier))];
+
+/** An enchantment the guild has added itself, alongside the built-in list. */
+export interface EnchantmentRecord {
+  id: string;
+  name: string;
+  tier: string;
+  cost: string;
+  notes: string;
+  addedBy: string;
+  at: string;
+}
 
 export interface Member {
   id: string;
@@ -289,6 +309,7 @@ export interface DB {
   bankItems: BankItem[];
   suggestions: Suggestion[];
   items: ItemRecord[];
+  enchantments: EnchantmentRecord[];
   enchants: EnchantRequest[];
 }
 

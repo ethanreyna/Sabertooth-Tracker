@@ -9,12 +9,16 @@ name: Deploy
 on:
   push:
     branches: [main]
+  # Pull requests get the same install/typecheck/build, but stop short of
+  # deploying — so a branch that can't build is visible before it lands.
+  pull_request:
+    branches: [main]
   # So a deploy can be re-run from the Actions tab without an empty commit.
   workflow_dispatch:
 
 # A newer push should win rather than race an older one onto the same Worker.
 concurrency:
-  group: deploy-main
+  group: deploy-${{ github.event.pull_request.number || 'main' }}
   cancel-in-progress: true
 
 jobs:
@@ -42,6 +46,7 @@ jobs:
       - run: pnpm build
 
       - uses: cloudflare/wrangler-action@v3
+        if: github.event_name != 'pull_request'
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

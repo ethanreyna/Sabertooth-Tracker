@@ -1,6 +1,6 @@
 import { DEFAULT_GUILD_CUT_PCT } from './types';
 import { coordOrEmpty, httpUrlOrEmpty } from './lib/maps';
-import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, Job, ItemRecord, LedgerEntry, BankItem, Member, MemberEntry, Price, Role, Spot, Suggestion, SyncCfg } from './types';
+import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, EnchantmentRecord, Job, ItemRecord, LedgerEntry, BankItem, Member, MemberEntry, Price, Role, Spot, Suggestion, SyncCfg } from './types';
 
 const CFG_KEY = 'sabretooth-auth';
 const LEGACY_CFG_KEY = 'sabertooth-auth'; // pre-rename; read once so nobody is logged out
@@ -403,7 +403,16 @@ export function normalizeDb(raw: unknown): DB {
         addedBy: s(x.addedBy), at: s(x.at),
       };
     }).filter((i) => i.name),
+    enchantments: arr(o.enchantments).map((e): EnchantmentRecord => {
+      const x = (e || {}) as Record<string, unknown>;
+      return {
+        id: s(x.id) || Math.random().toString(36).slice(2, 10),
+        name: s(x.name), tier: s(x.tier), cost: s(x.cost), notes: s(x.notes),
+        addedBy: s(x.addedBy), at: s(x.at),
+      };
+    }).filter((e) => e.name),
     enchants: arr(o.enchants).map((e): EnchantRequest => {
+
       const x = (e || {}) as Record<string, unknown>;
       return {
         id: s(x.id) || Math.random().toString(36).slice(2, 10),
