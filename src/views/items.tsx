@@ -7,54 +7,39 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { EmptyState, TonedBadge } from '@/components/bits';
+import { EmptyState, Picker, TonedBadge } from '@/components/bits';
 import { ITEMS } from '@/items';
-import { catalogueName, isTradeable, priceOf, tidyCategory } from '@/lib/prices';
+import { canonCategory, fromLedger, fromRecipes, norm } from '@/lib/item-import';
+import type { Candidate } from '@/lib/item-import';
 import { usePrices } from '@/views/prices';
 import { uid } from '@/lib/format';
-import type { Price } from '@/types';
 import { cn } from '@/lib/utils';
 import type { DB } from '@/types';
 
 const ALL = '__all';
 
-const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+/** Where a batch of items is being read from. */
+type Source = 'ledger' | 'recipes';
 
-/** One row of the price list that could become an item. */
-interface Candidate {
-  name: string;
-  category: string;
-  each: number;
-}
+const SOURCES: Record<Source, { title: string; blurb: string; button: string }> = {
+  ledger: {
+    title: 'Add items from the Ledger',
+    blurb: 'Everything the price list names and prices that the item list doesn’t have yet. '
+      + 'Rows without a price, and rows covering several items at once, are left out — the sheet '
+      + 'has plenty of both.',
+    button: 'Add from Ledger',
+  },
+  recipes: {
+    title: 'Add items from the Recipes',
+    blurb: 'Everything the blacksmith doc makes, and what it makes them from. Names are matched '
+      + 'loosely, so “Nails” won’t be added alongside “Nail”, and nothing already in the list '
+      + 'comes back.',
+    button: 'Add from Recipes',
+  },
+};
 
-/**
- * Priced rows that aren't in the item list yet.
- *
- * Deliberately narrow. The price sheet is the only record of Keizaal's own
- * items, so it is worth mining — but it also holds section headers, notes and
- * rows covering several things at once, and a catalogue full of those is worse
- * than one that is merely incomplete. Only rows that name one thing and carry a
- * price the guild would actually charge get this far (see isTradeable), and
- * anything already known, built in or added, is dropped here.
- */
-function candidates(prices: Price[], known: Set<string>): Candidate[] {
-  const seen = new Set<string>();
-  const out: Candidate[] = [];
-  for (const row of prices) {
-    if (!isTradeable(row)) continue;
-    const name = catalogueName(row);
-    const key = norm(name);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    if (known.has(key)) continue;
-    const m = priceOf(row);
-    out.push({ name, category: tidyCategory(row), each: m ? m.each : 0 });
-  }
-  return out;
-}
-
-function ImportFromLedger({ known, close, onAdd }: {
+function ImportItems({ source, known, close, onAdd }: {
+  source: Source;
   known: Set<string>;
   close: () => void;
   onAdd: (picked: Candidate[]) => void;
@@ -63,7 +48,11 @@ function ImportFromLedger({ known, close, onAdd }: {
   const [q, setQ] = useState('');
   const [dropped, setDropped] = useState<Set<string>>(() => new Set());
 
-  const found = useMemo(() => candidates(prices, known), [prices, known]);
+  const fmt = SOURCES[source];
+  const found = useMemo(
+    () => (source === 'recipes' ? fromRecipes(known) : fromLedger(prices, known)),
+    [source, prices, known],
+  );
 
   const needle = q.trim().toLowerCase();
   const shown = found.filter(
@@ -98,15 +87,13 @@ function ImportFromLedger({ known, close, onAdd }: {
     <Dialog open onOpenChange={(open) => { if (!open) close(); }}>
       <DialogContent className="max-h-[calc(100vh-4rem)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Add items from the Ledger</DialogTitle>
+          <DialogTitle>{fmt.title}</DialogTitle>
           <DialogDescription>
-            Everything the price list names and prices, that the item list doesn’t have yet.
-            Rows without a price, and rows covering several items at once, are left out — the
-            sheet has plenty of both. Untick anything that shouldn’t be an item.
+            {fmt.blurb} Untick anything that shouldn’t be an item.
           </DialogDescription>
         </DialogHeader>
 
-        {prices.length === 0 ? (
+        {source === 'ledger' && prices.length === 0 ? (
           <div className="space-y-3 py-2">
             <p className="text-sm text-muted-foreground">
               No price list loaded in this browser yet.
@@ -117,7 +104,8 @@ function ImportFromLedger({ known, close, onAdd }: {
           </div>
         ) : found.length === 0 ? (
           <p className="py-4 text-sm text-muted-foreground">
-            Nothing to add — every priced item in the Ledger is already on the item list.
+            Nothing to add — everything the {source === 'recipes' ? 'recipe doc' : 'Ledger'} names
+            is already on the item list.
           </p>
         ) : (
           <div className="space-y-3">
@@ -184,15 +172,20 @@ type Row = { name: string; cat: string; notes: string; id: string; custom: boole
 function rows(db: DB): Row[] {
   const byName = new Map<string, Row>();
 
+  // Categories are canonicalised for display so the two sources' spellings of
+  // one idea — Potion and Potions, Misc and Misc. — sit together rather than
+  // splitting the list in two. What's stored is left as it was written.
   for (const i of ITEMS) {
-    byName.set(i.name.toLowerCase(), { name: i.name, cat: i.cat, notes: '', id: '', custom: false });
+    byName.set(i.name.toLowerCase(), {
+      name: i.name, cat: canonCategory(i.cat), notes: '', id: '', custom: false,
+    });
   }
   for (const c of db.items) {
     const name = c.name.trim();
     if (!name) continue;
     byName.set(name.toLowerCase(), {
       name,
-      cat: c.category.trim() || 'Custom',
+      cat: canonCategory(c.category.trim() || 'Misc'),
       notes: c.notes,
       id: c.id,
       // A custom entry that shadows a built-in is still the guild's record, so
@@ -211,13 +204,19 @@ export function Items({ db, update, readOnly, onEdit }: {
 }) {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState(ALL);
-  const [importing, setImporting] = useState(false);
+  const [importing, setImporting] = useState<Source | null>(null);
 
   const all = useMemo(() => rows(db), [db]);
-  const cats = useMemo(
-    () => [...new Set(all.map((r) => r.cat))].sort((a, b) => a.localeCompare(b)),
-    [all],
-  );
+  const catOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of all) counts.set(r.cat, (counts.get(r.cat) ?? 0) + 1);
+    return [
+      { value: ALL, label: `All categories (${all.length})` },
+      ...[...counts.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([c, n]) => ({ value: c, label: `${c} (${n})` })),
+    ];
+  }, [all]);
 
   const needle = q.trim().toLowerCase();
   const shown = all.filter((r) => {
@@ -296,10 +295,21 @@ export function Items({ db, update, readOnly, onEdit }: {
           placeholder="Search items" value={q} onChange={(e) => setQ(e.target.value)}
           className="h-8 w-64 max-sm:w-full"
         />
+        <div className="w-56 max-sm:w-full">
+          <Picker
+            value={cat} onValueChange={(v) => setCat(v || ALL)}
+            options={catOptions} ariaLabel="Category"
+          />
+        </div>
         {!readOnly && (
-          <Button variant="outline" size="sm" onClick={() => setImporting(true)}>
-            <Download />Add from Ledger
-          </Button>
+          <>
+            <Button variant="outline" size="sm" onClick={() => setImporting('ledger')}>
+              <Download />Add from Ledger
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setImporting('recipes')}>
+              <Download />Add from Recipes
+            </Button>
+          </>
         )}
         <p className="text-xs text-muted-foreground">
           {all.length} items — {ITEMS.length} built in, {customCount} added by the guild.
@@ -309,9 +319,10 @@ export function Items({ db, update, readOnly, onEdit }: {
       </div>
 
       {importing && (
-        <ImportFromLedger
+        <ImportItems
+          source={importing}
           known={new Set(all.map((r) => norm(r.name)))}
-          close={() => setImporting(false)}
+          close={() => setImporting(null)}
           onAdd={(picked) => update((d) => {
             const at = new Date().toISOString();
             for (const c of picked) {
@@ -324,20 +335,7 @@ export function Items({ db, update, readOnly, onEdit }: {
         />
       )}
 
-      {all.length === 0 ? (
-        <EmptyState>No items yet.</EmptyState>
-      ) : (
-        <Tabs value={cat} onValueChange={(v) => setCat(v ? String(v) : ALL)}>
-          <TabsList className="flex-wrap">
-            <TabsTrigger value={ALL}>All</TabsTrigger>
-            {cats.map((c) => <TabsTrigger key={c} value={c}>{c}</TabsTrigger>)}
-          </TabsList>
-          <TabsContent value={ALL} className="mt-4">{table(shown)}</TabsContent>
-          {cats.map((c) => (
-            <TabsContent key={c} value={c} className="mt-4">{table(shown)}</TabsContent>
-          ))}
-        </Tabs>
-      )}
+      {all.length === 0 ? <EmptyState>No items yet.</EmptyState> : table(shown)}
     </div>
   );
 }
