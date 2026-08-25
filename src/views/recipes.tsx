@@ -84,7 +84,11 @@ export function Recipes() {
       {groups.length === 0 ? (
         <EmptyState>Nothing matches “{q}”.</EmptyState>
       ) : (
-        groups.map((g, i) => (
+        groups.map((g, i) => {
+          // Smelter blocks have nothing to rate, so the column would be a
+          // header over a row of dashes.
+          const rated = g.rows.some((r) => r.stat > 0);
+          return (
           <Card key={`${g.category}-${i}`} className="overflow-hidden py-0">
             <div className="flex items-center gap-2 border-b bg-muted/40 px-4 py-2">
               <h2 className="text-sm font-semibold">{g.category}</h2>
@@ -95,7 +99,9 @@ export function Recipes() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="min-w-56">Item</TableHead>
-                    <TableHead className="w-24 text-right">{statLabel(g.category)}</TableHead>
+                    {rated && (
+                      <TableHead className="w-24 text-right">{statLabel(g.category)}</TableHead>
+                    )}
                     <TableHead>Ingredients</TableHead>
                     <TableHead className="w-10" />
                   </TableRow>
@@ -109,9 +115,11 @@ export function Recipes() {
                           {r.station}
                         </span>
                       </TableCell>
-                      <TableCell className={cn('text-right tabular-nums', !r.stat && 'text-muted-foreground')}>
-                        {r.stat || '—'}
-                      </TableCell>
+                      {rated && (
+                        <TableCell className={cn('text-right tabular-nums', !r.stat && 'text-muted-foreground')}>
+                          {r.stat || '—'}
+                        </TableCell>
+                      )}
                       <TableCell className="whitespace-normal">
                         <span className="flex flex-wrap gap-1">
                           {r.ingredients.map((g2, k) => (
@@ -141,7 +149,8 @@ export function Recipes() {
               </Table>
             </div>
           </Card>
-        ))
+          );
+        })
       )}
 
       {RECIPE_NOTES.map((n) => (
@@ -154,8 +163,8 @@ export function Recipes() {
       <p className="text-xs text-muted-foreground">
         Transcribed once from the guild's blacksmith recipe document — this list ships with the app
         rather than syncing, so changes to the doc need a fresh extraction. The doc's own headings
-        say 97 and 152 recipes; it actually holds {RECIPES.length} across both stations, and every
-        one of them is here.
+        say 97 and 152 recipes for the first two stations; they actually hold 102 and 151.
+        All {RECIPES.length} are here, smelting included.
       </p>
     </div>
   );

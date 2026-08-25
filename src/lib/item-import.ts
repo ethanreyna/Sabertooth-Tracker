@@ -111,7 +111,11 @@ export function fromLedger(prices: Price[], known: Set<string>): Candidate[] {
  */
 export function fromRecipes(known: Set<string>): Candidate[] {
   const list: Candidate[] = RECIPES.map((r) => ({
-    name: r.name,
+    // The smelter's melt recipes are named for the route as well as the
+    // product — "Dwarven Metal Ingot — from Large Dwemer Strut" — because six
+    // scraps make the same ingot. That distinction belongs to the recipe; the
+    // item is just the ingot, and all six collapse onto it here.
+    name: r.name.split(' — from ')[0].trim(),
     category: canonCategory(r.category),
     each: 0,
   }));

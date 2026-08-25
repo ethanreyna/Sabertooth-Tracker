@@ -23,6 +23,7 @@ export interface Recipe {
 
 export const RECIPE_NOTES: string[] = [
   "Blacksmith Forge: New recipes only (152). The Blacksmith Forge also carries most Part I recipes with identical ingredients.",
+  "Smelter: Ore-to-ingot conversions. Fuel tiers: Poor Charcoal (iron/corundum), Charcoal (gold/silver/steel), Charcoal Briquette (orichalcum/moonstone), Coke (ebony/quicksilver/malachite). Dwemer scrap pieces melt into multiple Dwarven Metal Ingots each (3–5 depending on the piece).",
   "Item stats reflect the modded values shown in-game. All previously uncertain ingredient counts have been verified against clearer footage."
 ];
 
@@ -280,6 +281,22 @@ export const RECIPES: Recipe[] = [
   { station: "Blacksmith Forge", category: "Tools & Miscellaneous", name: "Nails", stat: 0, ingredients: [{ qty: 1, item: "Iron Ingot" }] },
   { station: "Blacksmith Forge", category: "Tools & Miscellaneous", name: "Pickaxe", stat: 6, ingredients: [{ qty: 1, item: "Iron Ingot" }] },
   { station: "Blacksmith Forge", category: "Tools & Miscellaneous", name: "Woodcutter's Axe", stat: 6, ingredients: [{ qty: 1, item: "Iron Ingot" }] },
+  { station: "Smelter", category: "Ingots & Refined Materials", name: "Corundum Ingot", stat: 0, ingredients: [{ qty: 8, item: "Corundum Ore" }, { qty: 8, item: "Poor Charcoal" }] },
+  { station: "Smelter", category: "Ingots & Refined Materials", name: "Ebony Ingot", stat: 0, ingredients: [{ qty: 2, item: "Ebony Ore" }, { qty: 2, item: "Coke" }] },
+  { station: "Smelter", category: "Ingots & Refined Materials", name: "Gold Ingot", stat: 0, ingredients: [{ qty: 6, item: "Gold Ore" }, { qty: 6, item: "Charcoal" }] },
+  { station: "Smelter", category: "Ingots & Refined Materials", name: "Iron Ingot", stat: 0, ingredients: [{ qty: 6, item: "Iron Ore" }, { qty: 6, item: "Poor Charcoal" }] },
+  { station: "Smelter", category: "Ingots & Refined Materials", name: "Orichalcum Ingot", stat: 0, ingredients: [{ qty: 6, item: "Orichalcum Ore" }, { qty: 6, item: "Charcoal Briquette" }] },
+  { station: "Smelter", category: "Ingots & Refined Materials", name: "Quicksilver Ingot", stat: 0, ingredients: [{ qty: 6, item: "Quicksilver Ore" }, { qty: 6, item: "Coke" }] },
+  { station: "Smelter", category: "Ingots & Refined Materials", name: "Refined Malachite", stat: 0, ingredients: [{ qty: 6, item: "Malachite Ore" }, { qty: 6, item: "Coke" }] },
+  { station: "Smelter", category: "Ingots & Refined Materials", name: "Refined Moonstone", stat: 0, ingredients: [{ qty: 6, item: "Moonstone Ore" }, { qty: 6, item: "Charcoal Briquette" }] },
+  { station: "Smelter", category: "Ingots & Refined Materials", name: "Silver Ingot", stat: 0, ingredients: [{ qty: 6, item: "Silver Ore" }, { qty: 6, item: "Charcoal" }] },
+  { station: "Smelter", category: "Ingots & Refined Materials", name: "Steel Ingot", stat: 0, ingredients: [{ qty: 3, item: "Corundum Ore" }, { qty: 3, item: "Iron Ore" }, { qty: 6, item: "Charcoal" }] },
+  { station: "Smelter", category: "Dwemer Scrap Melting", name: "Dwarven Metal Ingot \u2014 from Bent Dwemer Scrap Metal", stat: 0, ingredients: [{ qty: 1, item: "Bent Dwemer Scrap Metal" }] },
+  { station: "Smelter", category: "Dwemer Scrap Melting", name: "Dwarven Metal Ingot \u2014 from Large Decorative Dwemer Strut", stat: 0, ingredients: [{ qty: 1, item: "Large Decorative Dwemer Strut" }] },
+  { station: "Smelter", category: "Dwemer Scrap Melting", name: "Dwarven Metal Ingot \u2014 from Large Dwemer Plate Metal", stat: 0, ingredients: [{ qty: 1, item: "Large Dwemer Plate Metal" }] },
+  { station: "Smelter", category: "Dwemer Scrap Melting", name: "Dwarven Metal Ingot \u2014 from Large Dwemer Strut", stat: 0, ingredients: [{ qty: 1, item: "Large Dwemer Strut" }] },
+  { station: "Smelter", category: "Dwemer Scrap Melting", name: "Dwarven Metal Ingot \u2014 from Small Dwemer Plate Metal", stat: 0, ingredients: [{ qty: 1, item: "Small Dwemer Plate Metal" }] },
+  { station: "Smelter", category: "Dwemer Scrap Melting", name: "Dwarven Metal Ingot \u2014 from Solid Dwemer Metal", stat: 0, ingredients: [{ qty: 1, item: "Solid Dwemer Metal" }] },
 ];
 
 /** Weapons are rated by damage, everything else by armour. */

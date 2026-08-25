@@ -39,13 +39,33 @@ def read_lines(path):
     return [ln for ln in lines if ln != '']
 
 
+# The smelter tables have no rating to give, so they run two columns instead of
+# three: what you get, and what it takes. The Dwemer block inverts that — it
+# lists the scrap and what it melts into.
+PAIR_HEADERS = {
+    ('Product', 'Requires'): 'makes',
+    ('Scrap Piece', 'Melts Into'): 'melts',
+}
+
+
 def is_header(seq):
+    """A three-column header: Item / Armor|Damage|Dmg / Ingredients."""
     return (
         len(seq) == 3
         and seq[0] == 'Item'
         and seq[1] in STAT_HEADERS
         and seq[2] == 'Ingredients'
     )
+
+
+def pair_mode(seq):
+    """'makes', 'melts', or None for a two-column header."""
+    return PAIR_HEADERS.get(tuple(seq[:2])) if len(seq) >= 2 else None
+
+
+def block_starts(lines, i):
+    """True when a new table's header begins at i — either shape."""
+    return is_header(tuple(lines[i:i + 3])) or pair_mode(lines[i:i + 2]) is not None
 
 
 def parse_stat(raw):
@@ -85,6 +105,7 @@ records = []
 notes = []
 station = ''
 category = ''
+mode = 'stat'
 i = 0
 
 while i < len(lines):
@@ -94,19 +115,31 @@ while i < len(lines):
     if part:
         station = part.group(1).strip()
         # A station's own blurb sits under its heading; keep it as a note.
-        if i + 1 < len(lines) and not is_header(tuple(lines[i + 1:i + 4])):
+        if i + 1 < len(lines) and not block_starts(lines, i + 1):
             nxt = lines[i + 1]
             if len(nxt.split()) > 2 and not PART.match(nxt):
                 notes.append(f'{station}: {nxt}')
         category = ''
+        mode = 'stat'
         i += 1
         continue
 
-    # A header triple means the previous line was the category name.
+    # A header means the previous line was the category name.
     if ln == 'Item' and is_header(tuple(lines[i:i + 3])):
         if i > 0:
             category = lines[i - 1]
+        mode = 'stat'
         i += 3
+        continue
+
+    pm = pair_mode(lines[i:i + 2])
+    if pm:
+        if i > 0:
+            # "Dwemer Scrap Melting (→ Dwarven Metal Ingot)" — the parenthetical
+            # repeats what every name in the block already says.
+            category = re.sub(r'\s*\([^)]*\)\s*$', '', lines[i - 1]).strip()
+        mode = pm
+        i += 2
         continue
 
     # Not in a block yet (title / subtitle lines before the first header).
@@ -115,16 +148,40 @@ while i < len(lines):
         continue
 
     # The line before the next header is that block's category, not a record.
-    if is_header(tuple(lines[i + 1:i + 4])) or PART.match(lines[i + 1] if i + 1 < len(lines) else ''):
-        # Trailing prose after the last record, e.g. the closing note.
-        if len(ln.split()) > 6:
-            notes.append(ln)
+    if (i + 1 < len(lines)
+            and (block_starts(lines, i + 1) or PART.match(lines[i + 1]))):
         i += 1
         continue
 
     if is_prose(ln):
         notes.append(ln)
         i += 1
+        continue
+
+    if mode in ('makes', 'melts'):
+        second = lines[i + 1] if i + 1 < len(lines) else ''
+        if not second:
+            i += 1
+            continue
+
+        if mode == 'makes':
+            # "Iron Ingot" <- "6 Iron Ore, 6 Poor Charcoal"
+            name, ing = ln, second
+        else:
+            # "Bent Dwemer Scrap Metal" -> "→ Dwarven Metal Ingot". The product
+            # is what you are making, so it leads the name; several scraps make
+            # the same ingot, and a recipe name has to stay unique.
+            product = second.lstrip('→>-→ ').strip()
+            name, ing = f'{product} — from {ln}', ln
+
+        records.append({
+            'station': station,
+            'category': category,
+            'name': name,
+            'stat': 0,
+            'ingredients': parse_ingredients(ing),
+        })
+        i += 2
         continue
 
     name = ln
