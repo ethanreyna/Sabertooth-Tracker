@@ -277,7 +277,7 @@ export function Suggest({ cfg, memberNames, itemNames }: {
 
                 <Field label="Enchantment" htmlFor="sg-en-ench">
                   <NameField id="sg-en-ench" name="enchantment" options={ENCHANTMENTS}
-                    placeholder="e.g. Fortify Smithing" />
+                    placeholder="e.g. Fortify Magicka I" />
                 </Field>
 
                 <Field label="Anything the enchanter should know (optional)" htmlFor="sg-en-notes">

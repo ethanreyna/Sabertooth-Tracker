@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "dev:api": "wrangler dev",
+    "dev:api:offline": "wrangler dev -c wrangler.local.toml",
     "build": "vite build",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json",
     "preview": "pnpm build && wrangler dev",

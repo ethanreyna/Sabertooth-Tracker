@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { CircleCheck, Sparkles, Trash2, Undo2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, CircleCheck, Pencil, Sparkles, Trash2, Undo2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -27,12 +28,34 @@ export function Enchants({ db, update, readOnly, memberNames }: {
   const [tab, setTab] = useState('waiting');
   const [err, setErr] = useState('');
   const [seq, setSeq] = useState(0);
+  const [editing, setEditing] = useState<EnchantRequest | null>(null);
+  const [editErr, setEditErr] = useState('');
 
   const itemNames = catalogue(db.items).map((i) => i.name);
 
-  const sorted = db.enchants.slice().sort((a, b) => (a.at || '').localeCompare(b.at || ''));
-  const waiting = sorted.filter((e) => e.status === 'waiting');
-  const done = sorted.filter((e) => e.status === 'done').reverse();
+  // The array itself is the queue: entries were always appended in date order,
+  // and keeping position in the array (rather than sorting by a timestamp)
+  // is what lets the arrows below reorder the queue by hand.
+  const waiting = db.enchants.filter((e) => e.status === 'waiting');
+  const done = db.enchants.filter((e) => e.status === 'done')
+    .sort((a, b) => (b.doneAt || b.at || '').localeCompare(a.doneAt || a.at || ''));
+
+  // Lifetime tally per person, counted off the records themselves — so
+  // deleting an entry from the Enchanted tab also removes it from the tally.
+  const totalsMap = new Map<string, { name: string; done: number; waiting: number; lastAt: string }>();
+  for (const e of db.enchants) {
+    const key = e.who.trim().toLowerCase();
+    const t = totalsMap.get(key) ?? { name: e.who.trim(), done: 0, waiting: 0, lastAt: '' };
+    if (e.status === 'done') {
+      t.done += 1;
+      if ((e.doneAt || '') > t.lastAt) t.lastAt = e.doneAt || '';
+    } else {
+      t.waiting += 1;
+    }
+    totalsMap.set(key, t);
+  }
+  const totals = [...totalsMap.values()]
+    .sort((a, b) => b.done - a.done || a.name.localeCompare(b.name));
 
   const add = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -94,6 +117,47 @@ export function Enchants({ db, update, readOnly, memberNames }: {
     update((d) => { d.enchants = d.enchants.filter((x) => x.id !== e.id); });
   };
 
+  /** Swap a waiting entry with its neighbour in the queue. Done entries mixed
+   *  into the array keep their slots; only the two waiting rows trade places. */
+  const move = (id: string, dir: -1 | 1) => update((d) => {
+    const ids = d.enchants.filter((x) => x.status === 'waiting').map((x) => x.id);
+    const i = ids.indexOf(id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    const a = d.enchants.findIndex((x) => x.id === ids[i]);
+    const b = d.enchants.findIndex((x) => x.id === ids[j]);
+    [d.enchants[a], d.enchants[b]] = [d.enchants[b], d.enchants[a]];
+  });
+
+  const saveEdit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editing) return;
+    const f = new FormData(e.currentTarget);
+    const who = String(f.get('who') || '').trim();
+    const item = String(f.get('item') || '').trim();
+    const enchantment = String(f.get('enchantment') || '').trim();
+    const notes = String(f.get('notes') || '').trim();
+    if (!who || !item) return;
+
+    // Handing a waiting order to someone who already holds a place would give
+    // them two — the same rule as adding, minus the entry being edited.
+    if (editing.status === 'waiting') {
+      const held = db.enchants.find((x) => x.id !== editing.id && x.status === 'waiting'
+        && x.who.trim().toLowerCase() === who.toLowerCase());
+      if (held) {
+        setEditErr(`${who} already has ${held.item} on the list — only one at a time.`);
+        return;
+      }
+    }
+
+    setEditErr('');
+    setEditing(null);
+    update((d) => {
+      const t = d.enchants.find((x) => x.id === editing.id);
+      if (t) { t.who = who; t.item = item; t.enchantment = enchantment; t.notes = notes; }
+    });
+  };
+
   const queue = (list: EnchantRequest[], numbered: boolean) => (
     <Card className="overflow-hidden py-0">
       <Table>
@@ -104,7 +168,7 @@ export function Enchants({ db, update, readOnly, memberNames }: {
             <TableHead>Item</TableHead>
             <TableHead>Enchantment</TableHead>
             <TableHead className="w-28">Added</TableHead>
-            {!readOnly && <TableHead className="w-20" />}
+            {!readOnly && <TableHead className={numbered ? 'w-36' : 'w-24'} />}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -129,6 +193,28 @@ export function Enchants({ db, update, readOnly, memberNames }: {
               {!readOnly && (
                 <TableCell>
                   <div className="flex justify-end gap-0.5">
+                    {e.status === 'waiting' && (
+                      <>
+                        <Button
+                          variant="ghost" size="icon-xs" aria-label={`Move ${e.item} up the queue`}
+                          disabled={i === 0} onClick={() => move(e.id, -1)}
+                        >
+                          <ChevronUp />
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon-xs" aria-label={`Move ${e.item} down the queue`}
+                          disabled={i === list.length - 1} onClick={() => move(e.id, 1)}
+                        >
+                          <ChevronDown />
+                        </Button>
+                      </>
+                    )}
+                    <Button
+                      variant="ghost" size="icon-xs" aria-label={`Edit ${e.item}`}
+                      onClick={() => { setEditErr(''); setEditing(e); }}
+                    >
+                      <Pencil />
+                    </Button>
                     {e.status === 'waiting' ? (
                       <Button
                         variant="ghost" size="icon-xs" aria-label={`Mark ${e.item} enchanted`}
@@ -182,7 +268,7 @@ export function Enchants({ db, update, readOnly, memberNames }: {
                 </Field>
                 <Field label="Enchantment" htmlFor="en-ench">
                   <NameField id="en-ench" name="enchantment" options={ENCHANTMENTS}
-                    placeholder="e.g. Fortify Smithing" />
+                    placeholder="e.g. Fortify Magicka I" />
                 </Field>
               </div>
               <div className="flex items-end gap-2">
@@ -207,11 +293,12 @@ export function Enchants({ db, update, readOnly, memberNames }: {
           <TabsTrigger value="done">
             Enchanted{done.length > 0 && <span className="ml-1.5 text-muted-foreground">{done.length}</span>}
           </TabsTrigger>
+          <TabsTrigger value="totals">Totals</TabsTrigger>
         </TabsList>
 
         <TabsContent value="waiting" className="mt-4">
           {waiting.length === 0
-            ? <EmptyState>Nobody is waiting. Items go out in the order they were added.</EmptyState>
+            ? <EmptyState>Nobody is waiting. New items join the back of the queue; the arrows move them.</EmptyState>
             : queue(waiting, true)}
         </TabsContent>
 
@@ -220,7 +307,73 @@ export function Enchants({ db, update, readOnly, memberNames }: {
             ? <EmptyState>Nothing has been enchanted yet.</EmptyState>
             : queue(done, false)}
         </TabsContent>
+
+        <TabsContent value="totals" className="mt-4">
+          {totals.length === 0
+            ? <EmptyState>Nothing on the books yet — totals build up as items are enchanted.</EmptyState>
+            : (
+              <Card className="overflow-hidden py-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Member</TableHead>
+                      <TableHead className="w-28">Enchanted</TableHead>
+                      <TableHead className="w-28">Waiting</TableHead>
+                      <TableHead className="w-36">Last enchanted</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {totals.map((t) => (
+                      <TableRow key={t.name.toLowerCase()}>
+                        <TableCell className="font-medium">{t.name}</TableCell>
+                        <TableCell className="font-semibold tabular-nums">{t.done}</TableCell>
+                        <TableCell className="text-muted-foreground tabular-nums">{t.waiting || ''}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {t.lastAt ? ago(t.lastAt) : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            )}
+        </TabsContent>
       </Tabs>
+
+      {editing && (
+        <Dialog open onOpenChange={(open) => { if (!open) setEditing(null); }}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Edit enchantment order</DialogTitle>
+            </DialogHeader>
+
+            {editErr && <Alert variant="destructive"><AlertDescription>{editErr}</AlertDescription></Alert>}
+
+            <form onSubmit={saveEdit} className="space-y-4">
+              <Field label="Whose item" htmlFor="en-edit-who">
+                <NameField id="en-edit-who" name="who" options={memberNames} required
+                  defaultValue={editing.who} placeholder="Pick a member or write in" />
+              </Field>
+              <Field label="Item" htmlFor="en-edit-item">
+                <NameField id="en-edit-item" name="item" options={itemNames} required
+                  defaultValue={editing.item} placeholder="Search items, or write one in" />
+              </Field>
+              <Field label="Enchantment" htmlFor="en-edit-ench">
+                <NameField id="en-edit-ench" name="enchantment" options={ENCHANTMENTS}
+                  defaultValue={editing.enchantment} placeholder="e.g. Fortify Magicka I" />
+              </Field>
+              <Field label="Notes (optional)" htmlFor="en-edit-notes">
+                <Input id="en-edit-notes" name="notes" defaultValue={editing.notes}
+                  placeholder="Soul gem provided, charge level, anything else" />
+              </Field>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
+                <Button type="submit">Save order</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

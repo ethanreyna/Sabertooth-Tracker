@@ -236,19 +236,18 @@ export interface EnchantRequest {
   doneAt: string;
 }
 
-/** Offered as suggestions; anything can be written in. */
+/**
+ * Offered as suggestions; anything can be written in. This is what the guild's
+ * enchanter can actually do in Keizaal right now — the novice tier, armour and
+ * clothes only — not the full Skyrim table. Grows as new tiers unlock.
+ */
 export const ENCHANTMENTS = [
-  'Absorb Health', 'Absorb Magicka', 'Absorb Stamina', 'Banish', 'Chaos Damage',
-  'Fear', 'Fiery Soul Trap', 'Fire Damage', 'Frost Damage', 'Paralyze', 'Shock Damage',
-  'Silent Moons', 'Soul Trap', 'Turn Undead',
-  'Fortify Alchemy', 'Fortify Alteration', 'Fortify Archery', 'Fortify Barter',
-  'Fortify Block', 'Fortify Carry Weight', 'Fortify Conjuration', 'Fortify Destruction',
-  'Fortify Health', 'Fortify Heavy Armor', 'Fortify Illusion', 'Fortify Light Armor',
-  'Fortify Lockpicking', 'Fortify Magicka', 'Fortify Magicka Regen', 'Fortify Marksman',
-  'Fortify One-Handed', 'Fortify Pickpocket', 'Fortify Restoration', 'Fortify Smithing',
-  'Fortify Sneak', 'Fortify Stamina', 'Fortify Stamina Regen', 'Fortify Two-Handed',
-  'Fortify Unarmed', 'Muffle', 'Resist Disease', 'Resist Fire', 'Resist Frost',
-  'Resist Magic', 'Resist Poison', 'Resist Shock', 'Waterbreathing',
+  'Fortify Magicka I (+20 Magicka)',
+  'Fortify Stamina I (+20 Stamina)',
+  'Fortify Magicka Regen I (+40% Regen)',
+  'Fortify Stamina Regen I (+20% Regen)',
+  'Fortify Health Regen I (+10% Regen)',
+  'Fortify Carry Weight I (+25 Carry Weight)',
 ];
 
 export interface Member {
