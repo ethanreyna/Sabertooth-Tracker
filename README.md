@@ -113,6 +113,19 @@ A deploy never touches the `GUILD_PASSWORD` secret — secrets live on the Worke
 not in the build — so pushing can't change who is able to sign in. The D1
 database and R2 bucket must already exist (steps above) or the deploy fails.
 
+Changes reach `main` as pull requests rather than direct pushes, so every
+release has a diff to look at. `.github/workflows/auto-merge.yml` approves and
+merges a PR opened by the repo owner; anyone else's waits for a human. Pull
+requests run the same install, typecheck and build as a deploy, but stop before
+`wrangler deploy` — only `main` deploys.
+
+For an auto-merge to actually deploy, add a third secret, `AUTOMERGE_TOKEN`: a
+personal access token with `contents: write` and `pull_requests: write` on this
+repo. A merge made with the built-in `GITHUB_TOKEN` deliberately raises no push
+event, so Deploy would never run; the workflow warns in its log when the token
+is missing. Turning on **Allow auto-merge** plus branch protection makes it wait
+for the build instead of merging straight away.
+
 Cloudflare's own Git integration (**Workers → Create → Import a repository**,
 build `pnpm install --frozen-lockfile=false && pnpm build`, deploy
 `npx wrangler deploy`) does the same job without putting a token in GitHub. Use

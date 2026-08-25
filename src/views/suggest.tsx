@@ -10,7 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Field, NameField, Picker, choices } from '@/components/bits';
 import type { Choice } from '@/components/bits';
 import { postSuggestion } from '@/sync';
-import { ENCHANTMENTS } from '@/types';
 import type { SuggestionKind, SyncCfg } from '@/types';
 
 const TAGS = ['Resource collection', 'Kill', 'Arrest', 'Guard', 'Escort', 'Delivery', 'Other'];
@@ -36,8 +35,8 @@ const SENT: Record<SuggestionKind, string> = {
  * each submission is appended as a pending suggestion that a member approves or
  * denies, so the guest never needs (or gets) write access to the records.
  */
-export function Suggest({ cfg, memberNames, itemNames }: {
-  cfg: SyncCfg; memberNames: string[]; itemNames: string[];
+export function Suggest({ cfg, memberNames, itemNames, enchantmentNames }: {
+  cfg: SyncCfg; memberNames: string[]; itemNames: string[]; enchantmentNames: string[];
 }) {
   const [tab, setTab] = useState<SuggestionKind>('job');
   const [tag, setTag] = useState(TAGS[0]);
@@ -276,7 +275,7 @@ export function Suggest({ cfg, memberNames, itemNames }: {
                 </div>
 
                 <Field label="Enchantment" htmlFor="sg-en-ench">
-                  <NameField id="sg-en-ench" name="enchantment" options={ENCHANTMENTS}
+                  <NameField id="sg-en-ench" name="enchantment" options={enchantmentNames}
                     placeholder="e.g. Fortify Magicka I" />
                 </Field>
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Download, Pencil, Trash2 } from 'lucide-react';
+import { Download, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -7,7 +7,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState, Picker, TonedBadge } from '@/components/bits';
+import { enchantments } from '@/lib/enchantments';
 import { ITEMS } from '@/items';
 import { canonCategory, fromLedger, fromRecipes, norm } from '@/lib/item-import';
 import type { Candidate } from '@/lib/item-import';
@@ -196,7 +198,7 @@ function rows(db: DB): Row[] {
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function Items({ db, update, readOnly, onEdit }: {
+function ItemList({ db, update, readOnly, onEdit }: {
   db: DB;
   update: (fn: (d: DB) => void) => void;
   readOnly: boolean;
@@ -337,5 +339,158 @@ export function Items({ db, update, readOnly, onEdit }: {
 
       {all.length === 0 ? <EmptyState>No items yet.</EmptyState> : table(shown)}
     </div>
+  );
+}
+
+/** Built-in and guild enchantments, merged, with the guild's editable. */
+function EnchantmentList({ db, update, readOnly, onEdit }: {
+  db: DB;
+  update: (fn: (d: DB) => void) => void;
+  readOnly: boolean;
+  onEdit: (id: string) => void;
+}) {
+  const [q, setQ] = useState('');
+  const rowsAll = useMemo(() => enchantments(db.enchantments), [db.enchantments]);
+
+  const needle = q.trim().toLowerCase();
+  const shown = rowsAll.filter((e) => !needle
+    || e.name.toLowerCase().includes(needle)
+    || e.tier.toLowerCase().includes(needle)
+    || e.notes.toLowerCase().includes(needle));
+
+  // Tier order comes from the list itself, so a new tier needs no code change.
+  const groups: Array<{ tier: string; rows: typeof rowsAll }> = [];
+  for (const e of shown) {
+    const tier = e.tier || 'Other';
+    const last = groups.find((g) => g.tier === tier);
+    if (last) last.rows.push(e);
+    else groups.push({ tier, rows: [e] });
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <Input
+          placeholder="Search enchantments" value={q} onChange={(e) => setQ(e.target.value)}
+          className="h-8 w-64 max-sm:w-full"
+        />
+        {!readOnly && (
+          <Button variant="outline" size="sm" onClick={() => onEdit('')}>
+            <Plus />Add an enchantment
+          </Button>
+        )}
+        <p className="text-xs text-muted-foreground">
+          What the guild&rsquo;s enchanter can actually do &mdash; not the full Skyrim table. These
+          are what the waitlist and guest requests offer.
+        </p>
+      </div>
+
+      {groups.length === 0 ? (
+        <EmptyState>Nothing matches &ldquo;{q}&rdquo;.</EmptyState>
+      ) : groups.map((g) => (
+        <Card key={g.tier} className="overflow-hidden py-0">
+          <div className="flex items-center gap-2 border-b bg-muted/40 px-4 py-2">
+            <h2 className="text-sm font-semibold">{g.tier}</h2>
+            {g.rows[0]?.cost && (
+              <span className="text-xs text-muted-foreground">{g.rows[0].cost}</span>
+            )}
+            <span className="ml-auto text-xs text-muted-foreground">{g.rows.length}</span>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Enchantment</TableHead>
+                <TableHead className="w-48">Cost</TableHead>
+                <TableHead>Notes</TableHead>
+                <TableHead className="w-28">Source</TableHead>
+                {!readOnly && <TableHead className="w-20" />}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {g.rows.map((e) => (
+                <TableRow key={e.name}>
+                  <TableCell className="font-medium">{e.name}</TableCell>
+                  <TableCell className="text-muted-foreground">{e.cost || '—'}</TableCell>
+                  <TableCell className="max-w-0 truncate text-muted-foreground">{e.notes}</TableCell>
+                  <TableCell>
+                    <TonedBadge tone={e.custom ? 'blue' : 'neutral'}>
+                      {e.custom ? 'Guild' : 'Built in'}
+                    </TonedBadge>
+                  </TableCell>
+                  {!readOnly && (
+                    <TableCell className={cn('text-right', !e.custom && 'opacity-0')}>
+                      {e.custom && (
+                        <div className="flex justify-end gap-0.5">
+                          <Button
+                            variant="ghost" size="icon-xs" aria-label={`Edit ${e.name}`}
+                            onClick={() => onEdit(e.id)}
+                          >
+                            <Pencil />
+                          </Button>
+                          <Button
+                            variant="ghost" size="icon-xs" aria-label={`Remove ${e.name}`}
+                            onClick={() => {
+                              if (confirm(`Remove ${e.name} from the enchantment list?`)) {
+                                update((d) => {
+                                  d.enchantments = d.enchantments.filter((x) => x.id !== e.id);
+                                });
+                              }
+                            }}
+                          >
+                            <Trash2 />
+                          </Button>
+                        </div>
+                      )}
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+export type DatabaseTab = 'items' | 'enchantments';
+
+/**
+ * The guild's reference data: what exists, and what can be done to it.
+ *
+ * Both lists work the same way — a built-in set the app ships with, plus the
+ * guild's own additions on top, with only the additions editable. Everything
+ * here feeds the pickers elsewhere, so this is where a missing option gets
+ * fixed rather than being written in over and over.
+ */
+export function Database({ db, update, readOnly, tab, onTabChange, onEditItem, onEditEnchantment }: {
+  db: DB;
+  update: (fn: (d: DB) => void) => void;
+  readOnly: boolean;
+  tab: DatabaseTab;
+  onTabChange: (t: DatabaseTab) => void;
+  onEditItem: (id: string) => void;
+  onEditEnchantment: (id: string) => void;
+}) {
+  const enchCount = enchantments(db.enchantments).length;
+
+  return (
+    <Tabs value={tab} onValueChange={(v) => onTabChange(v === 'enchantments' ? 'enchantments' : 'items')}>
+      <TabsList>
+        <TabsTrigger value="items">
+          Items<span className="ml-1.5 text-muted-foreground">{ITEMS.length + db.items.length}</span>
+        </TabsTrigger>
+        <TabsTrigger value="enchantments">
+          Enchantments<span className="ml-1.5 text-muted-foreground">{enchCount}</span>
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="items" className="mt-4">
+        <ItemList db={db} update={update} readOnly={readOnly} onEdit={onEditItem} />
+      </TabsContent>
+      <TabsContent value="enchantments" className="mt-4">
+        <EnchantmentList db={db} update={update} readOnly={readOnly} onEdit={onEditEnchantment} />
+      </TabsContent>
+    </Tabs>
   );
 }

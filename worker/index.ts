@@ -34,7 +34,7 @@ const EMPTY_DB = {
   settings: { guildCutPct: 20 },
   members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [],
   ledger: [], bankItems: [], suggestions: [], items: [],
-  enchants: [],
+  enchantments: [], enchants: [],
 };
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_VISION_BYTES = 4 * 1024 * 1024;

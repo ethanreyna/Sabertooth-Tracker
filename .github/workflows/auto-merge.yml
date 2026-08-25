@@ -1,0 +1,50 @@
+# Approves and merges pull requests opened by the repo owner.
+#
+# The point is that everything reaches main as a reviewable PR — a diff, a
+# title, a place for comments — without anyone having to click Merge. Anyone
+# else's PR is left alone for a human to look at.
+name: Auto-merge
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    # Only the owner's own PRs, and never a draft.
+    if: >-
+      github.event.pull_request.user.login == github.repository_owner
+      && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      REPO: ${{ github.repository }}
+    steps:
+      # GITHUB_TOKEN can approve here because the review comes from
+      # github-actions[bot], not from the author — GitHub refuses self-approval.
+      - name: Approve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr review "$PR" --repo "$REPO" --approve \
+            --body "Opened by the repo owner — approved automatically." || true
+
+      # A merge made with GITHUB_TOKEN raises no push event, so Deploy would
+      # never run. AUTOMERGE_TOKEN is a personal access token, which does.
+      - name: Merge
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMERGE_TOKEN || secrets.GITHUB_TOKEN }}
+          HAS_PAT: ${{ secrets.AUTOMERGE_TOKEN != '' }}
+        run: |
+          if [ "$HAS_PAT" != "true" ]; then
+            echo "::warning::AUTOMERGE_TOKEN is not set, so this merge will not" \
+                 "trigger Deploy. Add it as a repository secret, or deploy by hand."
+          fi
+          # --auto waits for required checks, but only where branch protection
+          # says which checks are required. Without it, merge straight away.
+          gh pr merge "$PR" --repo "$REPO" --squash --delete-branch --auto \
+            || gh pr merge "$PR" --repo "$REPO" --squash --delete-branch

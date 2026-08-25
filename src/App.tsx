@@ -18,7 +18,8 @@ import { Recipes } from '@/views/recipes';
 import { MapView } from '@/views/map';
 import { Suggestions } from '@/views/suggestions';
 import { Suggest } from '@/views/suggest';
-import { Items } from '@/views/items';
+import { Database } from '@/views/items';
+import type { DatabaseTab } from '@/views/items';
 import { Run } from '@/views/run';
 import { Enchants } from '@/views/enchants';
 import { Settings as SettingsView } from '@/views/settings';
@@ -29,6 +30,7 @@ import type { AddMode } from '@/views/map';
 import type { MapKind } from '@/components/map-canvas';
 import { emptyDb } from '@/data';
 import { catalogue } from '@/items';
+import { enchantmentNames } from '@/lib/enchantments';
 import { applyTheme, loadTheme } from '@/theme';
 import {
   AuthError, ConflictError, ReadOnlyError, clearLocal, loadCfg, loadLocal, pullDb, pushDb, saveCfg, saveLocal,
@@ -54,7 +56,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'ledger', label: 'Ledger', icon: <Scale /> },
   { id: 'recipes', label: 'Recipes', icon: <Hammer /> },
   { id: 'dungeons', label: 'Dungeons', icon: <Skull /> },
-  { id: 'items', label: 'Items', icon: <Boxes /> },
+  { id: 'items', label: 'Database', icon: <Boxes /> },
   { id: 'settings', label: 'Settings', icon: <Users /> },
   { id: 'suggestions', label: 'Suggestions', icon: <Inbox /> },
   { id: 'run', label: 'Loot Tracker', icon: <Swords /> },
@@ -64,7 +66,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
 
 const TITLES: Record<View, string> = {
   dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', map: 'Map',
-  bank: 'Bank', ledger: 'Ledger', items: 'Item database', run: 'Loot Tracker', enchants: 'Enchanting waitlist', recipes: 'Recipes',
+  bank: 'Bank', ledger: 'Ledger', items: 'Database', run: 'Loot Tracker', enchants: 'Enchanting waitlist', recipes: 'Recipes',
   settings: 'Settings', suggestions: 'Guest suggestions', suggest: 'Suggest a change',
 };
 
@@ -77,7 +79,12 @@ const ACTIONS: Partial<Record<View, Action[]>> = {
   dungeons: [{ label: 'New dungeon', modal: 'dungeon' }],
   map: [{ label: 'New point', modal: 'spot' }],
   bank: [{ label: 'New item', modal: 'bankItem' }, { label: 'New entry', modal: 'ledger' }],
+};
+
+/** The Database page holds two lists behind tabs, so its button depends on which. */
+const DATABASE_ACTIONS: Record<DatabaseTab, Action[]> = {
   items: [{ label: 'Add item', modal: 'item' }],
+  enchantments: [{ label: 'Add enchantment', modal: 'enchantment' }],
 };
 
 /** Settings holds two lists behind tabs, so its button depends on which. */
@@ -99,6 +106,8 @@ export default function App() {
   const [editDungeonId, setEditDungeonId] = useState<string | null>(null);
   const [editSpotId, setEditSpotId] = useState<string | null>(null);
   const [editItemId, setEditItemId] = useState<string | null>(null);
+  const [editEnchantmentId, setEditEnchantmentId] = useState<string | null>(null);
+  const [dbTab, setDbTab] = useState<DatabaseTab>('items');
   // A job or storage record read off a pasted board post, waiting to be
   // reviewed in the normal form. Never saved straight from the importer.
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -345,7 +354,9 @@ export default function App() {
     : NAV.filter((n) => n.id !== 'suggest');
   const actions = readOnly
     ? undefined
-    : view === 'settings' ? SETTINGS_ACTIONS[settingsTab] : ACTIONS[view];
+    : view === 'settings' ? SETTINGS_ACTIONS[settingsTab]
+      : view === 'items' ? DATABASE_ACTIONS[dbTab]
+        : ACTIONS[view];
   const pending = db.suggestions.filter((s) => s.status === 'pending').length;
 
   return (
@@ -518,16 +529,25 @@ export default function App() {
             <Bank db={db} income={income} spend={spend} readOnly={readOnly} update={update} />
           )}
           {view === 'suggestions' && <Suggestions db={db} update={update} memberNames={memberNames} />}
-          {view === 'suggest' && <Suggest cfg={cfg} memberNames={memberNames} itemNames={itemNames} />}
+          {view === 'suggest' && <Suggest
+              cfg={cfg} memberNames={memberNames} itemNames={itemNames}
+              enchantmentNames={enchantmentNames(db)}
+            />}
           {view === 'ledger' && <Prices />}
           {view === 'run' && <Run db={db} memberNames={memberNames} />}
           {view === 'enchants' && (
             <Enchants db={db} update={update} readOnly={readOnly} memberNames={memberNames} />
           )}
           {view === 'items' && (
-            <Items
+            <Database
               db={db} update={update} readOnly={readOnly}
-              onEdit={(id) => { setEditItemId(id); setModal('item'); }}
+              tab={dbTab} onTabChange={setDbTab}
+              onEditItem={(id: string) => { setEditItemId(id); setModal('item'); }}
+              // An empty id is "new one", so Add and Edit share a path.
+              onEditEnchantment={(id: string) => {
+                setEditEnchantmentId(id || null);
+                setModal('enchantment');
+              }}
             />
           )}
           {view === 'recipes' && <Recipes />}
@@ -561,13 +581,13 @@ export default function App() {
       {modal && modal !== 'import' && (!readOnly || modal === 'sync') && (
 
         <Modals
-          key={`${modal}:${editRoleId ?? editJobId ?? editBarrelId ?? editDungeonId ?? editSpotId ?? editItemId ?? (draft ? 'draft' : 'new')}`}
+          key={`${modal}:${editRoleId ?? editJobId ?? editBarrelId ?? editDungeonId ?? editSpotId ?? editItemId ?? editEnchantmentId ?? (draft ? 'draft' : 'new')}`}
           modal={modal}
           close={() => {
             setModal(null);
             setEditRoleId(null); setEditJobId(null);
             setEditBarrelId(null); setEditDungeonId(null); setEditSpotId(null);
-            setEditItemId(null); setDraft(null);
+            setEditItemId(null); setEditEnchantmentId(null); setDraft(null);
             setNewSpotAt(null); setNewDungeonAt(null); setNewSpotKind('');
           }}
           roles={db.roles}
@@ -579,6 +599,7 @@ export default function App() {
           editDungeon={db.dungeons.find((g) => g.id === editDungeonId) ?? null}
           editSpot={db.spots.find((sp) => sp.id === editSpotId) ?? null}
           editItem={db.items.find((i) => i.id === editItemId) ?? null}
+          editEnchantment={db.enchantments.find((e) => e.id === editEnchantmentId) ?? null}
           customItems={db.items}
           draftJob={draft?.kind === 'job' ? draft : null}
           draftBarrel={draft?.kind === 'barrel' ? draft : null}
