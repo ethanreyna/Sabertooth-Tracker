@@ -238,16 +238,27 @@ export interface EnchantRequest {
 
 /**
  * Offered as suggestions; anything can be written in. This is what the guild's
- * enchanter can actually do in Keizaal right now — the novice tier, armour and
- * clothes only — not the full Skyrim table. Grows as new tiers unlock.
+ * enchanter can actually do in Keizaal right now — not the full Skyrim table.
+ * Grows as new tiers unlock. Costs: Novice (I) 80 filled soul gems,
+ * Advanced (II) 160.
  */
 export const ENCHANTMENTS = [
+  // Novice — 80 filled soul gems
   'Fortify Magicka I (+20 Magicka)',
   'Fortify Stamina I (+20 Stamina)',
   'Fortify Magicka Regen I (+40% Regen)',
   'Fortify Stamina Regen I (+20% Regen)',
   'Fortify Health Regen I (+10% Regen)',
   'Fortify Carry Weight I (+25 Carry Weight)',
+  // Advanced — 160 filled soul gems
+  'Fortify Magicka II (+30 Magicka)',
+  'Fortify Stamina II (+30 Stamina)',
+  'Fortify Magicka Regen II (+60% Regen)',
+  'Fortify Stamina Regen II (+30% Regen)',
+  'Fortify Health Regen II (+20% Regen)',
+  'Fortify Carry Weight II (+30 Carry Weight)',
+  'Water Breathing II (Breathe Underwater)',
+  'Soul Trap II (Allows soul capture)',
 ];
 
 export interface Member {
