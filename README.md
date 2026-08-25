@@ -95,15 +95,28 @@ pnpm deploy                 # or let the GitHub integration do it (below)
 
 ### Deploying from GitHub
 
-In the Cloudflare dashboard, connect this repo under **Workers → Create → Import
-a repository**, then set:
+`.github/workflows/deploy.yml` builds and deploys on every push to `main`, and
+can be re-run by hand from the repo's **Actions** tab. It needs two repository
+secrets — **Settings → Secrets and variables → Actions → New repository
+secret**:
 
-- **Build command:** `pnpm install --frozen-lockfile=false && pnpm build`
-- **Deploy command:** `npx wrangler deploy`
+| Secret | Where it comes from |
+| --- | --- |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare → My Profile → API Tokens → Create Token → **Edit Cloudflare Workers** |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare → Workers & Pages → Account details |
 
-Every push to `main` then builds and deploys automatically. The D1 database, R2
-bucket, and `GUILD_PASSWORD` secret must already exist (steps above) or the
-deploy will fail.
+Scope the token to this account only. It needs Workers Scripts: Edit, plus
+Account Settings: Read; the D1, R2 and Workers AI bindings are resolved from
+`wrangler.toml` at deploy time and need no extra permission to attach.
+
+A deploy never touches the `GUILD_PASSWORD` secret — secrets live on the Worker,
+not in the build — so pushing can't change who is able to sign in. The D1
+database and R2 bucket must already exist (steps above) or the deploy fails.
+
+Cloudflare's own Git integration (**Workers → Create → Import a repository**,
+build `pnpm install --frozen-lockfile=false && pnpm build`, deploy
+`npx wrangler deploy`) does the same job without putting a token in GitHub. Use
+one or the other, not both, or two builds race for the same Worker.
 
 ## Reward splits
 

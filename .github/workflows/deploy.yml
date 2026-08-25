@@ -1,0 +1,47 @@
+# Builds and deploys the tracker whenever main moves.
+#
+# Deploying is `pnpm build` (Vite → dist/) then `wrangler deploy`, which uploads
+# dist/ as the Worker's static assets and worker/index.ts as its code. Bindings
+# come from wrangler.toml; the GUILD_PASSWORD secret lives on the Worker and is
+# never touched by a deploy, so a push can't disturb who can sign in.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  # So a deploy can be re-run from the Actions tab without an empty commit.
+  workflow_dispatch:
+
+# A newer push should win rather than race an older one onto the same Worker.
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Typecheck first: a deploy that compiles but doesn't type-check is a
+      # broken page nobody asked for.
+      - run: pnpm typecheck
+
+      - run: pnpm build
+
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
