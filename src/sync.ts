@@ -338,6 +338,7 @@ export function normalizeDb(raw: unknown): DB {
         id: s(x.id) || Math.random().toString(36).slice(2, 10),
         name: s(x.name), location: s(x.location),
         recommended: Math.max(0, n(x.recommended, 1)),
+        chests: Math.min(20, Math.max(0, Math.round(n(x.chests)))),
         difficulty: s(x.difficulty), notes: s(x.notes),
         x: coordOrEmpty(x.x), y: coordOrEmpty(x.y),
         imgs: arr(x.imgs).map((u) => s(u)).filter(Boolean),

@@ -81,6 +81,8 @@ export interface Dungeon {
   name: string;
   location: string;
   recommended: number; // suggested party size
+  /** Lootable chests inside — usually one to three. 0 means nobody has counted. */
+  chests: number;
   difficulty: string;
   /** Skyrim world coordinates, blank when nobody has placed it yet. */
   x: string;

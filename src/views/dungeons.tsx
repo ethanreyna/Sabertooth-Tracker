@@ -1,4 +1,4 @@
-import { ImageIcon, MapPin, MapPinPlus, Pencil, Trash2, Users } from 'lucide-react';
+import { ImageIcon, MapPin, MapPinPlus, Package, Pencil, Trash2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState, TonedBadge } from '@/components/bits';
@@ -85,12 +85,22 @@ export function Dungeons({ db, update, readOnly, onEdit, onPlace }: {
               </p>
             )}
 
-            <p className="flex items-center gap-1.5 text-xs">
-              <Users className="size-3 shrink-0 text-muted-foreground" />
-              <span className="font-medium">
-                {g.recommended > 0 ? `${g.recommended} recommended` : 'Party size unknown'}
-              </span>
-            </p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+              <p className="flex items-center gap-1.5">
+                <Users className="size-3 shrink-0 text-muted-foreground" />
+                <span className="font-medium">
+                  {g.recommended > 0 ? `${g.recommended} recommended` : 'Party size unknown'}
+                </span>
+              </p>
+              <p className="flex items-center gap-1.5">
+                <Package className="size-3 shrink-0 text-muted-foreground" />
+                <span className={g.chests > 0 ? 'font-medium' : 'text-muted-foreground'}>
+                  {g.chests > 0
+                    ? `${g.chests} chest${g.chests === 1 ? '' : 's'}`
+                    : 'chests not counted'}
+                </span>
+              </p>
+            </div>
 
             {g.notes && <p className="text-xs whitespace-pre-wrap">{g.notes}</p>}
 

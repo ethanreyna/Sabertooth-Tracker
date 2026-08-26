@@ -329,14 +329,15 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMo
         }),
       });
       marker.bindTooltip(
-        `${esc(g.name)}${g.recommended ? ` · ${g.recommended}+` : ''}`,
+        `${esc(g.name)}${g.recommended ? ` · ${g.recommended}+` : ''}`
+        + `${g.chests ? ` · ${g.chests} chest${g.chests === 1 ? '' : 's'}` : ''}`,
         { direction: 'top' },
       );
       const dbtn = 'font-size:12px;text-decoration:underline;cursor:pointer;background:none;border:0;padding:0';
       marker.bindPopup(
         `<div style="min-width:180px">
            <div style="font-weight:600">${esc(g.name)}</div>
-           <div style="opacity:.7;font-size:12px">Dungeon${g.difficulty ? ' · ' + esc(g.difficulty) : ''}${g.recommended ? ` · ${g.recommended}+ recommended` : ''}</div>
+           <div style="opacity:.7;font-size:12px">Dungeon${g.difficulty ? ' · ' + esc(g.difficulty) : ''}${g.recommended ? ` · ${g.recommended}+ recommended` : ''}${g.chests ? ` · ${g.chests} chest${g.chests === 1 ? '' : 's'}` : ''}</div>
            ${g.location ? `<div style="font-size:12px;margin-top:4px">${esc(g.location)}</div>` : ''}
            <div style="font-size:11px;opacity:.6;margin-top:4px">${esc(g.x)}, ${esc(g.y)}</div>
            <div style="display:flex;gap:10px;margin-top:6px">
