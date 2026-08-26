@@ -293,7 +293,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
           id: uid(), name,
           location: String(f.get('location') || '').trim(),
           recommended: Math.max(0, Number(f.get('recommended') || 0)),
-          chests: 0,
+          chests: Math.min(20, Math.max(0, Number(f.get('chests') || 0))),
           difficulty: String(f.get('difficulty') || '').trim(),
           notes: String(f.get('notes') || ''),
           x, y, imgs: [],
@@ -716,9 +716,12 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                   />
                 </Field>
                 {!attachedDungeon && (
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-4 sm:grid-cols-3">
                     <Field label="Recommended party" htmlFor="sp-rec">
                       <Input id="sp-rec" name="recommended" type="number" min={0} placeholder="2" />
+                    </Field>
+                    <Field label="Lootable chests" htmlFor="sp-chests">
+                      <Input id="sp-chests" name="chests" type="number" min={0} max={20} placeholder="1–3" />
                     </Field>
                     <Field label="Difficulty" htmlFor="sp-diff">
                       <NameField name="difficulty" options={DIFFICULTIES} defaultValue=""
