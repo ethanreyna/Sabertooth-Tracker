@@ -293,6 +293,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
           id: uid(), name,
           location: String(f.get('location') || '').trim(),
           recommended: Math.max(0, Number(f.get('recommended') || 0)),
+          chests: 0,
           difficulty: String(f.get('difficulty') || '').trim(),
           notes: String(f.get('notes') || ''),
           x, y, imgs: [],
@@ -370,6 +371,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
       name: String(f.get('name') || '').trim(),
       location: String(f.get('location') || '').trim(),
       recommended: Math.max(0, Number(f.get('recommended') || 0)),
+      chests: Math.min(20, Math.max(0, Number(f.get('chests') || 0))),
       difficulty,
       notes: String(f.get('notes') || ''),
       x: coordOrEmpty(String(f.get('x') || '')),
@@ -822,10 +824,16 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                 placeholder="e.g. Above Riverwood, up the mountain path" />
             </Field>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <Field label="Recommended party size" htmlFor="dg-rec">
                 <Input id="dg-rec" name="recommended" type="number" min={1}
                   defaultValue={editDungeon?.recommended || 2} />
+              </Field>
+              <Field label="Lootable chests" htmlFor="dg-chests">
+                <Input
+                  id="dg-chests" name="chests" type="number" min={0} max={20}
+                  defaultValue={editDungeon?.chests ?? ''} placeholder="1–3"
+                />
               </Field>
               <Field label="Difficulty">
                 <Picker
