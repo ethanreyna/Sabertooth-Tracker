@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { GLYPH_PATHS, glyphFor } from '@/components/map-glyphs';
@@ -159,7 +159,17 @@ export interface MapCanvasProps {
   onMoveRequest: (req: MoveRequest) => void;
 }
 
-export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMoveRequest }: MapCanvasProps) {
+/** Imperative escape hatch for search: Leaflet's own view isn't state, so
+ *  jumping to a result is a method call rather than a prop. */
+export interface MapCanvasHandle {
+  /** Pans to a marker and opens its popup. False if it isn't on the map. */
+  focus: (kind: MapKind, id: string) => boolean;
+}
+
+const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas(
+  { db, readOnly, onPick, onOpen, onDelete, onMoveRequest },
+  ref,
+) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -174,6 +184,8 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMo
   moveRef.current = onMoveRequest;
   const roRef = useRef(readOnly);
   roRef.current = readOnly;
+  // Keyed `kind:id`, filled in during the marker redraw below.
+  const markersRef = useRef(new Map<string, L.Marker>());
 
   useEffect(() => {
     const host = hostRef.current;
@@ -242,6 +254,7 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMo
     const map = mapRef.current;
     if (!group || !map) return;
     group.clearLayers();
+    markersRef.current.clear();
 
     // Torn down on the next redraw: the icons these are bound to are gone by
     // then, and a stale listener would arm a marker that no longer exists.
@@ -312,6 +325,7 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMo
           });
       });
       marker.addTo(group);
+      markersRef.current.set(`spot:${s.id}`, marker);
       makeMovable(marker, 'spot', s.id, s.name);
     }
 
@@ -358,11 +372,28 @@ export default function MapCanvas({ db, readOnly, onPick, onOpen, onDelete, onMo
           });
       });
       marker.addTo(group);
+      markersRef.current.set(`dungeon:${g.id}`, marker);
       makeMovable(marker, 'dungeon', g.id, g.name);
     }
 
     return () => { for (const fn of cleanups) fn(); };
   }, [db.spots, db.dungeons]);
 
+  useImperativeHandle(ref, () => ({
+    focus: (kind, id) => {
+      const map = mapRef.current;
+      const marker = markersRef.current.get(`${kind}:${id}`);
+      if (!map || !marker) return false;
+      // A held zoom (someone deep in a corner of the map) stays put; only a
+      // zoomed-out view jumps in, so a search doesn't yank the view around.
+      const targetZoom = Math.max(map.getZoom(), 4);
+      map.flyTo(marker.getLatLng(), targetZoom, { duration: 0.6 });
+      marker.openPopup();
+      return true;
+    },
+  }), []);
+
   return <div ref={hostRef} className="h-full w-full rounded-xl [&_.leaflet-container]:bg-muted" />;
-}
+});
+
+export default MapCanvas;
