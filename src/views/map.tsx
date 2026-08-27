@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState } from 'react';
+import { Suspense, lazy, useRef, useState } from 'react';
 import { MapPinPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -7,7 +7,8 @@ import { TonedBadge } from '@/components/bits';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Spots } from '@/views/spots';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import type { MapKind, MoveRequest } from '@/components/map-canvas';
+import type { MapCanvasHandle, MapKind, MoveRequest } from '@/components/map-canvas';
+import { MapSearch } from '@/components/map-search';
 import { ChunkBoundary } from '@/components/chunk-boundary';
 import { lazyChunk } from '@/lib/lazy-chunk';
 import type { DB } from '@/types';
@@ -47,6 +48,7 @@ export function MapView({ db, update, readOnly, placing, addMode, onAddModeChang
   onAddModeChange: (m: AddMode) => void;
 }) {
   const [tab, setTab] = useState<'map' | 'list'>('map');
+  const canvasRef = useRef<MapCanvasHandle>(null);
   // A dropped marker, waiting to be confirmed. Nothing is written to the record
   // until it is: a marker knocked loose can simply be put back.
   const [move, setMove] = useState<MoveRequest | null>(null);
@@ -86,6 +88,15 @@ export function MapView({ db, update, readOnly, placing, addMode, onAddModeChang
         {unplaced > 0 && (
           <TonedBadge tone="amber">{unplaced} without coordinates</TonedBadge>
         )}
+        <MapSearch
+          db={db}
+          onSelect={(kind, id, hasCoords) => {
+            // Nothing to fly to without coordinates, so this opens the record
+            // instead of failing quietly on a map that never moves.
+            if (hasCoords) canvasRef.current?.focus(kind, id);
+            else onOpen(kind, id);
+          }}
+        />
         <div className="ml-auto flex flex-wrap items-center gap-3">
           {LEGEND.map(([label, dot]) => (
             <span key={label} className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -146,6 +157,7 @@ export function MapView({ db, update, readOnly, placing, addMode, onAddModeChang
             }
           >
             <MapCanvas
+              ref={canvasRef}
               db={db} readOnly={readOnly}
               onPick={onPick} onOpen={onOpen} onDelete={onDelete}
               onMoveRequest={setMove}
