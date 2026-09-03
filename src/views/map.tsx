@@ -177,6 +177,10 @@ export function MapView({ db, update, readOnly, placing, addMode, onAddModeChang
               db={db} readOnly={readOnly}
               onPick={onPick} onOpen={onOpen} onDelete={onDelete}
               onMoveRequest={setMove}
+              onSetDungeonStatus={(id, status) => update((d) => {
+                const t = d.dungeons.find((g) => g.id === id);
+                if (t) t.status = status;
+              })}
             />
           </Suspense>
         </ChunkBoundary>

@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { GLYPH_PATHS, glyphFor } from '@/components/map-glyphs';
-import { dungeonIconStyle, dungeonLabel } from '@/lib/dungeon';
+import { DUNGEON_STATUSES, STATUS_LABEL, dungeonIconStyle, dungeonLabel } from '@/lib/dungeon';
 import type { DB, DungeonStatus, Spot } from '@/types';
 
 // The tile pyramid was cut from Skyrim's own LOD textures, so these numbers are
@@ -180,6 +180,9 @@ export interface MapCanvasProps {
   onDelete: (kind: MapKind, id: string) => void;
   /** A finished drag. Nothing is written until the request is confirmed. */
   onMoveRequest: (req: MoveRequest) => void;
+  /** Sets a dungeon's status straight from its popup — the same three-way
+   *  toggle the dungeon form and its map thumbnail already offer. */
+  onSetDungeonStatus: (id: string, status: DungeonStatus) => void;
 }
 
 /** Imperative escape hatch for search: Leaflet's own view isn't state, so
@@ -190,7 +193,7 @@ export interface MapCanvasHandle {
 }
 
 const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas(
-  { db, readOnly, onPick, onOpen, onDelete, onMoveRequest },
+  { db, readOnly, onPick, onOpen, onDelete, onMoveRequest, onSetDungeonStatus },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -201,6 +204,8 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
   pickRef.current = onPick;
   const openRef = useRef(onOpen);
   openRef.current = onOpen;
+  const statusRef = useRef(onSetDungeonStatus);
+  statusRef.current = onSetDungeonStatus;
   const deleteRef = useRef(onDelete);
   deleteRef.current = onDelete;
   const moveRef = useRef(onMoveRequest);
@@ -372,12 +377,21 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
         { direction: 'top' },
       );
       const dbtn = 'font-size:12px;text-decoration:underline;cursor:pointer;background:none;border:0;padding:0';
+      // The current status is plain text; the other two are links, so setting
+      // one is a single click straight from the popup — no dialog needed for
+      // the common case of correcting or confirming what's already scouted.
+      const statusRow = roRef.current ? '' : DUNGEON_STATUSES.map((s) => (
+        s === g.status
+          ? `<span style="font-weight:600">${esc(STATUS_LABEL[s])}</span>`
+          : `<button data-status="${s}" style="${dbtn};color:inherit">${esc(STATUS_LABEL[s])}</button>`
+      )).join('<span style="opacity:.4"> · </span>');
       marker.bindPopup(
         `<div style="min-width:180px">
            <div style="font-weight:600">${esc(label)}</div>
            <div style="opacity:.7;font-size:12px">Dungeon${g.difficulty ? ' · ' + esc(g.difficulty) : ''}${g.recommended ? ` · ${g.recommended}+ recommended` : ''}${g.chests ? ` · ${g.chests} chest${g.chests === 1 ? '' : 's'}` : ''}</div>
            ${g.location ? `<div style="font-size:12px;margin-top:4px">${esc(g.location)}</div>` : ''}
            <div style="font-size:11px;opacity:.6;margin-top:4px">${esc(g.x)}, ${esc(g.y)}</div>
+           ${statusRow ? `<div style="font-size:12px;margin-top:6px"><span style="opacity:.6">Status: </span>${statusRow}</div>` : ''}
            <div style="display:flex;gap:10px;margin-top:6px">
              <button data-act="open" style="${dbtn};color:inherit">Open</button>
              ${roRef.current ? '' : `<button data-act="del" style="${dbtn};color:#dc2626">Delete</button>`}
@@ -388,6 +402,11 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
         const el = (e as unknown as { popup: L.Popup }).popup.getElement();
         el?.querySelector<HTMLButtonElement>('button[data-act="open"]')
           ?.addEventListener('click', () => openRef.current('dungeon', g.id));
+        el?.querySelectorAll<HTMLButtonElement>('button[data-status]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            statusRef.current(g.id, btn.dataset.status as DungeonStatus);
+          });
+        });
         el?.querySelector<HTMLButtonElement>('button[data-act="del"]')
           ?.addEventListener('click', () => {
             if (confirm(`Delete “${g.name}”? This removes it from the Dungeons section too.`)) {
