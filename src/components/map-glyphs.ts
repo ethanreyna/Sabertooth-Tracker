@@ -37,6 +37,8 @@ export const GLYPH_PATHS: Record<string, string> = {
   grove: 'M11 22h2v-6h-2v6zM12 2l5 7h-3l4 6H6l4-6H7l5-7z',
   // Standing stone.
   stone: 'M9 22 7 6l5-4 5 4-2 16H9z',
+  // Open book — libraries and reading rooms.
+  library: 'M3 5C3 4 4 3 6 3C9 3 11 4 12 6C13 4 15 3 18 3C20 3 21 4 21 5V18C21 17 20 17 18 17C15 17 13 18 12 20C11 18 9 17 6 17C4 17 3 17 3 18ZM12 6V20',
 };
 
 /** Kinds that keep a plain coloured dot rather than a silhouette. */
@@ -49,7 +51,8 @@ const ALIASES: Record<string, string> = {
   ruin: 'dungeon', ruins: 'dungeon', mines: 'mine', harbour: 'dock',
   harbor: 'dock', port: 'dock', watchtower: 'tower', 'lumber mill': 'mill',
   windmill: 'mill', shipwreck: 'ship', wreck: 'ship', 'standing stone': 'stone',
-  shrine: 'stone', camps: 'camp',
+  shrine: 'stone', camps: 'camp', book: 'library', books: 'library',
+  bookshop: 'library', college: 'library', archive: 'library',
 };
 
 /** The glyph for a kind, or null when it should render as a dot. */
