@@ -76,6 +76,13 @@ export interface Barrel {
 }
 
 /** A dungeon the guild has scouted: where it is, and what it takes to clear. */
+/**
+ * Whether a scouted dungeon still has anything worth going for.
+ * `unknown` is the honest answer when nobody's confirmed either way — not
+ * every cave gets checked as often as it's found.
+ */
+export type DungeonStatus = 'active' | 'disabled' | 'unknown';
+
 export interface Dungeon {
   id: string;
   name: string;
@@ -83,10 +90,9 @@ export interface Dungeon {
   recommended: number; // suggested party size
   /** Lootable chests inside — usually one to three. 0 means nobody has counted. */
   chests: number;
-  /** False for a dungeon that's on the map but known not to drop loot any
-   *  more — still worth knowing about, not worth a special trip. Defaults to
-   *  true, so every existing record reads as active until marked otherwise. */
-  active: boolean;
+  /** Defaults to `active`, so every existing record reads that way until
+   *  someone says otherwise. */
+  status: DungeonStatus;
   difficulty: string;
   /** Skyrim world coordinates, blank when nobody has placed it yet. */
   x: string;

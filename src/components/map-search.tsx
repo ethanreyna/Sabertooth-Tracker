@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { TonedBadge } from '@/components/bits';
+import { STATUS_LABEL } from '@/lib/dungeon';
 import type { MapKind } from '@/components/map-canvas';
 import type { DB } from '@/types';
 
@@ -27,7 +28,7 @@ function search(db: DB, q: string): Hit[] {
     .filter((g) => g.name.toLowerCase().includes(needle) || g.location.toLowerCase().includes(needle))
     .map((g) => ({
       kind: 'dungeon', id: g.id, name: g.name,
-      detail: `Dungeon (${g.active ? 'Active' : 'Disabled'})`,
+      detail: `Dungeon (${STATUS_LABEL[g.status]})`,
       placed: g.x !== '' && g.y !== '',
     }));
 

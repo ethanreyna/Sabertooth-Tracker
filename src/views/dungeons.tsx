@@ -4,12 +4,20 @@ import { Card } from '@/components/ui/card';
 import { EmptyState, TonedBadge } from '@/components/bits';
 import { MapThumb } from '@/components/map-thumb';
 import type { Tone } from '@/components/bits';
+import { STATUS_LABEL } from '@/lib/dungeon';
 import { ago } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { DB } from '@/types';
+import type { DB, DungeonStatus } from '@/types';
 
 const DIFFICULTY_TONE: Record<string, Tone> = {
   Easy: 'green', Moderate: 'blue', Hard: 'amber', Deadly: 'red',
+};
+
+/** Matches the map marker's own lit/dark/unknown colouring, in plain text. */
+const STATUS_TEXT: Record<DungeonStatus, string> = {
+  active: 'text-amber-600 dark:text-amber-400',
+  disabled: 'text-muted-foreground',
+  unknown: 'text-sky-600 dark:text-sky-400',
 };
 
 export function Dungeons({ db, update, readOnly, onEdit, onPlace }: {
@@ -36,14 +44,22 @@ export function Dungeons({ db, update, readOnly, onEdit, onPlace }: {
         <Card
           key={g.id}
           // Same idea as the map marker: a disabled dungeon reads as unlit —
-          // still on record, visibly not worth a special trip.
-          className={cn('flex flex-col overflow-hidden py-0', !g.active && 'opacity-65')}
+          // still on record, visibly not worth a special trip. Unknown stays
+          // full opacity; it hasn't been ruled out, just not checked yet.
+          className={cn('flex flex-col overflow-hidden py-0', g.status === 'disabled' && 'opacity-65')}
         >
           {/* Once a dungeon is on the map it has a picture for free: a crop of
               the guild map with the marker on it. Beats asking anyone to go and
               screenshot their own map, and it can't fall out of date. */}
           {g.x && g.y ? (
-            <MapThumb x={g.x} y={g.y} zoom={4} className="h-40 border-b" alt={`${g.name} on the map`} />
+            <MapThumb
+              x={g.x} y={g.y} zoom={4} className="h-40 border-b" alt={`${g.name} on the map`}
+              status={g.status}
+              onSetStatus={readOnly ? undefined : (status) => update((d) => {
+                const t = d.dungeons.find((x) => x.id === g.id);
+                if (t) t.status = status;
+              })}
+            />
           ) : g.imgs.length > 0 ? (
             <div className={g.imgs.length > 1 ? 'grid grid-cols-2 gap-px bg-border' : ''}>
               {g.imgs.slice(0, 4).map((src, i) => (
@@ -80,8 +96,8 @@ export function Dungeons({ db, update, readOnly, onEdit, onPlace }: {
             <div className="flex items-start gap-2">
               <span className="min-w-0 flex-1 text-sm font-semibold">
                 {g.name}{' '}
-                <span className={g.active ? 'font-normal text-amber-600 dark:text-amber-400' : 'font-normal text-muted-foreground'}>
-                  ({g.active ? 'Active' : 'Disabled'})
+                <span className={cn('font-normal', STATUS_TEXT[g.status])}>
+                  ({STATUS_LABEL[g.status]})
                 </span>
               </span>
               {g.difficulty && (

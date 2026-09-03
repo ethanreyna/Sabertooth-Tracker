@@ -8,19 +8,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { MapPinPlus } from 'lucide-react';
-import { Field, NONE, NameField, Picker, choices } from '@/components/bits';
+import { Field, NONE, NameField, Picker, TonedBadge, choices } from '@/components/bits';
 import type { Choice } from '@/components/bits';
 import { ItemPicker } from '@/components/item-picker';
 import { MapThumb } from '@/components/map-thumb';
 import { catalogue } from '@/items';
 import { uploadImage } from '@/sync';
 import { uid } from '@/lib/format';
-import { dungeonLabel } from '@/lib/dungeon';
+import { DUNGEON_STATUSES, STATUS_LABEL, STATUS_TONE, dungeonLabel } from '@/lib/dungeon';
 import { DURATION_UNITS, fromNow } from '@/lib/deadline';
 import type { DurationUnit } from '@/lib/deadline';
 import { ENCHANTMENT_TIERS, ITEM_CATEGORIES, SPOT_KINDS } from '@/types';
 import { coordOrEmpty } from '@/lib/maps';
-import type { BankItem, Barrel, CollectionTarget, DB, Dungeon, EnchantmentRecord, ItemRecord, Job, LedgerEntry, Member, Role, Settings, Spot, SyncCfg, SyncStatus } from '@/types';
+import type { BankItem, Barrel, CollectionTarget, DB, Dungeon, DungeonStatus, EnchantmentRecord, ItemRecord, Job, LedgerEntry, Member, Role, Settings, Spot, SyncCfg, SyncStatus } from '@/types';
 import { durationFromText } from '@/lib/deadline';
 import type { BarrelDraft, JobDraft } from '@/lib/parse-import';
 
@@ -86,7 +86,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
   const [paid, setPaid] = useState(editBarrel?.paid ?? draftBarrel?.paid ?? false);
   const [guildMember, setGuildMember] = useState(editBarrel?.guildMember ?? draftBarrel?.guildMember ?? true);
   const [difficulty, setDifficulty] = useState(editDungeon?.difficulty || DIFFICULTIES[1]);
-  const [dungeonActive, setDungeonActive] = useState(editDungeon?.active ?? true);
+  const [dungeonStatus, setDungeonStatus] = useState<DungeonStatus>(editDungeon?.status ?? 'active');
   const [dungeonImgs, setDungeonImgs] = useState<string[]>(editDungeon?.imgs ?? []);
   const [spotImgs, setSpotImgs] = useState<string[]>(editSpot?.imgs ?? []);
   const [targets, setTargets] = useState<CollectionTarget[]>(editJob?.items ?? draftJob?.items ?? []);
@@ -296,7 +296,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
           location: String(f.get('location') || '').trim(),
           recommended: Math.max(0, Number(f.get('recommended') || 0)),
           chests: Math.min(20, Math.max(0, Number(f.get('chests') || 0))),
-          active: true,
+          status: 'active',
           difficulty: String(f.get('difficulty') || '').trim(),
           notes: String(f.get('notes') || ''),
           x, y, imgs: [],
@@ -375,7 +375,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
       location: String(f.get('location') || '').trim(),
       recommended: Math.max(0, Number(f.get('recommended') || 0)),
       chests: Math.min(20, Math.max(0, Number(f.get('chests') || 0))),
-      active: dungeonActive,
+      status: dungeonStatus,
       difficulty,
       notes: String(f.get('notes') || ''),
       x: coordOrEmpty(String(f.get('x') || '')),
@@ -850,14 +850,24 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
               </Field>
             </div>
 
-            <Label className="flex items-center gap-2.5 text-sm font-normal">
-              <Checkbox checked={dungeonActive} onCheckedChange={(v) => setDungeonActive(v !== false)} />
-              Active — still drops loot
-            </Label>
-            {!dungeonActive && (
+            <Field label="Status">
+              <div className="flex flex-wrap items-center gap-2">
+                {DUNGEON_STATUSES.map((s) => (
+                  <button key={s} type="button" onClick={() => setDungeonStatus(s)}>
+                    <TonedBadge tone={dungeonStatus === s ? STATUS_TONE[s] : 'neutral'}>
+                      {STATUS_LABEL[s]}
+                    </TonedBadge>
+                  </button>
+                ))}
+              </div>
+            </Field>
+            {dungeonStatus !== 'active' && (
               <p className="-mt-2 text-xs text-muted-foreground">
-                Marked Disabled: shown on the map with an unlit cave marker and (Disabled) after its
-                name, so it stays on record without anyone making a trip for nothing.
+                {dungeonStatus === 'disabled'
+                  ? 'Marked Disabled: shown on the map with an unlit cave marker, so it stays on '
+                    + 'record without anyone making a trip for nothing.'
+                  : 'Marked Unknown: shown on the map with a "?" marker until someone checks and '
+                    + 'sets it one way or the other.'}
               </p>
             )}
 
@@ -884,7 +894,10 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
             </div>
 
             {/* What those numbers actually mean, without leaving the form. */}
-            <MapThumb x={dgX} y={dgY} zoom={5} radius={2} className="h-44 rounded-lg border" />
+            <MapThumb
+              x={dgX} y={dgY} zoom={5} radius={2} status={dungeonStatus}
+              className="h-44 rounded-lg border"
+            />
 
             <Field label="Notes" htmlFor="dg-notes">
               <Textarea id="dg-notes" name="notes" rows={3}
