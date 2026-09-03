@@ -97,13 +97,13 @@ export const demoDb = (): DB => ({
   dungeons: [
     {
       id: 'dg1', name: 'Bleak Falls Barrow', location: 'Above Riverwood, up the mountain path',
-      recommended: 2, chests: 3, difficulty: 'Moderate', x: '', y: '',
+      recommended: 2, chests: 3, active: true, difficulty: 'Moderate', x: '', y: '',
       notes: 'Draugr throughout, one Draugr Overlord at the end. Watch the swinging gate puzzle.',
       imgs: [], addedBy: 'Karina', at: d(9),
     },
     {
       id: 'dg2', name: 'Valtheim Towers', location: 'White River, east of Whiterun',
-      recommended: 3, chests: 2, difficulty: 'Easy', x: '', y: '',
+      recommended: 3, chests: 2, active: true, difficulty: 'Easy', x: '', y: '',
       notes: 'Bandits, archers on the bridge. Approach from the road side.',
       imgs: [], addedBy: 'Zahir Alazar', at: d(6),
     },

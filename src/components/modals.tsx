@@ -15,6 +15,7 @@ import { MapThumb } from '@/components/map-thumb';
 import { catalogue } from '@/items';
 import { uploadImage } from '@/sync';
 import { uid } from '@/lib/format';
+import { dungeonLabel } from '@/lib/dungeon';
 import { DURATION_UNITS, fromNow } from '@/lib/deadline';
 import type { DurationUnit } from '@/lib/deadline';
 import { ENCHANTMENT_TIERS, ITEM_CATEGORIES, SPOT_KINDS } from '@/types';
@@ -85,6 +86,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
   const [paid, setPaid] = useState(editBarrel?.paid ?? draftBarrel?.paid ?? false);
   const [guildMember, setGuildMember] = useState(editBarrel?.guildMember ?? draftBarrel?.guildMember ?? true);
   const [difficulty, setDifficulty] = useState(editDungeon?.difficulty || DIFFICULTIES[1]);
+  const [dungeonActive, setDungeonActive] = useState(editDungeon?.active ?? true);
   const [dungeonImgs, setDungeonImgs] = useState<string[]>(editDungeon?.imgs ?? []);
   const [spotImgs, setSpotImgs] = useState<string[]>(editSpot?.imgs ?? []);
   const [targets, setTargets] = useState<CollectionTarget[]>(editJob?.items ?? draftJob?.items ?? []);
@@ -294,6 +296,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
           location: String(f.get('location') || '').trim(),
           recommended: Math.max(0, Number(f.get('recommended') || 0)),
           chests: Math.min(20, Math.max(0, Number(f.get('chests') || 0))),
+          active: true,
           difficulty: String(f.get('difficulty') || '').trim(),
           notes: String(f.get('notes') || ''),
           x, y, imgs: [],
@@ -372,6 +375,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
       location: String(f.get('location') || '').trim(),
       recommended: Math.max(0, Number(f.get('recommended') || 0)),
       chests: Math.min(20, Math.max(0, Number(f.get('chests') || 0))),
+      active: dungeonActive,
       difficulty,
       notes: String(f.get('notes') || ''),
       x: coordOrEmpty(String(f.get('x') || '')),
@@ -710,7 +714,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                       { value: '', label: 'Create a new dungeon' },
                       ...dungeons.slice().sort((a, b) => a.name.localeCompare(b.name)).map((g) => ({
                         value: g.name,
-                        label: g.name + (g.x && g.y ? ' (already placed)' : ''),
+                        label: dungeonLabel(g) + (g.x && g.y ? ' — already placed' : ''),
                       })),
                     ]}
                   />
@@ -845,6 +849,17 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                 />
               </Field>
             </div>
+
+            <Label className="flex items-center gap-2.5 text-sm font-normal">
+              <Checkbox checked={dungeonActive} onCheckedChange={(v) => setDungeonActive(v !== false)} />
+              Active — still drops loot
+            </Label>
+            {!dungeonActive && (
+              <p className="-mt-2 text-xs text-muted-foreground">
+                Marked Disabled: shown on the map with an unlit cave marker and (Disabled) after its
+                name, so it stays on record without anyone making a trip for nothing.
+              </p>
+            )}
 
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="X" htmlFor="dg-x">

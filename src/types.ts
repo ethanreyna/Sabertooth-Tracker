@@ -83,6 +83,10 @@ export interface Dungeon {
   recommended: number; // suggested party size
   /** Lootable chests inside — usually one to three. 0 means nobody has counted. */
   chests: number;
+  /** False for a dungeon that's on the map but known not to drop loot any
+   *  more — still worth knowing about, not worth a special trip. Defaults to
+   *  true, so every existing record reads as active until marked otherwise. */
+  active: boolean;
   difficulty: string;
   /** Skyrim world coordinates, blank when nobody has placed it yet. */
   x: string;

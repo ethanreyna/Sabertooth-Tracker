@@ -5,6 +5,7 @@ import { EmptyState, TonedBadge } from '@/components/bits';
 import { MapThumb } from '@/components/map-thumb';
 import type { Tone } from '@/components/bits';
 import { ago } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import type { DB } from '@/types';
 
 const DIFFICULTY_TONE: Record<string, Tone> = {
@@ -32,7 +33,12 @@ export function Dungeons({ db, update, readOnly, onEdit, onPlace }: {
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {dungeons.map((g) => (
-        <Card key={g.id} className="flex flex-col overflow-hidden py-0">
+        <Card
+          key={g.id}
+          // Same idea as the map marker: a disabled dungeon reads as unlit —
+          // still on record, visibly not worth a special trip.
+          className={cn('flex flex-col overflow-hidden py-0', !g.active && 'opacity-65')}
+        >
           {/* Once a dungeon is on the map it has a picture for free: a crop of
               the guild map with the marker on it. Beats asking anyone to go and
               screenshot their own map, and it can't fall out of date. */}
@@ -72,7 +78,12 @@ export function Dungeons({ db, update, readOnly, onEdit, onPlace }: {
 
           <div className="flex flex-1 flex-col gap-2 p-3.5">
             <div className="flex items-start gap-2">
-              <span className="min-w-0 flex-1 text-sm font-semibold">{g.name}</span>
+              <span className="min-w-0 flex-1 text-sm font-semibold">
+                {g.name}{' '}
+                <span className={g.active ? 'font-normal text-amber-600 dark:text-amber-400' : 'font-normal text-muted-foreground'}>
+                  ({g.active ? 'Active' : 'Disabled'})
+                </span>
+              </span>
               {g.difficulty && (
                 <TonedBadge tone={DIFFICULTY_TONE[g.difficulty] ?? 'neutral'}>{g.difficulty}</TonedBadge>
               )}
