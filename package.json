@@ -15,6 +15,7 @@
     "cf:d1:create": "wrangler d1 create sabertooth",
     "cf:d1:init": "wrangler d1 execute sabertooth --remote --file=./schema.sql",
     "cf:d1:init:local": "wrangler d1 execute sabertooth --local --file=./schema.sql",
+    "cf:d1:archive-init": "wrangler d1 execute sabertooth --remote --file=./schema_archive.sql",
     "cf:r2:create": "wrangler r2 bucket create sabertooth-images",
     "cf:secret": "wrangler secret put GUILD_PASSWORD"
   },

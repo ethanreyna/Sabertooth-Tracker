@@ -215,3 +215,58 @@ nowhere is worse than no tracker. On sign-in the server's copy always wins;
 nothing from your browser is ever uploaded to seed it. `localStorage` holds only
 your password and a read-only cache of the last synced state, shown with an
 "Offline" warning if the server can't be reached, and cleared on sign-out.
+
+## Backing up and resetting the guild database
+
+`doc_archive` is a second D1 table (`schema_archive.sql`, `pnpm cf:d1:archive-init`
+once) that holds full snapshots of `doc`, taken before anything destructive.
+It's never read by any Worker route — unlike R2, where any key is a public
+`GET` at `/api/img/:key`, there's no path that serves it back, so a snapshot
+sitting there is as private as the database itself, and safe to keep even
+though this repo is public.
+
+```sh
+# Back up before doing anything destructive
+wrangler d1 execute sabertooth --remote \
+  --command "SELECT version, data FROM doc WHERE id = 1" --json > /tmp/current.json
+python3 scripts/backup_doc.py /tmp/current.json "why-you're-backing-up" backup.sql
+wrangler d1 execute sabertooth --remote --file=backup.sql
+
+# Restore the most recent snapshot
+wrangler d1 execute sabertooth --remote \
+  --command "SELECT data FROM doc_archive ORDER BY id DESC LIMIT 1" --json > /tmp/archive.json
+wrangler d1 execute sabertooth --remote \
+  --command "SELECT version FROM doc WHERE id = 1" --json > /tmp/current.json
+python3 scripts/restore_doc.py /tmp/archive.json /tmp/current.json restore.sql
+wrangler d1 execute sabertooth --remote --file=restore.sql
+```
+
+Both scripts, and `reset_for_new_server.py` below, only ever *write* a SQL
+file — nothing touches the database until that file is executed as a separate
+step, and every UPDATE is guarded on the version read a moment before, the
+same optimistic-concurrency check the app itself uses. A stale version means
+the guarded row doesn't match and nothing happens, rather than clobbering a
+change made in between.
+
+### Resetting for a new game-server season
+
+`reset_for_new_server.py` clears everything tied to a specific run of the
+guild — jobs, storage, the bank ledger, pending suggestions, the enchanting
+waitlist, roster, roles, and the item/enchantment catalogues — while keeping
+`dungeons` and `spots` exactly as scouted, coordinates included: Skyrim's
+geography doesn't move when the server does.
+
+```sh
+wrangler d1 execute sabertooth --remote \
+  --command "SELECT version, data FROM doc WHERE id = 1" --json > /tmp/current.json
+python3 scripts/backup_doc.py /tmp/current.json "pre-reset" backup.sql
+wrangler d1 execute sabertooth --remote --file=backup.sql   # back up first, always
+python3 scripts/reset_for_new_server.py /tmp/current.json reset.sql
+wrangler d1 execute sabertooth --remote --file=reset.sql
+```
+
+Recipes and the Ledger's price list aren't part of this: recipes are compiled
+into the app from a doc (`scripts/gen_recipes.py`) and the price list is
+pulled live from a Google Sheet named in `wrangler.toml`. Both reflect the old
+server's content until someone hands over a new doc or sheet for the new one —
+this reset can't fix that on its own.
