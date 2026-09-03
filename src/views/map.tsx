@@ -122,6 +122,13 @@ export function MapView({ db, update, readOnly, placing, addMode, onAddModeChang
           </span>
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <svg viewBox="0 0 24 24" className="size-3.5" aria-hidden="true">
+              <path d="M12 2 C6 2 3 7 3 13 v8 h5 v-6 a4 4 0 0 1 8 0 v6 h5 v-8 c0-6-3-11-9-11z"
+                fill="#94a3b8" />
+            </svg>
+            Dungeon (Unknown)
+          </span>
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <svg viewBox="0 0 24 24" className="size-3.5" aria-hidden="true">
               <path d="M12 2 2 11 h3 v11 h6 v-6 h2 v6 h6 V11 h3z" fill="currentColor" />
             </svg>
             Settlement

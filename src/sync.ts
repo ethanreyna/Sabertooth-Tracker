@@ -340,8 +340,11 @@ export function normalizeDb(raw: unknown): DB {
         recommended: Math.max(0, n(x.recommended, 1)),
         chests: Math.min(20, Math.max(0, Math.round(n(x.chests)))),
         // A dungeon nobody has marked one way or the other reads as active —
-        // missing is not the same as explicitly disabled.
-        active: x.active !== false,
+        // missing is not the same as explicitly disabled. The `active`
+        // fallback reads records from before status existed as a field.
+        status: x.status === 'disabled' || x.status === 'unknown'
+          ? x.status
+          : x.active === false ? 'disabled' : 'active',
         difficulty: s(x.difficulty), notes: s(x.notes),
         x: coordOrEmpty(x.x), y: coordOrEmpty(x.y),
         imgs: arr(x.imgs).map((u) => s(u)).filter(Boolean),

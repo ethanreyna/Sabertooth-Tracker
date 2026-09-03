@@ -2,8 +2,8 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { GLYPH_PATHS, glyphFor } from '@/components/map-glyphs';
-import { dungeonLabel } from '@/lib/dungeon';
-import type { DB, Spot } from '@/types';
+import { dungeonIconStyle, dungeonLabel } from '@/lib/dungeon';
+import type { DB, DungeonStatus, Spot } from '@/types';
 
 // The tile pyramid was cut from Skyrim's own LOD textures, so these numbers are
 // exact rather than eyeballed: the world spans cells -64..+63 at 4096 units per
@@ -45,17 +45,20 @@ const glyphSvg = (path: string, size: number) =>
  * cleared location from an unvisited one, borrowed for "still worth a trip"
  * versus "known not to drop loot any more." An active dungeon glows amber, as
  * if there's a torch just inside; a disabled one goes flat grey and a little
- * translucent, the way an unlit door reads on the game's own map.
+ * translucent, the way an unlit door reads on the game's own map. Unknown
+ * gets the same treatment in a cooler grey, plus a small "?" badge — it isn't
+ * a claim either way, just an admission nobody's checked.
  */
-const dungeonGlyphSvg = (active: boolean, size: number) => {
-  const fill = active ? '#1c1006' : '#3f3f46';
-  const stroke = active ? '#f5b942' : '#71717a';
-  const glow = active
-    ? 'drop-shadow(0 0 5px rgba(245,185,66,.85)) drop-shadow(0 1px 2px rgba(0,0,0,.6))'
-    : 'drop-shadow(0 1px 2px rgba(0,0,0,.5))';
+const dungeonGlyphSvg = (status: DungeonStatus, size: number) => {
+  const { fill, stroke, glow, opacity } = dungeonIconStyle(status);
+  const badge = status === 'unknown'
+    ? `<circle cx="18" cy="6" r="6.5" fill="#0b0b0c" stroke="${stroke}" stroke-width="1"/>
+       <text x="18" y="9" font-size="9" font-weight="700" text-anchor="middle" fill="${stroke}">?</text>`
+    : '';
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"
-        style="filter:${glow};opacity:${active ? 1 : 0.62}">
+        style="filter:${glow};opacity:${opacity}">
      <path d="${GLYPH_PATHS.dungeon}" fill="${fill}" stroke="${stroke}" stroke-width="1.5" stroke-linejoin="round"/>
+     ${badge}
    </svg>`;
 };
 
@@ -359,7 +362,7 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
           className: '',
           iconSize: [26, 26],
           iconAnchor: [13, 22],
-          html: dungeonGlyphSvg(g.active, 26),
+          html: dungeonGlyphSvg(g.status, 26),
         }),
       });
       const label = dungeonLabel(g);
