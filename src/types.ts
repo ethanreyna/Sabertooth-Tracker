@@ -129,7 +129,7 @@ export interface Spot {
 export const SPOT_KINDS = [
   'Ore', 'Hunting', 'Alchemy', 'Crafting',
   'City', 'Settlement', 'Dungeon', 'Tower', 'Fort', 'Mine', 'Dock', 'Farm', 'Mill',
-  'Camp', 'Grove', 'Stone', 'Other',
+  'Camp', 'Grove', 'Stone', 'Library', 'Other',
 ];
 
 export interface LedgerEntry {
