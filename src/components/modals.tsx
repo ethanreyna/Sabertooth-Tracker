@@ -16,6 +16,7 @@ import { catalogue } from '@/items';
 import { uploadImage } from '@/sync';
 import { uid } from '@/lib/format';
 import { DUNGEON_STATUSES, STATUS_LABEL, STATUS_TONE, dungeonLabel } from '@/lib/dungeon';
+import { cn } from '@/lib/utils';
 import { DURATION_UNITS, fromNow } from '@/lib/deadline';
 import type { DurationUnit } from '@/lib/deadline';
 import { ENCHANTMENT_TIERS, ITEM_CATEGORIES, SPOT_KINDS } from '@/types';
@@ -852,13 +853,26 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
 
             <Field label="Status">
               <div className="flex flex-wrap items-center gap-2">
-                {DUNGEON_STATUSES.map((s) => (
-                  <button key={s} type="button" onClick={() => setDungeonStatus(s)}>
-                    <TonedBadge tone={dungeonStatus === s ? STATUS_TONE[s] : 'neutral'}>
-                      {STATUS_LABEL[s]}
-                    </TonedBadge>
-                  </button>
-                ))}
+                {DUNGEON_STATUSES.map((s) => {
+                  const selected = dungeonStatus === s;
+                  return (
+                    // Disabled's own tone is 'neutral' — the same tone an
+                    // unselected button uses — so colour alone can't show
+                    // which is picked when Disabled is it. The ring can:
+                    // it doesn't depend on which tone won.
+                    <button
+                      key={s} type="button" onClick={() => setDungeonStatus(s)}
+                      className={cn(
+                        'rounded-full',
+                        selected && 'ring-2 ring-offset-2 ring-offset-background ring-foreground/50',
+                      )}
+                    >
+                      <TonedBadge tone={selected ? STATUS_TONE[s] : 'neutral'}>
+                        {STATUS_LABEL[s]}
+                      </TonedBadge>
+                    </button>
+                  );
+                })}
               </div>
             </Field>
             {dungeonStatus !== 'active' && (
