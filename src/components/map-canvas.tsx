@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { GLYPH_PATHS, glyphFor } from '@/components/map-glyphs';
+import { dungeonLabel } from '@/lib/dungeon';
 import type { DB, Spot } from '@/types';
 
 // The tile pyramid was cut from Skyrim's own LOD textures, so these numbers are
@@ -38,6 +39,25 @@ const glyphSvg = (path: string, size: number) =>
         style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.65))">
      <path d="${path}" fill="#111114" stroke="#e4e4e7" stroke-width="1.5" stroke-linejoin="round"/>
    </svg>`;
+
+/**
+ * The same cave-mouth icon, lit or dark — Skyrim's own way of telling a
+ * cleared location from an unvisited one, borrowed for "still worth a trip"
+ * versus "known not to drop loot any more." An active dungeon glows amber, as
+ * if there's a torch just inside; a disabled one goes flat grey and a little
+ * translucent, the way an unlit door reads on the game's own map.
+ */
+const dungeonGlyphSvg = (active: boolean, size: number) => {
+  const fill = active ? '#1c1006' : '#3f3f46';
+  const stroke = active ? '#f5b942' : '#71717a';
+  const glow = active
+    ? 'drop-shadow(0 0 5px rgba(245,185,66,.85)) drop-shadow(0 1px 2px rgba(0,0,0,.6))'
+    : 'drop-shadow(0 1px 2px rgba(0,0,0,.5))';
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"
+        style="filter:${glow};opacity:${active ? 1 : 0.62}">
+     <path d="${GLYPH_PATHS.dungeon}" fill="${fill}" stroke="${stroke}" stroke-width="1.5" stroke-linejoin="round"/>
+   </svg>`;
+};
 
 /** Kinds with a silhouette get one; the resource kinds stay coloured dots. */
 function spotIcon(kind: string): L.DivIcon {
@@ -339,18 +359,19 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
           className: '',
           iconSize: [26, 26],
           iconAnchor: [13, 22],
-          html: glyphSvg(GLYPH_PATHS.dungeon, 26),
+          html: dungeonGlyphSvg(g.active, 26),
         }),
       });
+      const label = dungeonLabel(g);
       marker.bindTooltip(
-        `${esc(g.name)}${g.recommended ? ` · ${g.recommended}+` : ''}`
+        `${esc(label)}${g.recommended ? ` · ${g.recommended}+` : ''}`
         + `${g.chests ? ` · ${g.chests} chest${g.chests === 1 ? '' : 's'}` : ''}`,
         { direction: 'top' },
       );
       const dbtn = 'font-size:12px;text-decoration:underline;cursor:pointer;background:none;border:0;padding:0';
       marker.bindPopup(
         `<div style="min-width:180px">
-           <div style="font-weight:600">${esc(g.name)}</div>
+           <div style="font-weight:600">${esc(label)}</div>
            <div style="opacity:.7;font-size:12px">Dungeon${g.difficulty ? ' · ' + esc(g.difficulty) : ''}${g.recommended ? ` · ${g.recommended}+ recommended` : ''}${g.chests ? ` · ${g.chests} chest${g.chests === 1 ? '' : 's'}` : ''}</div>
            ${g.location ? `<div style="font-size:12px;margin-top:4px">${esc(g.location)}</div>` : ''}
            <div style="font-size:11px;opacity:.6;margin-top:4px">${esc(g.x)}, ${esc(g.y)}</div>

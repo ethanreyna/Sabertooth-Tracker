@@ -105,11 +105,20 @@ export function MapView({ db, update, readOnly, placing, addMode, onAddModeChang
             </span>
           ))}
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <svg viewBox="0 0 24 24" className="size-3.5" aria-hidden="true">
+            <svg viewBox="0 0 24 24" className="size-3.5" aria-hidden="true"
+              style={{ filter: 'drop-shadow(0 0 3px rgba(245,185,66,.8))' }}
+            >
               <path d="M12 2 C6 2 3 7 3 13 v8 h5 v-6 a4 4 0 0 1 8 0 v6 h5 v-8 c0-6-3-11-9-11z"
-                fill="currentColor" />
+                fill="#f5b942" />
             </svg>
-            Dungeon
+            Dungeon (Active)
+          </span>
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <svg viewBox="0 0 24 24" className="size-3.5 opacity-60" aria-hidden="true">
+              <path d="M12 2 C6 2 3 7 3 13 v8 h5 v-6 a4 4 0 0 1 8 0 v6 h5 v-8 c0-6-3-11-9-11z"
+                fill="#71717a" />
+            </svg>
+            Dungeon (Disabled)
           </span>
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <svg viewBox="0 0 24 24" className="size-3.5" aria-hidden="true">

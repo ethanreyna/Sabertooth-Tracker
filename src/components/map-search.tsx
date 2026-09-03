@@ -25,7 +25,11 @@ function search(db: DB, q: string): Hit[] {
 
   const dungeons: Hit[] = db.dungeons
     .filter((g) => g.name.toLowerCase().includes(needle) || g.location.toLowerCase().includes(needle))
-    .map((g) => ({ kind: 'dungeon', id: g.id, name: g.name, detail: 'Dungeon', placed: g.x !== '' && g.y !== '' }));
+    .map((g) => ({
+      kind: 'dungeon', id: g.id, name: g.name,
+      detail: `Dungeon (${g.active ? 'Active' : 'Disabled'})`,
+      placed: g.x !== '' && g.y !== '',
+    }));
 
   return [...dungeons, ...spots].slice(0, 30);
 }
