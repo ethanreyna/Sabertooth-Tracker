@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Boxes, Coins, Construction, FileInput, Hammer, Inbox, LayoutDashboard, Sparkles, Swords, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, Settings, Shield, Skull, Sun, Users, Briefcase,
+  Boxes, Coins, Construction, FileInput, Hammer, Inbox, LayoutDashboard, Swords, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, Settings, Shield, Skull, Sun, Users, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,8 +43,9 @@ type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger'
 
 /** What a read-only guest is allowed to see. `ledger` is the market price list,
  *  which comes from the public sheet; `bank` (the guild's septims) stays hidden,
- *  and the Worker strips those transactions from a guest response entirely. */
-const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'items', 'run', 'enchants', 'projects', 'recipes', 'settings', 'suggest'];
+ *  and the Worker strips those transactions from a guest response entirely.
+ *  `enchants` is deliberately absent — see the note by NAV below. */
+const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'items', 'run', 'projects', 'recipes', 'settings', 'suggest'];
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -61,7 +62,10 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'settings', label: 'Settings', icon: <Users /> },
   { id: 'suggestions', label: 'Suggestions', icon: <Inbox /> },
   { id: 'run', label: 'Loot Tracker', icon: <Swords /> },
-  { id: 'enchants', label: 'Enchanting', icon: <Sparkles /> },
+  // Enchanting is left out of the sidebar rather than removed — the current
+  // server has no enchanter, but 'enchants' stays a real view (TITLES, the
+  // render switch below, the guest Suggest tab's kind) so putting this line
+  // back is the whole job if that changes. Nothing already logged is touched.
   { id: 'projects', label: 'Projects', icon: <Construction /> },
   { id: 'suggest', label: 'Suggest', icon: <MessageSquarePlus /> },
 ];
