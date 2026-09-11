@@ -2,7 +2,7 @@ import { Flag } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { TonedBadge } from '@/components/bits';
-import { projectStats } from '@/views/projects';
+import { contributedFor, stageStats, stageRemaining } from '@/views/projects';
 import { ago, sep } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { DB } from '@/types';
@@ -22,7 +22,9 @@ function Stat({ label, value, sub, className }: { label: string; value: string |
 export function Dashboard({ db, income, spend, onOpenProjects }: {
   db: DB; income: number; spend: number; onOpenProjects: () => void;
 }) {
-  const activeProjects = db.projects.filter((p) => p.active);
+  const activeStages = db.projects.flatMap((p) => p.stages
+    .filter((st) => st.active)
+    .map((st) => ({ project: p, stage: st })));
   const activity = [
     ...db.jobs.map((j) => ({ at: j.postedAt, text: `${j.postedBy} posted job “${j.name}”`, dot: 'bg-primary' })),
     ...db.jobs.flatMap((j) => j.entries.map((e) => ({
@@ -55,26 +57,35 @@ export function Dashboard({ db, income, spend, onOpenProjects }: {
         <Stat label="Members" value={db.members.length} sub="on the roster" />
       </div>
 
-      {activeProjects.length > 0 && (
+      {activeStages.length > 0 && (
         <Card>
           <CardHeader className="border-b">
             <CardTitle className="text-sm">Actively collecting</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {activeProjects.map((p) => {
-              const stats = projectStats(p);
+            {activeStages.map(({ project, stage }) => {
+              const stats = stageStats(project, stage);
+              const remaining = stageRemaining(project, stage);
+              const need = remaining.length === 0
+                ? 'Fully stocked — ready to turn in'
+                : remaining
+                  .slice(0, 3)
+                  .map((r) => `${sep(r.qty - contributedFor(project, r.id))} ${r.item}`)
+                  .join(', ') + (remaining.length > 3 ? `, +${remaining.length - 3} more` : '');
               return (
                 <button
-                  key={p.id} type="button" onClick={onOpenProjects}
+                  key={stage.id} type="button" onClick={onOpenProjects}
                   className="flex w-full items-center gap-3 border-b px-4 py-3 text-left last:border-0 hover:bg-muted/40"
                 >
                   <Flag className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium">{p.name}</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="truncate text-sm font-medium">{stage.name}</span>
                       <TonedBadge tone="amber" className="shrink-0">Active</TonedBadge>
+                      <span className="truncate text-xs text-muted-foreground">{project.name}</span>
                     </div>
                     <Progress value={stats.pct} className="mt-1.5" />
+                    <p className="mt-1 truncate text-xs text-muted-foreground">Needs {need}</p>
                   </div>
                   <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                     {stats.total > 0 ? `${stats.done}/${stats.total}` : 'No requirements yet'}
