@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Boxes, Coins, FileInput, Hammer, Inbox, LayoutDashboard, Sparkles, Swords, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, Settings, Shield, Skull, Sun, Users, Briefcase,
+  Boxes, Coins, Construction, FileInput, Hammer, Inbox, LayoutDashboard, Sparkles, Swords, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, Settings, Shield, Skull, Sun, Users, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,7 @@ import { Database } from '@/views/items';
 import type { DatabaseTab } from '@/views/items';
 import { Run } from '@/views/run';
 import { Enchants } from '@/views/enchants';
+import { Projects } from '@/views/projects';
 import { Settings as SettingsView } from '@/views/settings';
 import type { SettingsTab } from '@/views/settings';
 import { ImportDialog } from '@/components/import-dialog';
@@ -38,12 +39,12 @@ import {
 import { cn } from '@/lib/utils';
 import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
-type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'run' | 'enchants' | 'recipes' | 'settings' | 'suggestions' | 'suggest';
+type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'run' | 'enchants' | 'projects' | 'recipes' | 'settings' | 'suggestions' | 'suggest';
 
 /** What a read-only guest is allowed to see. `ledger` is the market price list,
  *  which comes from the public sheet; `bank` (the guild's septims) stays hidden,
  *  and the Worker strips those transactions from a guest response entirely. */
-const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'items', 'run', 'enchants', 'recipes', 'settings', 'suggest'];
+const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'items', 'run', 'enchants', 'projects', 'recipes', 'settings', 'suggest'];
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -61,12 +62,14 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'suggestions', label: 'Suggestions', icon: <Inbox /> },
   { id: 'run', label: 'Loot Tracker', icon: <Swords /> },
   { id: 'enchants', label: 'Enchanting', icon: <Sparkles /> },
+  { id: 'projects', label: 'Projects', icon: <Construction /> },
   { id: 'suggest', label: 'Suggest', icon: <MessageSquarePlus /> },
 ];
 
 const TITLES: Record<View, string> = {
   dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', map: 'Map',
-  bank: 'Bank', ledger: 'Ledger', items: 'Database', run: 'Loot Tracker', enchants: 'Enchanting waitlist', recipes: 'Recipes',
+  bank: 'Bank', ledger: 'Ledger', items: 'Database', run: 'Loot Tracker', enchants: 'Enchanting waitlist',
+  projects: 'Projects', recipes: 'Recipes',
   settings: 'Settings', suggestions: 'Guest suggestions', suggest: 'Suggest a change',
 };
 
@@ -537,6 +540,9 @@ export default function App() {
           {view === 'run' && <Run db={db} memberNames={memberNames} />}
           {view === 'enchants' && (
             <Enchants db={db} update={update} readOnly={readOnly} memberNames={memberNames} />
+          )}
+          {view === 'projects' && (
+            <Projects db={db} update={update} readOnly={readOnly} memberNames={memberNames} />
           )}
           {view === 'items' && (
             <Database

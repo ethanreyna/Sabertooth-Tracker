@@ -309,6 +309,53 @@ export interface Settings {
 
 export const DEFAULT_GUILD_CUT_PCT = 20;
 
+/**
+ * One line of a project stage's cost — a pile of septims, or a stack of a
+ * named item. `unit` is free text so "8,000 Septims" and "400" (a plain
+ * count) both read naturally without the item name having to carry it.
+ */
+export interface ProjectRequirement {
+  id: string;
+  item: string;
+  qty: number;
+  unit: string;
+}
+
+/** One contribution toward a requirement — what got turned in, not what's
+ *  still owed, so the running total is just these added up. */
+export interface ProjectContribution {
+  id: string;
+  requirementId: string;
+  qty: number;
+  by: string;
+  note: string;
+  at: string;
+}
+
+/** One phase of a project, with its own cost list — a stronghold expansion's
+ *  "Stage 1: Palisade" or a flat-priced "Stations" list are both just this. */
+export interface ProjectStage {
+  id: string;
+  name: string;
+  description: string;
+  requirements: ProjectRequirement[];
+}
+
+/** A big multi-stage undertaking — a stronghold expansion, a guild hall
+ *  addition — tracked stage by stage, requirement by requirement, as members
+ *  turn things in. Contributions live at the project level, not nested under
+ *  a requirement, so moving or renumbering stages never orphans a record of
+ *  who gave what. */
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  stages: ProjectStage[];
+  contributions: ProjectContribution[];
+  addedBy: string;
+  at: string;
+}
+
 export interface DB {
   settings: Settings;
   members: Member[];
@@ -323,6 +370,7 @@ export interface DB {
   items: ItemRecord[];
   enchantments: EnchantmentRecord[];
   enchants: EnchantRequest[];
+  projects: Project[];
 }
 
 /** One row of the market price list, mirrored from the guild's Google Sheet.
