@@ -25,7 +25,7 @@ export function DungeonsSection({
   onEditDungeon: (id: string) => void;
   onPlaceDungeon: (id: string) => void;
 }) {
-  const trackedCount = db.dungeons.filter((g) => g.respawnDays > 0).length;
+  const trackedCount = db.dungeons.filter((g) => g.respawnMinutes > 0).length;
 
   return (
     <Tabs
