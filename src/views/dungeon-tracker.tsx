@@ -43,18 +43,19 @@ function formatCountdown(ms: number): string {
   return `${mins}:${pad(secs)}`;
 }
 
-/** Reads "5:34" or "1:05:34" back into total seconds — the same clock shape
- *  the countdown itself displays, so setting a timer means typing what you
- *  want to see, not converting it to a flat number first. Null when it
- *  doesn't parse, which leaves the form as a no-op rather than guessing. */
+/** Reads a typed duration back into total seconds. Colons are cosmetic —
+ *  stripped out before anything else happens — so "543", "5:43", and even a
+ *  stray ":5:43" all land the same place: digits are grouped from the right
+ *  in twos (seconds, then minutes, then hours), the way a stopwatch reads
+ *  digits typed on a keypad. Null when there's nothing to read, which leaves
+ *  the form as a no-op rather than guessing. */
 function parseDuration(text: string): number | null {
-  const parts = text.trim().split(':');
-  if (parts.length < 2 || parts.length > 3 || !parts.every((p) => /^\d+$/.test(p))) return null;
-  const nums = parts.map(Number);
-  const secs = nums[nums.length - 1];
-  if (secs > 59) return null;
-  if (nums.length === 3 && nums[1] > 59) return null;
-  const total = nums.length === 3 ? nums[0] * 3600 + nums[1] * 60 + nums[2] : nums[0] * 60 + nums[1];
+  const digits = text.replace(/\D/g, '');
+  if (!digits) return null;
+  const secs = Number(digits.slice(-2)) || 0;
+  const mins = Number(digits.slice(-4, -2)) || 0;
+  const hours = Number(digits.slice(0, -4)) || 0;
+  const total = hours * 3600 + mins * 60 + secs;
   return total > 0 ? total : null;
 }
 
@@ -173,8 +174,9 @@ function TrackDungeonForm({ untracked, onTrack }: {
           <Field label="Respawn time" htmlFor="track-duration" className="w-32">
             <Input
               id="track-duration" name="duration" type="text" inputMode="numeric" required
-              placeholder="5:34" pattern="^\d+:[0-5]\d(:[0-5]\d)?$" title="Minutes:seconds, like 5:34"
+              placeholder="543" title="543, or 5:43 — however you'd rather type it"
             />
+            <p className="text-[11px] text-muted-foreground">543 becomes 5:43</p>
           </Field>
           <Button type="submit" disabled={!name}><Plus />Start tracking</Button>
         </form>
