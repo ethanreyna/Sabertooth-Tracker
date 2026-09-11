@@ -355,6 +355,9 @@ export interface Project {
   id: string;
   name: string;
   description: string;
+  /** Whether the guild is actively collecting toward this one right now —
+   *  surfaced on the dashboard. Not exclusive; more than one can run at once. */
+  active: boolean;
   stages: ProjectStage[];
   contributions: ProjectContribution[];
   addedBy: string;
