@@ -119,7 +119,9 @@ export function Suggest({ cfg, memberNames, itemNames, enchantmentNames }: {
           <TabsTrigger value="job">A job</TabsTrigger>
           <TabsTrigger value="ledger">A bank entry</TabsTrigger>
           <TabsTrigger value="bankItem">A storage item</TabsTrigger>
-          <TabsTrigger value="enchant">An enchantment</TabsTrigger>
+          {/* Enchanting is hidden along with the waitlist itself — see App.tsx.
+              The tab's own content and submit handler are left in place below,
+              so bringing it back is just restoring this trigger. */}
         </TabsList>
 
         <TabsContent value="job" className="mt-4">
