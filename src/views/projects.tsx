@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import {
-  ChevronLeft, ChevronDown, ChevronUp, CircleCheck, FolderPlus, Package, Pencil, Plus, Trash2, Upload,
+  ChevronLeft, ChevronDown, ChevronUp, CircleCheck, Flag, FolderPlus, Package, Pencil, Plus, Trash2, Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -28,7 +28,7 @@ const stageStats = (project: Project, stage: ProjectStage) => {
   return { done, total };
 };
 
-const projectStats = (project: Project) => {
+export const projectStats = (project: Project) => {
   const total = project.stages.reduce((sum, st) => sum + st.requirements.length, 0);
   const done = project.stages.reduce((sum, st) => sum + stageStats(project, st).done, 0);
   return { done, total, pct: total > 0 ? Math.round((done / total) * 100) : 0 };
@@ -42,6 +42,7 @@ function buildProject(draft: ParsedProject, addedBy: string): Project {
     id: uid(),
     name: draft.name || 'Untitled project',
     description: '',
+    active: false,
     addedBy, at,
     stages: draft.stages.map((st) => ({
       id: uid(),
@@ -376,16 +377,27 @@ function ProjectDetail({ project, readOnly, memberNames, itemNames, update, onBa
 
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-semibold">{project.name}</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-semibold">{project.name}</h2>
+            {project.active && <TonedBadge tone="amber">Actively collecting</TonedBadge>}
+          </div>
           {project.description && <p className="mt-1 text-sm text-muted-foreground">{project.description}</p>}
           <p className="mt-1 text-xs text-muted-foreground">
             {project.addedBy ? `Added by ${project.addedBy}` : 'Added'} {ago(project.at)}
           </p>
         </div>
         {!readOnly && (
-          <Button variant="ghost" size="icon-xs" aria-label="Edit project" onClick={() => setEditingHeader(true)}>
-            <Pencil />
-          </Button>
+          <>
+            <Button
+              variant={project.active ? 'secondary' : 'outline'} size="xs"
+              onClick={() => withProject((p) => { p.active = !p.active; })}
+            >
+              <Flag />{project.active ? 'Stop collecting' : 'Mark active'}
+            </Button>
+            <Button variant="ghost" size="icon-xs" aria-label="Edit project" onClick={() => setEditingHeader(true)}>
+              <Pencil />
+            </Button>
+          </>
         )}
       </div>
 
@@ -506,7 +518,7 @@ export function Projects({ db, update, readOnly, memberNames }: {
               const id = uid();
               update((d) => {
                 d.projects.push({
-                  id, name: 'Untitled project', description: '',
+                  id, name: 'Untitled project', description: '', active: false,
                   stages: [], contributions: [], addedBy: memberNames[0] || '', at: new Date().toISOString(),
                 });
               });
@@ -535,6 +547,7 @@ export function Projects({ db, update, readOnly, memberNames }: {
                   <CardContent className="space-y-2 p-4">
                     <div className="flex items-start gap-2">
                       <span className="min-w-0 flex-1 truncate font-semibold">{p.name}</span>
+                      {p.active && <TonedBadge tone="amber">Active</TonedBadge>}
                       {complete && <TonedBadge tone="green">Complete</TonedBadge>}
                     </div>
                     {p.description && (

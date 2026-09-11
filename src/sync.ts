@@ -456,7 +456,7 @@ export function normalizeDb(raw: unknown): DB {
       }).filter((c) => c.requirementId && c.qty > 0);
       return {
         id: s(x.id) || Math.random().toString(36).slice(2, 10),
-        name: s(x.name), description: s(x.description), stages, contributions,
+        name: s(x.name), description: s(x.description), active: !!x.active, stages, contributions,
         addedBy: s(x.addedBy), at: s(x.at),
       };
     }).filter((p) => p.name),

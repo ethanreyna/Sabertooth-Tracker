@@ -470,7 +470,9 @@ export default function App() {
         </nav>
 
         <div className="flex-1 overflow-y-auto bg-muted/40 p-4">
-          {view === 'dash' && <Dashboard db={db} income={income} spend={spend} />}
+          {view === 'dash' && (
+            <Dashboard db={db} income={income} spend={spend} onOpenProjects={() => setView('projects')} />
+          )}
           {view === 'jobs' && (
             <Jobs
               db={db} q={q} exp={exp} setExp={setExp} memberNames={memberNames} update={update}
