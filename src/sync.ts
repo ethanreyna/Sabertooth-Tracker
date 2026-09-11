@@ -1,6 +1,6 @@
 import { DEFAULT_GUILD_CUT_PCT } from './types';
 import { coordOrEmpty, httpUrlOrEmpty } from './lib/maps';
-import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, EnchantmentRecord, Job, ItemRecord, LedgerEntry, BankItem, Member, MemberEntry, Price, Role, Spot, Suggestion, SyncCfg } from './types';
+import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, EnchantmentRecord, Job, ItemRecord, LedgerEntry, BankItem, Member, MemberEntry, Price, Project, ProjectContribution, ProjectRequirement, ProjectStage, Role, Spot, Suggestion, SyncCfg } from './types';
 
 const CFG_KEY = 'sabretooth-auth';
 const LEGACY_CFG_KEY = 'sabertooth-auth'; // pre-rename; read once so nobody is logged out
@@ -428,6 +428,36 @@ export function normalizeDb(raw: unknown): DB {
         by: s(x.by), at: s(x.at), doneBy: s(x.doneBy), doneAt: s(x.doneAt),
       };
     }).filter((e) => e.who && e.item),
+    projects: arr(o.projects).map((p): Project => {
+      const x = (p || {}) as Record<string, unknown>;
+      const stages = arr(x.stages).map((st): ProjectStage => {
+        const sx = (st || {}) as Record<string, unknown>;
+        const requirements = arr(sx.requirements).map((r): ProjectRequirement => {
+          const rx = (r || {}) as Record<string, unknown>;
+          return {
+            id: s(rx.id) || Math.random().toString(36).slice(2, 10),
+            item: s(rx.item), qty: Math.max(0, n(rx.qty)), unit: s(rx.unit),
+          };
+        }).filter((r) => r.item);
+        return {
+          id: s(sx.id) || Math.random().toString(36).slice(2, 10),
+          name: s(sx.name), description: s(sx.description), requirements,
+        };
+      }).filter((st) => st.name);
+      const contributions = arr(x.contributions).map((c): ProjectContribution => {
+        const cx = (c || {}) as Record<string, unknown>;
+        return {
+          id: s(cx.id) || Math.random().toString(36).slice(2, 10),
+          requirementId: s(cx.requirementId), qty: Math.max(0, n(cx.qty)),
+          by: s(cx.by), note: s(cx.note), at: s(cx.at),
+        };
+      }).filter((c) => c.requirementId && c.qty > 0);
+      return {
+        id: s(x.id) || Math.random().toString(36).slice(2, 10),
+        name: s(x.name), description: s(x.description), stages, contributions,
+        addedBy: s(x.addedBy), at: s(x.at),
+      };
+    }).filter((p) => p.name),
   };
 
 }
