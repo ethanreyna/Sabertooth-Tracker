@@ -20,7 +20,9 @@ const STATUS_TEXT: Record<DungeonStatus, string> = {
   unknown: 'text-sky-600 dark:text-sky-400',
 };
 
-export function Dungeons({ db, update, readOnly, onEdit, onPlace }: {
+/** The full scouted-dungeon list — the "Dungeon Database" tab inside the
+ *  Dungeons section (see dungeons-section.tsx). */
+export function DungeonDatabase({ db, update, readOnly, onEdit, onPlace }: {
   db: DB;
   update: (fn: (d: DB) => void) => void;
   readOnly: boolean;

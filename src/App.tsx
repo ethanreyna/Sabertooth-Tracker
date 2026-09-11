@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Boxes, Coins, Construction, FileInput, Hammer, Inbox, LayoutDashboard, Swords, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, Settings, Shield, Skull, Sun, Users, Briefcase,
+  Boxes, Coins, Construction, FileInput, Hammer, Inbox, LayoutDashboard, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, Settings, Shield, Skull, Sun, Users, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,14 +13,14 @@ import { Jobs } from '@/views/jobs';
 import { Storage } from '@/views/storage';
 import { Ledger as Bank } from '@/views/ledger';
 import { Prices } from '@/views/prices';
-import { Dungeons } from '@/views/dungeons';
+import { DungeonsSection } from '@/views/dungeons-section';
+import type { DungeonsTab } from '@/views/dungeons-section';
 import { Recipes } from '@/views/recipes';
 import { MapView } from '@/views/map';
 import { Suggestions } from '@/views/suggestions';
 import { Suggest } from '@/views/suggest';
 import { Database } from '@/views/items';
 import type { DatabaseTab } from '@/views/items';
-import { Run } from '@/views/run';
 import { Enchants } from '@/views/enchants';
 import { Projects } from '@/views/projects';
 import { Settings as SettingsView } from '@/views/settings';
@@ -39,13 +39,13 @@ import {
 import { cn } from '@/lib/utils';
 import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
-type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'run' | 'enchants' | 'projects' | 'recipes' | 'settings' | 'suggestions' | 'suggest';
+type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'enchants' | 'projects' | 'recipes' | 'settings' | 'suggestions' | 'suggest';
 
 /** What a read-only guest is allowed to see. `ledger` is the market price list,
  *  which comes from the public sheet; `bank` (the guild's septims) stays hidden,
  *  and the Worker strips those transactions from a guest response entirely.
  *  `enchants` is deliberately absent — see the note by NAV below. */
-const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'items', 'run', 'projects', 'recipes', 'settings', 'suggest'];
+const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'items', 'projects', 'recipes', 'settings', 'suggest'];
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -61,7 +61,6 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'items', label: 'Database', icon: <Boxes /> },
   { id: 'settings', label: 'Settings', icon: <Users /> },
   { id: 'suggestions', label: 'Suggestions', icon: <Inbox /> },
-  { id: 'run', label: 'Loot Tracker', icon: <Swords /> },
   // Enchanting is left out of the sidebar rather than removed — the current
   // server has no enchanter, but 'enchants' stays a real view (TITLES, the
   // render switch below, the guest Suggest tab's kind) so putting this line
@@ -72,7 +71,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
 
 const TITLES: Record<View, string> = {
   dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', map: 'Map',
-  bank: 'Bank', ledger: 'Ledger', items: 'Database', run: 'Loot Tracker', enchants: 'Enchanting waitlist',
+  bank: 'Bank', ledger: 'Ledger', items: 'Database', enchants: 'Enchanting waitlist',
   projects: 'Projects', recipes: 'Recipes',
   settings: 'Settings', suggestions: 'Guest suggestions', suggest: 'Suggest a change',
 };
@@ -83,9 +82,15 @@ type Action = { label: string; modal: ModalKind; variant?: 'outline' };
 const ACTIONS: Partial<Record<View, Action[]>> = {
   jobs: [{ label: 'Import', modal: 'import', variant: 'outline' }, { label: 'New job', modal: 'job' }],
   storage: [{ label: 'Import', modal: 'import', variant: 'outline' }, { label: 'New storage', modal: 'barrel' }],
-  dungeons: [{ label: 'New dungeon', modal: 'dungeon' }],
   map: [{ label: 'New point', modal: 'spot' }],
   bank: [{ label: 'New item', modal: 'bankItem' }, { label: 'New entry', modal: 'ledger' }],
+};
+
+/** The Dungeons page holds three lists behind tabs, so its button depends on which. */
+const DUNGEONS_ACTIONS: Record<DungeonsTab, Action[]> = {
+  loot: [],
+  tracker: [],
+  database: [{ label: 'New dungeon', modal: 'dungeon' }],
 };
 
 /** The Database page holds two lists behind tabs, so its button depends on which. */
@@ -115,6 +120,7 @@ export default function App() {
   const [editItemId, setEditItemId] = useState<string | null>(null);
   const [editEnchantmentId, setEditEnchantmentId] = useState<string | null>(null);
   const [dbTab, setDbTab] = useState<DatabaseTab>('items');
+  const [dungeonsTab, setDungeonsTab] = useState<DungeonsTab>('database');
   // A job or storage record read off a pasted board post, waiting to be
   // reviewed in the normal form. Never saved straight from the importer.
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -363,7 +369,8 @@ export default function App() {
     ? undefined
     : view === 'settings' ? SETTINGS_ACTIONS[settingsTab]
       : view === 'items' ? DATABASE_ACTIONS[dbTab]
-        : ACTIONS[view];
+        : view === 'dungeons' ? DUNGEONS_ACTIONS[dungeonsTab]
+          : ACTIONS[view];
   const pending = db.suggestions.filter((s) => s.status === 'pending').length;
 
   return (
@@ -478,10 +485,11 @@ export default function App() {
             />
           )}
           {view === 'dungeons' && (
-            <Dungeons
-              db={db} update={update} readOnly={readOnly}
-              onEdit={(id) => { setEditDungeonId(id); setModal('dungeon'); }}
-              onPlace={(id) => { setPlacingTarget({ kind: 'dungeon', id }); setView('map'); }}
+            <DungeonsSection
+              db={db} update={update} readOnly={readOnly} memberNames={memberNames}
+              tab={dungeonsTab} onTabChange={setDungeonsTab}
+              onEditDungeon={(id) => { setEditDungeonId(id); setModal('dungeon'); }}
+              onPlaceDungeon={(id) => { setPlacingTarget({ kind: 'dungeon', id }); setView('map'); }}
             />
           )}
           {view === 'map' && (
@@ -541,7 +549,6 @@ export default function App() {
               enchantmentNames={enchantmentNames(db)}
             />}
           {view === 'ledger' && <Prices />}
-          {view === 'run' && <Run db={db} memberNames={memberNames} />}
           {view === 'enchants' && (
             <Enchants db={db} update={update} readOnly={readOnly} memberNames={memberNames} />
           )}
