@@ -349,7 +349,7 @@ export function normalizeDb(raw: unknown): DB {
         x: coordOrEmpty(x.x), y: coordOrEmpty(x.y),
         imgs: arr(x.imgs).map((u) => s(u)).filter(Boolean),
         addedBy: s(x.addedBy), at: s(x.at),
-        respawnDays: Math.max(0, Math.round(n(x.respawnDays))),
+        respawnMinutes: Math.max(0, Math.round(n(x.respawnMinutes))),
         lastCleared: s(x.lastCleared),
       };
     }).filter((g) => g.name),

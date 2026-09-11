@@ -298,7 +298,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
           recommended: Math.max(0, Number(f.get('recommended') || 0)),
           chests: Math.min(20, Math.max(0, Number(f.get('chests') || 0))),
           status: 'active',
-          respawnDays: 0, lastCleared: '',
+          respawnMinutes: 0, lastCleared: '',
           difficulty: String(f.get('difficulty') || '').trim(),
           notes: String(f.get('notes') || ''),
           x, y, imgs: [],
@@ -401,7 +401,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
       // "not tracked" is correct — editing one that's already being tracked
       // must never wipe its respawn timer.
       d.dungeons.push({
-        id: uid(), ...fields, respawnDays: 0, lastCleared: '', at: new Date().toISOString(),
+        id: uid(), ...fields, respawnMinutes: 0, lastCleared: '', at: new Date().toISOString(),
       });
     });
   };
