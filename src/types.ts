@@ -101,9 +101,9 @@ export interface Dungeon {
   imgs: string[]; // map screenshots (R2 URLs)
   addedBy: string;
   at: string;
-  /** How long loot takes to come back, in minutes. 0 means the Dungeon
+  /** How long loot takes to come back, in seconds. 0 means the Dungeon
    *  Tracker isn't watching this one. */
-  respawnMinutes: number;
+  respawnSeconds: number;
   /** When someone last cleared it, or blank if it's never been tracked. */
   lastCleared: string;
 }
@@ -344,6 +344,10 @@ export interface ProjectStage {
   name: string;
   description: string;
   requirements: ProjectRequirement[];
+  /** Whether the guild is actively collecting toward this stage right now —
+   *  surfaced on the dashboard. Not exclusive; stages across different
+   *  projects (or even the same one) can be active at the same time. */
+  active: boolean;
 }
 
 /** A big multi-stage undertaking — a stronghold expansion, a guild hall
@@ -355,9 +359,6 @@ export interface Project {
   id: string;
   name: string;
   description: string;
-  /** Whether the guild is actively collecting toward this one right now —
-   *  surfaced on the dashboard. Not exclusive; more than one can run at once. */
-  active: boolean;
   stages: ProjectStage[];
   contributions: ProjectContribution[];
   addedBy: string;

@@ -4,12 +4,15 @@ import { Clock, Plus, Timer, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { EmptyState, Field, Picker, TonedBadge, choices } from '@/components/bits';
+import { EmptyState, Field, Picker, choices } from '@/components/bits';
 import { ago, sep } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import type { DB, Dungeon } from '@/types';
 
 /** Ticks once a second so every countdown on the page moves together, off one
- *  timer instead of one per row. */
+ *  timer instead of one per row. Lives only around the tracked list — the
+ *  "track a dungeon" form above it has no reason to re-render every second,
+ *  and doing so was resetting its search box's filter mid-type. */
 function useNow(): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -22,7 +25,7 @@ function useNow(): number {
 /** When loot is due back, in epoch ms — nothing here is stored, so it's
  *  never stale between renders. */
 function readyAt(g: Dungeon): number {
-  return new Date(g.lastCleared).getTime() + g.respawnMinutes * 60_000;
+  return new Date(g.lastCleared).getTime() + g.respawnSeconds * 1000;
 }
 
 /** "5:34" while under an hour, "1:05:34" once it isn't, "2d 03:14:07" for
@@ -38,6 +41,21 @@ function formatCountdown(ms: number): string {
   if (days > 0) return `${days}d ${pad(hours)}:${pad(mins)}:${pad(secs)}`;
   if (hours > 0) return `${hours}:${pad(mins)}:${pad(secs)}`;
   return `${mins}:${pad(secs)}`;
+}
+
+/** Reads "5:34" or "1:05:34" back into total seconds — the same clock shape
+ *  the countdown itself displays, so setting a timer means typing what you
+ *  want to see, not converting it to a flat number first. Null when it
+ *  doesn't parse, which leaves the form as a no-op rather than guessing. */
+function parseDuration(text: string): number | null {
+  const parts = text.trim().split(':');
+  if (parts.length < 2 || parts.length > 3 || !parts.every((p) => /^\d+$/.test(p))) return null;
+  const nums = parts.map(Number);
+  const secs = nums[nums.length - 1];
+  if (secs > 59) return null;
+  if (nums.length === 3 && nums[1] > 59) return null;
+  const total = nums.length === 3 ? nums[0] * 3600 + nums[1] * 60 + nums[2] : nums[0] * 60 + nums[1];
+  return total > 0 ? total : null;
 }
 
 /** "just now" / "12 min ago" / "3 hrs ago" — {@link ago} only tells days
@@ -65,16 +83,23 @@ function TrackedRow({ g, now, readOnly, onClear, onStop }: {
   const ready = msLeft <= 0;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b py-2.5 last:border-b-0">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b py-3 last:border-b-0">
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{g.name}</p>
         <p className="text-xs text-muted-foreground">
-          Cleared {clearedAgo(g.lastCleared, now)} · resets {g.respawnMinutes} min later
+          Cleared {clearedAgo(g.lastCleared, now)} · resets {formatCountdown(g.respawnSeconds * 1000)} after clearing
         </p>
       </div>
-      <TonedBadge tone={ready ? 'green' : 'amber'} className="font-mono tabular-nums">
-        {ready ? 'Ready now' : formatCountdown(msLeft)}
-      </TonedBadge>
+      <div
+        className={cn(
+          'shrink-0 rounded-lg border px-3 py-1 text-center font-mono text-2xl leading-tight font-bold tabular-nums',
+          ready
+            ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+            : 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+        )}
+      >
+        {ready ? 'Ready' : formatCountdown(msLeft)}
+      </div>
       {!readOnly && (
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="outline" size="xs" onClick={onClear}>
@@ -89,9 +114,35 @@ function TrackedRow({ g, now, readOnly, onClear, onStop }: {
   );
 }
 
+/** The live-ticking half of the tracker, isolated from the form above it so
+ *  typing in the dungeon picker doesn't fight a re-render every second. */
+function TrackedList({ tracked, readOnly, withDungeon }: {
+  tracked: Dungeon[];
+  readOnly: boolean;
+  withDungeon: (id: string, fn: (g: Dungeon) => void) => void;
+}) {
+  const now = useNow();
+  return (
+    <Card>
+      <CardContent className="p-4">
+        {tracked.map((g) => (
+          <TrackedRow
+            key={g.id}
+            g={g}
+            now={now}
+            readOnly={readOnly}
+            onClear={() => withDungeon(g.id, (x) => { x.lastCleared = new Date().toISOString(); })}
+            onStop={() => withDungeon(g.id, (x) => { x.respawnSeconds = 0; x.lastCleared = ''; })}
+          />
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 function TrackDungeonForm({ untracked, onTrack }: {
   untracked: Dungeon[];
-  onTrack: (dungeonId: string, respawnMinutes: number) => void;
+  onTrack: (dungeonId: string, respawnSeconds: number) => void;
 }) {
   const [name, setName] = useState('');
 
@@ -99,9 +150,9 @@ function TrackDungeonForm({ untracked, onTrack }: {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     const g = untracked.find((x) => x.name === name);
-    const minutes = Math.max(1, Math.round(Number(f.get('minutes') || 0)));
-    if (!g || !minutes) return;
-    onTrack(g.id, minutes);
+    const seconds = parseDuration(String(f.get('duration') || ''));
+    if (!g || !seconds) return;
+    onTrack(g.id, seconds);
     setName('');
     e.currentTarget.reset();
   };
@@ -119,8 +170,11 @@ function TrackDungeonForm({ untracked, onTrack }: {
               placeholder="Search scouted dungeons…"
             />
           </Field>
-          <Field label="Minutes to respawn" htmlFor="track-minutes" className="w-36">
-            <Input id="track-minutes" name="minutes" type="number" min={1} required placeholder="45" />
+          <Field label="Respawn time" htmlFor="track-duration" className="w-32">
+            <Input
+              id="track-duration" name="duration" type="text" inputMode="numeric" required
+              placeholder="5:34" pattern="^\d+:[0-5]\d(:[0-5]\d)?$" title="Minutes:seconds, like 5:34"
+            />
           </Field>
           <Button type="submit" disabled={!name}><Plus />Start tracking</Button>
         </form>
@@ -141,11 +195,10 @@ export function DungeonTracker({ db, update, readOnly }: {
   update: (fn: (d: DB) => void) => void;
   readOnly: boolean;
 }) {
-  const now = useNow();
   const tracked = db.dungeons
-    .filter((g) => g.respawnMinutes > 0)
+    .filter((g) => g.respawnSeconds > 0)
     .sort((a, b) => readyAt(a) - readyAt(b));
-  const untracked = db.dungeons.filter((g) => g.respawnMinutes === 0);
+  const untracked = db.dungeons.filter((g) => g.respawnSeconds === 0);
 
   const withDungeon = (id: string, fn: (g: Dungeon) => void) => update((d) => {
     const g = d.dungeons.find((x) => x.id === id);
@@ -157,8 +210,8 @@ export function DungeonTracker({ db, update, readOnly }: {
       {!readOnly && (
         <TrackDungeonForm
           untracked={untracked}
-          onTrack={(id, minutes) => withDungeon(id, (g) => {
-            g.respawnMinutes = minutes;
+          onTrack={(id, seconds) => withDungeon(id, (g) => {
+            g.respawnSeconds = seconds;
             g.lastCleared = new Date().toISOString();
           })}
         />
@@ -173,23 +226,10 @@ export function DungeonTracker({ db, update, readOnly }: {
               ? 'Nobody is tracking a respawn timer yet.'
               : untracked.length === 0
                 ? 'Every scouted dungeon is already being tracked.'
-                : 'Pick a dungeon above and say how long it takes to respawn to start the clock.'}
+                : 'Pick a dungeon above and set its respawn time (like 5:34) to start the clock.'}
         </EmptyState>
       ) : (
-        <Card>
-          <CardContent className="p-4">
-            {tracked.map((g) => (
-              <TrackedRow
-                key={g.id}
-                g={g}
-                now={now}
-                readOnly={readOnly}
-                onClear={() => withDungeon(g.id, (x) => { x.lastCleared = new Date().toISOString(); })}
-                onStop={() => withDungeon(g.id, (x) => { x.respawnMinutes = 0; x.lastCleared = ''; })}
-              />
-            ))}
-          </CardContent>
-        </Card>
+        <TrackedList tracked={tracked} readOnly={readOnly} withDungeon={withDungeon} />
       )}
 
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5">

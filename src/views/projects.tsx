@@ -17,16 +17,21 @@ import { cn } from '@/lib/utils';
 import type { ParsedProject } from '@/lib/parse-project';
 import type { DB, Project, ProjectRequirement, ProjectStage } from '@/types';
 
-const contributedFor = (project: Project, requirementId: string): number =>
+export const contributedFor = (project: Project, requirementId: string): number =>
   project.contributions
     .filter((c) => c.requirementId === requirementId)
     .reduce((sum, c) => sum + c.qty, 0);
 
-const stageStats = (project: Project, stage: ProjectStage) => {
+export const stageStats = (project: Project, stage: ProjectStage) => {
   const total = stage.requirements.length;
   const done = stage.requirements.filter((r) => contributedFor(project, r.id) >= r.qty && r.qty > 0).length;
-  return { done, total };
+  return { done, total, pct: total > 0 ? Math.round((done / total) * 100) : 0 };
 };
+
+/** Requirements a stage still needs more of — the "current materials"
+ *  a dashboard card points at while it's active. */
+export const stageRemaining = (project: Project, stage: ProjectStage): ProjectRequirement[] =>
+  stage.requirements.filter((r) => contributedFor(project, r.id) < r.qty);
 
 export const projectStats = (project: Project) => {
   const total = project.stages.reduce((sum, st) => sum + st.requirements.length, 0);
@@ -42,13 +47,13 @@ function buildProject(draft: ParsedProject, addedBy: string): Project {
     id: uid(),
     name: draft.name || 'Untitled project',
     description: '',
-    active: false,
     addedBy, at,
     stages: draft.stages.map((st) => ({
       id: uid(),
       name: st.name,
       description: st.description,
       requirements: st.requirements.map((r) => ({ id: uid(), item: r.item, qty: r.qty, unit: r.unit })),
+      active: false,
     })),
     contributions: [],
   };
@@ -268,17 +273,30 @@ function StageSection({ project, stage, readOnly, memberNames, itemNames, update
     if (p) fn(p);
   });
 
+  const toggleActive = () => withProject((p) => {
+    const s = p.stages.find((x) => x.id === stage.id);
+    if (s) s.active = !s.active;
+  });
+
   return (
     <Card className="overflow-hidden">
       <CardContent className="space-y-1 p-4">
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">{stage.name}</p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <p className="text-sm font-semibold">{stage.name}</p>
+              {stage.active && <TonedBadge tone="amber">Active</TonedBadge>}
+            </div>
             {stage.description && <p className="mt-0.5 text-xs text-muted-foreground">{stage.description}</p>}
           </div>
           <TonedBadge tone={complete ? 'green' : 'neutral'}>
             {total > 0 ? `${done}/${total}` : 'No requirements'}
           </TonedBadge>
+          {!readOnly && (
+            <Button variant={stage.active ? 'secondary' : 'outline'} size="xs" onClick={toggleActive}>
+              <Flag />{stage.active ? 'Stop collecting' : 'Mark active'}
+            </Button>
+          )}
           {!readOnly && (
             <Button
               variant="ghost" size="icon-xs" className="text-destructive"
@@ -377,27 +395,16 @@ function ProjectDetail({ project, readOnly, memberNames, itemNames, update, onBa
 
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold">{project.name}</h2>
-            {project.active && <TonedBadge tone="amber">Actively collecting</TonedBadge>}
-          </div>
+          <h2 className="text-lg font-semibold">{project.name}</h2>
           {project.description && <p className="mt-1 text-sm text-muted-foreground">{project.description}</p>}
           <p className="mt-1 text-xs text-muted-foreground">
             {project.addedBy ? `Added by ${project.addedBy}` : 'Added'} {ago(project.at)}
           </p>
         </div>
         {!readOnly && (
-          <>
-            <Button
-              variant={project.active ? 'secondary' : 'outline'} size="xs"
-              onClick={() => withProject((p) => { p.active = !p.active; })}
-            >
-              <Flag />{project.active ? 'Stop collecting' : 'Mark active'}
-            </Button>
-            <Button variant="ghost" size="icon-xs" aria-label="Edit project" onClick={() => setEditingHeader(true)}>
-              <Pencil />
-            </Button>
-          </>
+          <Button variant="ghost" size="icon-xs" aria-label="Edit project" onClick={() => setEditingHeader(true)}>
+            <Pencil />
+          </Button>
         )}
       </div>
 
@@ -431,7 +438,7 @@ function ProjectDetail({ project, readOnly, memberNames, itemNames, update, onBa
         <AddStageDialog
           close={() => setAddingStage(false)}
           onAdd={(name, description) => withProject((p) => {
-            p.stages.push({ id: uid(), name, description, requirements: [] });
+            p.stages.push({ id: uid(), name, description, requirements: [], active: false });
           })}
         />
       )}
@@ -518,7 +525,7 @@ export function Projects({ db, update, readOnly, memberNames }: {
               const id = uid();
               update((d) => {
                 d.projects.push({
-                  id, name: 'Untitled project', description: '', active: false,
+                  id, name: 'Untitled project', description: '',
                   stages: [], contributions: [], addedBy: memberNames[0] || '', at: new Date().toISOString(),
                 });
               });
@@ -541,13 +548,14 @@ export function Projects({ db, update, readOnly, memberNames }: {
           {db.projects.map((p) => {
             const stats = projectStats(p);
             const complete = stats.total > 0 && stats.done === stats.total;
+            const hasActiveStage = p.stages.some((st) => st.active);
             return (
               <button key={p.id} type="button" className="text-left" onClick={() => setSelectedId(p.id)}>
                 <Card className="h-full transition-colors hover:border-foreground/20">
                   <CardContent className="space-y-2 p-4">
                     <div className="flex items-start gap-2">
                       <span className="min-w-0 flex-1 truncate font-semibold">{p.name}</span>
-                      {p.active && <TonedBadge tone="amber">Active</TonedBadge>}
+                      {hasActiveStage && <TonedBadge tone="amber">Active</TonedBadge>}
                       {complete && <TonedBadge tone="green">Complete</TonedBadge>}
                     </div>
                     {p.description && (
