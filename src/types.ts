@@ -101,6 +101,11 @@ export interface Dungeon {
   imgs: string[]; // map screenshots (R2 URLs)
   addedBy: string;
   at: string;
+  /** How long loot takes to come back, in days. 0 means the Dungeon Tracker
+   *  isn't watching this one. */
+  respawnDays: number;
+  /** When someone last cleared it, or blank if it's never been tracked. */
+  lastCleared: string;
 }
 
 /** A point of interest: ore veins, hunting grounds, ingredient patches, and so
