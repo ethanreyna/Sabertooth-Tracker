@@ -22,7 +22,7 @@ const BUY_COLUMNS = ['buy', 'price to brew', 'make price', 'price of 1', 'sell',
 /** Columns that are never money, whatever they are called. */
 const NOT_MONEY = new Set([
   'buy price code', 'stock', 'low', 'high', 'avg', 'profit', 'high demand',
-  'ingredients', 'effects', 'potions used in', 'contents', 'details', 'notes',
+  'ingredients', 'effects', 'potions used in', 'contents', 'details', 'notes', 'level',
 ]);
 
 export interface Money {

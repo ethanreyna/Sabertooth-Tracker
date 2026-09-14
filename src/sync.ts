@@ -113,11 +113,13 @@ export async function pushDb(cfg: SyncCfg, db: DB, version: number): Promise<num
   return Number(j.version || 0);
 }
 
-// Bumped when the cached shape changes: rows used to be {make, unit, sell} and
-// are now {values}, so an old cache would hand the table rows with no `values`
-// at all. A versioned key retires it instead of crashing on it.
-const PRICES_KEY = 'sabretooth-prices-v2';
-const LEGACY_PRICES_KEYS = ['sabretooth-prices'];
+// Bumped when the cached shape changes (rows used to be {make, unit, sell} and
+// are now {values}), and again when the ledger moved to a new sheet: the list
+// only auto-pulls when nothing is cached, so without retiring the old key a
+// returning member would keep seeing the previous server's prices until they
+// happened to hit Refresh.
+const PRICES_KEY = 'sabretooth-prices-v3';
+const LEGACY_PRICES_KEYS = ['sabretooth-prices', 'sabretooth-prices-v2'];
 
 /** Coerces one row from cache or the wire, whatever shape it arrived in. */
 function normPrice(raw: unknown): Price | null {

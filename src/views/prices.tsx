@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 import type { Price } from '@/types';
 
 const SHEET_URL =
-  'https://docs.google.com/spreadsheets/d/1i5_O_jqz2wPBBNUzjCk0gwMRBIdVdnbIc0BG1S-KMWQ/edit';
+  'https://docs.google.com/spreadsheets/d/1XKxRsu-C_mu3uDYv0rLYcSPGAHUCnaMKj41CsNU5AJo/edit';
 
 const ALL = '__all';
 
@@ -24,7 +24,7 @@ const PRICE_ORDER = ['make price', 'price to brew', 'price of 1', 'buy', 'price'
 
 // Prose columns: left-aligned and allowed to wrap, unlike the numeric ones.
 const TEXT_COLUMNS = new Set([
-  'ingredients', 'effects', 'potions used in', 'contents', 'details', 'notes',
+  'ingredients', 'effects', 'potions used in', 'contents', 'details', 'notes', 'level',
 ]);
 
 const isTextColumn = (label: string) => TEXT_COLUMNS.has(label.toLowerCase());
