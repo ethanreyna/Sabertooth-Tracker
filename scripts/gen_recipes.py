@@ -1,217 +1,139 @@
 #!/usr/bin/env python3
-"""Extracts the blacksmith recipe doc into a static TS module.
+"""Builds the static recipe module from the transcribed recipe list.
 
-    gen_recipes.py <doc.docx|doc.txt> <out.ts>
+    gen_recipes.py <recipes.md> <out.ts>
 
-The doc is a flattened three-column table. Records come in groups of three
-(name, stat, ingredients) under an "Item / Armor|Damage / Ingredients" header,
-which is itself preceded by a category name. "Part N — <station>" headings
-split the whole thing by crafting station.
+The source is a markdown document: one `## SECTION` heading per crafting
+menu, each holding a pipe table whose header names its columns — `Item` (or
+`Output`), an optional rating column (`Dmg` or `Armor`), and `Requires`.
+Weight and value columns are read past; the app has no use for them yet.
+Bullet lines anywhere in the file become the notes shown under the tables.
 
-Not a live feed: re-run this when the doc changes.
+Not a live feed: re-run this when the transcription changes.
 """
-import html
 import json
 import re
 import sys
-import zipfile
+from collections import Counter
 
 SRC, OUT = sys.argv[1], sys.argv[2]
 
-# The armour blocks head their middle column "Armor"; the weapons block calls it
-# "Damage". Accept either, or the weapons block is silently skipped.
-STAT_HEADERS = ('Armor', 'Damage', 'Dmg')
-
-# "Part I — Skyforge", "Part II — Blacksmith Forge"
-PART = re.compile(r'^Part\s+[IVX\d]+\s*[—–-]\s*(.+)$')
-
-
-def read_lines(path):
-    """Text lines from a .docx, or from an already-extracted .txt."""
-    if not path.lower().endswith('.docx'):
-        raw = open(path, encoding='utf-8-sig').read()
-    else:
-        xml = zipfile.ZipFile(path).read('word/document.xml').decode('utf-8')
-        # One paragraph per line; tabs kept so column text doesn't run together.
-        xml = xml.replace('</w:p>', '\n').replace('<w:tab/>', '\t')
-        raw = html.unescape(re.sub(r'<[^>]+>', '', xml))
-    lines = [ln.replace('\r', '').lstrip('\t').strip() for ln in raw.split('\n')]
-    return [ln for ln in lines if ln != '']
-
-
-# The smelter tables have no rating to give, so they run two columns instead of
-# three: what you get, and what it takes. The Dwemer block inverts that — it
-# lists the scrap and what it melts into.
-PAIR_HEADERS = {
-    ('Product', 'Requires'): 'makes',
-    ('Scrap Piece', 'Melts Into'): 'melts',
+# Section heading -> (station, category). Everything the footage showed came
+# off one forge menu plus the smelter, so there is no Skyforge / Blacksmith
+# Forge split to preserve any more.
+SECTIONS = {
+    'WEAPONS': ('Forge', 'Weapons'),
+    'ARMOR & SHIELDS': ('Forge', 'Armor & Shields'),
+    'JEWELRY': ('Forge', 'Jewelry'),
+    'MISC': ('Forge', 'Miscellaneous'),
+    'SMELTER': ('Smelter', 'Ingots & Refined Materials'),
 }
+NAME_COLS = ('item', 'output')
+STAT_COLS = ('dmg', 'armor')
 
 
-def is_header(seq):
-    """A three-column header: Item / Armor|Damage|Dmg / Ingredients."""
-    return (
-        len(seq) == 3
-        and seq[0] == 'Item'
-        and seq[1] in STAT_HEADERS
-        and seq[2] == 'Ingredients'
-    )
-
-
-def pair_mode(seq):
-    """'makes', 'melts', or None for a two-column header."""
-    return PAIR_HEADERS.get(tuple(seq[:2])) if len(seq) >= 2 else None
-
-
-def block_starts(lines, i):
-    """True when a new table's header begins at i — either shape."""
-    return is_header(tuple(lines[i:i + 3])) or pair_mode(lines[i:i + 2]) is not None
+def cells(line):
+    return [c.strip() for c in line.strip().strip('|').split('|')]
 
 
 def parse_stat(raw):
-    """Armour rating or damage. Tools list "—", meaning the item has neither.
-
-    A blank is *not* a dash: it means we have run off the end of the table, so
-    it has to fail rather than quietly become a zero-rated recipe.
-    """
-    if raw in ('—', '–', '-'):
+    """A dash (with or without a "(?)") means the rating wasn't legible in the
+    footage. A number is a number. Anything else is a transcription slip and
+    should stop the build rather than quietly become a zero-rated recipe."""
+    if re.fullmatch(r'[—–-]\s*(\(\?\))?', raw):
         return 0
-    m = re.fullmatch(r'(\d+)', raw)
-    return int(m.group(1)) if m else None
+    m = re.fullmatch(r'\d+', raw)
+    if not m:
+        raise SystemExit(f'unreadable rating {raw!r}')
+    return int(raw)
 
 
-def is_prose(line):
-    """A sentence, not an item name — the doc ends with one."""
-    return len(line.split()) > 8 or line.endswith('.')
+def clean_name(raw):
+    return re.sub(r'\s*\(\?\)\s*$', '', raw).strip()
 
 
 def parse_ingredients(raw):
+    # A trailing "*(...)*" is the transcriber's aside, not an ingredient.
+    raw = re.sub(r'\*\([^)]*\)\*', '', raw).replace('(?)', '')
     out = []
     for part in raw.split(','):
         part = part.strip()
-        if not part:
+        # "…" marks a material that couldn't be read at all.
+        if not part or part.startswith('…'):
             continue
-        m = re.match(r'^(\d+)\s+(.*)$', part)
+        # "11–12 Steel Ingot": two frames disagreed. Take the higher — a
+        # shopping list that over-asks by one is a nuisance; one that
+        # under-asks leaves you short at the forge.
+        m = re.match(r'^(\d+)(?:\s*[–-]\s*(\d+))?\s+(.+)$', part)
         if m:
-            out.append({'qty': int(m.group(1)), 'item': m.group(2).strip()})
+            qty = max(int(m.group(1)), int(m.group(2) or 0))
+            out.append({'qty': qty, 'item': m.group(3).strip()})
         else:
             out.append({'qty': 1, 'item': part})
     return out
 
 
-lines = read_lines(SRC)
-
 records = []
 notes = []
-station = ''
-category = ''
-mode = 'stat'
-i = 0
+station = category = None
+cols = None  # column positions for the table currently being read
 
-while i < len(lines):
-    ln = lines[i]
+for line in open(SRC, encoding='utf-8-sig'):
+    line = line.rstrip('\n')
 
-    part = PART.match(ln)
-    if part:
-        station = part.group(1).strip()
-        # A station's own blurb sits under its heading; keep it as a note.
-        if i + 1 < len(lines) and not block_starts(lines, i + 1):
-            nxt = lines[i + 1]
-            if len(nxt.split()) > 2 and not PART.match(nxt):
-                notes.append(f'{station}: {nxt}')
-        category = ''
-        mode = 'stat'
-        i += 1
+    heading = re.match(r'^##\s+(.+?)\s*$', line)
+    if heading:
+        key = heading.group(1).strip().upper()
+        station, category = SECTIONS.get(key, (None, None))
+        cols = None
         continue
 
-    # A header means the previous line was the category name.
-    if ln == 'Item' and is_header(tuple(lines[i:i + 3])):
-        if i > 0:
-            category = lines[i - 1]
-        mode = 'stat'
-        i += 3
+    if line.startswith('- '):
+        notes.append(line[2:].strip())
         continue
 
-    pm = pair_mode(lines[i:i + 2])
-    if pm:
-        if i > 0:
-            # "Dwemer Scrap Melting (→ Dwarven Metal Ingot)" — the parenthetical
-            # repeats what every name in the block already says.
-            category = re.sub(r'\s*\([^)]*\)\s*$', '', lines[i - 1]).strip()
-        mode = pm
-        i += 2
+    if not line.startswith('|') or station is None:
         continue
 
-    # Not in a block yet (title / subtitle lines before the first header).
-    if not category:
-        i += 1
+    row = cells(line)
+    if cols is None:
+        lower = [c.lower() for c in row]
+        cols = {
+            'name': next(i for i, c in enumerate(lower) if c in NAME_COLS),
+            'stat': next((i for i, c in enumerate(lower) if c in STAT_COLS), None),
+            'req': lower.index('requires'),
+        }
         continue
-
-    # The line before the next header is that block's category, not a record.
-    if (i + 1 < len(lines)
-            and (block_starts(lines, i + 1) or PART.match(lines[i + 1]))):
-        i += 1
-        continue
-
-    if is_prose(ln):
-        notes.append(ln)
-        i += 1
-        continue
-
-    if mode in ('makes', 'melts'):
-        second = lines[i + 1] if i + 1 < len(lines) else ''
-        if not second:
-            i += 1
-            continue
-
-        if mode == 'makes':
-            # "Iron Ingot" <- "6 Iron Ore, 6 Poor Charcoal"
-            name, ing = ln, second
-        else:
-            # "Bent Dwemer Scrap Metal" -> "→ Dwarven Metal Ingot". The product
-            # is what you are making, so it leads the name; several scraps make
-            # the same ingot, and a recipe name has to stay unique.
-            product = second.lstrip('→>-→ ').strip()
-            name, ing = f'{product} — from {ln}', ln
-
-        records.append({
-            'station': station,
-            'category': category,
-            'name': name,
-            'stat': 0,
-            'ingredients': parse_ingredients(ing),
-        })
-        i += 2
-        continue
-
-    name = ln
-    stat_raw = lines[i + 1] if i + 1 < len(lines) else ''
-    ing_raw = lines[i + 2] if i + 2 < len(lines) else ''
-
-    stat = parse_stat(stat_raw)
-    if stat is None:
-        # Shape broke; skip one line and resynchronise rather than guess.
-        print(f'  ! skipped near {name!r}: stat was {stat_raw!r}', file=sys.stderr)
-        i += 1
-        continue
+    if all(re.fullmatch(r':?-+:?', c) for c in row):
+        continue  # the |---|---| rule under the header
 
     records.append({
         'station': station,
         'category': category,
-        'name': name,
-        'stat': stat,
-        'ingredients': parse_ingredients(ing_raw),
+        'name': clean_name(row[cols['name']]),
+        'stat': parse_stat(row[cols['stat']]) if cols['stat'] is not None else 0,
+        'ingredients': parse_ingredients(row[cols['req']]),
     })
-    i += 3
+
+# Several smelter inputs make the same ingot, and a recipe name has to stay
+# unique: the bench keys its plan by name. Lead with the product — it is what
+# you are making — and say what from.
+dupes = {n for n, k in Counter(r['name'] for r in records).items() if k > 1}
+for r in records:
+    if r['name'] in dupes:
+        r['name'] = f"{r['name']} — from {r['ingredients'][0]['item']}"
+clash = [n for n, k in Counter(r['name'] for r in records).items() if k > 1]
+if clash:
+    raise SystemExit(f'recipe names still not unique: {clash}')
 
 by_station = {}
 for r in records:
-    by_station.setdefault(r['station'], {})
-    by_station[r['station']][r['category']] = by_station[r['station']].get(r['category'], 0) + 1
+    cats = by_station.setdefault(r['station'], {})
+    cats[r['category']] = cats.get(r['category'], 0) + 1
 
 print(f'parsed {len(records)} recipes', file=sys.stderr)
 for st, cats in by_station.items():
-    print(f'  {st or "(no station)"}: {sum(cats.values())}', file=sys.stderr)
+    print(f'  {st}: {sum(cats.values())}', file=sys.stderr)
     for c, n in cats.items():
         print(f'    {c}: {n}', file=sys.stderr)
 
@@ -229,13 +151,12 @@ body = ',\n'.join(
     for r in records
 )
 
-ts = f'''// Generated from the guild's "Blacksmith Recipies" doc — a one-time extraction,
-// not a live feed, so edits to the doc need a re-run of scripts/gen_recipes.py.
+ts = f'''// Generated from the guild's transcription of the server's forge and smelter
+// menus — a one-time extraction, not a live feed, so a fresh transcription
+// needs a re-run of scripts/gen_recipes.py.
 //
-// Recipes are grouped by the station that crafts them. Part II of the doc lists
-// only what the Blacksmith Forge adds; it also carries most Skyforge recipes
-// with the same ingredients, which is why the two lists differ in size rather
-// than one containing the other.
+// Everything came off one forge menu plus the smelter, so recipes are grouped
+// by menu section rather than by which forge happens to carry them.
 
 export interface RecipeIngredient {{
   qty: number;
@@ -252,7 +173,7 @@ export interface Recipe {{
   ingredients: RecipeIngredient[];
 }}
 
-export const RECIPE_NOTES: string[] = {json.dumps(notes, ensure_ascii=False, indent=2).replace('"', '"')};
+export const RECIPE_NOTES: string[] = {json.dumps(notes, ensure_ascii=False, indent=2)};
 
 export const RECIPES: Recipe[] = [
 {body},

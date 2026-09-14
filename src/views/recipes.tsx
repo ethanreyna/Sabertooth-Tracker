@@ -161,10 +161,9 @@ export function Recipes() {
       ))}
 
       <p className="text-xs text-muted-foreground">
-        Transcribed once from the guild's blacksmith recipe document — this list ships with the app
-        rather than syncing, so changes to the doc need a fresh extraction. The doc's own headings
-        say 97 and 152 recipes for the first two stations; they actually hold 102 and 151.
-        All {RECIPES.length} are here, smelting included.
+        Transcribed once from the server's forge and smelter menus — this list ships with the app
+        rather than syncing, so a new transcription needs a fresh extraction. All {RECIPES.length} are
+        here, smelting included; the notes above say where the footage ran out.
       </p>
     </div>
   );
