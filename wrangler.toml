@@ -41,8 +41,8 @@ bucket_name = "sabertooth-images"
 # orphaned the "Price of 1" values. The gid-based CSV export returns the grid
 # verbatim. Find a tab's gid by opening it and reading #gid=... from the URL.
 [vars]
-PRICES_SHEET_ID = "1i5_O_jqz2wPBBNUzjCk0gwMRBIdVdnbIc0BG1S-KMWQ"
-PRICES_SHEET_TABS = "2094851253:BARS/ORES/WOOD,684884568:ARMOR/WEAPONS/TOOLS,963198346:BOOKS AND MAGIC,1241328953:TAILORING,339112539:FOOD,1812320419:ALCHEMY INGREDIENTS,0:POTIONS,1874240246:Copy of Sheet1"
+PRICES_SHEET_ID = "1XKxRsu-C_mu3uDYv0rLYcSPGAHUCnaMKj41CsNU5AJo"
+PRICES_SHEET_TABS = "510494453:Materials,401200603:Books and Magic"
 
 # GUILD_PASSWORD is a secret, never committed. Set it with:
 #   pnpm cf:secret

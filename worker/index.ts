@@ -213,7 +213,7 @@ const VALUE_LABELS = new Set([
   'make price', 'price of 1', 'buy', 'sell', 'price', 'value', 'cost',
   'potions used in', 'ingredients', 'effects', 'contents', 'stock adjust',
   'stock change', 'details', 'notes', 'stock', 'price to brew', 'profit',
-  'high demand', 'buy price code', 'low', 'high', 'avg',
+  'high demand', 'buy price code', 'low', 'high', 'avg', 'level',
 ]);
 
 const clean = (s: string | undefined) => (s || '').trim().replace(/\s+/g, ' ');
