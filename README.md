@@ -40,8 +40,8 @@ formatting helpers.
   fishing holes: kind, location, yield, respawn, coordinates, notes and
   screenshots, plus a pasted link to keizaal.com/map. Tabbed by kind, and the
   tabs come from the data, so a written-in kind gets its own tab.
-- **Recipes** — 102 Skyforge blacksmith recipes with armour/damage and
-  ingredients, searchable **by ingredient** ("what can I make with leather
+- **Recipes** — 482 blacksmith recipes, forge and smelter, with armour/damage
+  and ingredients, searchable **by ingredient** ("what can I make with leather
   strips"). Baked in rather than synced — see *Recipes* below.
 - **Guest mode** — an **Enter as Guest** button on the login screen gives a
   read-only view of jobs, storage, dungeons, points of interest, recipes,
@@ -150,28 +150,31 @@ The maths lives in `src/lib/payout.ts` if you want to change the cut.
 
 ## Recipes
 
-`src/recipes.ts` is generated once from the guild's blacksmith recipe Google Doc
-and ships with the app — deliberately not a live feed, so the Recipes page works
-with no network and no dependence on that doc staying shared. Re-extract after
-the doc changes:
+`src/recipes.ts` is generated once from the guild's transcription of the
+server's forge and smelter menus and ships with the app — deliberately not a
+live feed, so the Recipes page works with no network. The transcription is a
+markdown document: one `## SECTION` per menu (`WEAPONS`, `ARMOR & SHIELDS`,
+`JEWELRY`, `MISC`, `SMELTER`), each a pipe table with `Item`/`Output`, a `Dmg`
+or `Armor` rating, weight, value and `Requires` columns, plus bullet lines for
+the transcriber's caveats. Re-extract after it changes:
 
 ```sh
-curl -sL -o /tmp/recipes.txt \
-  "https://docs.google.com/document/d/<DOC_ID>/export?format=txt"
-python3 scripts/gen_recipes.py /tmp/recipes.txt src/recipes.ts
+python3 scripts/gen_recipes.py path/to/recipes.md src/recipes.ts
 ```
 
-The generator prints a per-category count; check it before committing. Two
-things it handles that are easy to get wrong:
+The generator prints a per-section count; check it before committing. What it
+does with the messy bits:
 
-- The armour blocks head their middle column **Armor**, the weapons block calls
-  it **Damage**. Only matching "Armor" silently drops every weapon.
-- Ingredient counts marked `(?)` in the doc were obscured in the footage it was
-  transcribed from. They are kept verbatim rather than tidied, so a guess is
-  never mistaken for a confirmed figure.
-
-The doc's own header says "97 recipes"; it contains **102** (306 record lines,
-dividing exactly by three). The larger number is the real one.
+- A dash in the rating column means the footage was illegible and becomes 0 —
+  the page then shows a dash. Any other non-number stops the build.
+- `(?)` markers and `*(…)*` asides are stripped from names and ingredients; the
+  doubt they flagged belongs in the bullet notes, which the page shows under
+  the tables. A count given as a range (`11–12`) takes the higher — over-asking
+  by one beats coming up short at the forge.
+- Weight and value are read past: the app has nowhere to show them yet.
+- Several smelter inputs make the same ingot, so those are named
+  "`<ingot> — from <input>`". Recipe names must be unique (the bench keys its
+  plan by name), and the build fails if they aren't.
 
 ## How syncing works
 
@@ -266,7 +269,7 @@ wrangler d1 execute sabertooth --remote --file=reset.sql
 ```
 
 Recipes and the Ledger's price list aren't part of this: recipes are compiled
-into the app from a doc (`scripts/gen_recipes.py`) and the price list is
-pulled live from a Google Sheet named in `wrangler.toml`. Both reflect the old
-server's content until someone hands over a new doc or sheet for the new one —
-this reset can't fix that on its own.
+into the app from a transcription (`scripts/gen_recipes.py`, above) and the
+price list is pulled live from the Google Sheet named in `wrangler.toml`.
+Moving either to a new server means a new transcription or a new sheet — this
+reset can't do that on its own.
