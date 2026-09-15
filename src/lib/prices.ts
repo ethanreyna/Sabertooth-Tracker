@@ -9,6 +9,7 @@
  * knowable and should be left alone.
  */
 
+import type { Recipe } from '@/recipes';
 import type { Price } from '@/types';
 
 /** Which side of the counter a value is quoted from. */
@@ -148,6 +149,57 @@ export function pricedItems(rows: Price[]): Price[] {
     out.push(r);
   }
   return out;
+}
+
+/** A name as a lookup key: trimmed, single-spaced, case-folded. */
+export const nameKey = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+
+/** Priced rows by {@link nameKey}. First occurrence wins, in sheet order,
+ *  the same way {@link pricedItems} dedupes. */
+export function priceIndex(rows: Price[]): Map<string, Price> {
+  const m = new Map<string, Price>();
+  for (const r of pricedItems(rows)) m.set(nameKey(r.item), r);
+  return m;
+}
+
+export interface IngredientCost {
+  item: string;
+  qty: number;
+  /** Per-unit money, or null when the Ledger has no price for it. */
+  each: Money | null;
+}
+
+export interface RecipeCost {
+  /** Septims for one crafting, counting only the ingredients that have a price. */
+  each: number;
+  lines: IngredientCost[];
+  /** Ingredients the Ledger doesn't price — `each` is short by these. */
+  unpriced: string[];
+  approx: boolean;
+}
+
+/**
+ * What one crafting of a recipe costs in materials on the given basis: every
+ * ingredient looked up in the Ledger and added up, so a sword is its ingots
+ * and leather strips at whatever the sheet says today. Ingredients the sheet
+ * doesn't price are listed rather than counted as zero, so the total says it
+ * is short instead of quietly being wrong. "Gold" as an ingredient is septims
+ * themselves and counts at face value without needing a row.
+ */
+export function recipeCost(recipe: Recipe, index: Map<string, Price>, basis: Basis): RecipeCost {
+  const lines = recipe.ingredients.map((g): IngredientCost => {
+    if (nameKey(g.item) === 'gold') {
+      return { item: g.item, qty: g.qty, each: { each: 1, from: 'septims', approx: false } };
+    }
+    const row = index.get(nameKey(g.item));
+    return { item: g.item, qty: g.qty, each: row ? priceOf(row, basis) : null };
+  });
+  return {
+    each: lines.reduce((sum, l) => sum + (l.each ? l.each.each * l.qty : 0), 0),
+    lines,
+    unpriced: lines.filter((l) => !l.each).map((l) => l.item),
+    approx: lines.some((l) => l.each?.approx ?? false),
+  };
 }
 
 /**
