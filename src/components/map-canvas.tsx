@@ -1,8 +1,9 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { GLYPH_PATHS, glyphFor } from '@/components/map-glyphs';
 import { DUNGEON_STATUSES, STATUS_LABEL, dungeonIconStyle, dungeonLabel } from '@/lib/dungeon';
+import { dungeonHay, matchesAny, spotHay } from '@/lib/map-filter';
 import type { DB, DungeonStatus, Spot } from '@/types';
 
 // The tile pyramid was cut from Skyrim's own LOD textures, so these numbers are
@@ -183,6 +184,9 @@ export interface MapCanvasProps {
   /** Sets a dungeon's status straight from its popup — the same three-way
    *  toggle the dungeon form and its map thumbnail already offer. */
   onSetDungeonStatus: (id: string, status: DungeonStatus) => void;
+  /** Terms to light up; every other marker dims. OR-combined, and nothing is
+   *  written — this is the viewer's own lens on the map, not the record. */
+  filters: string[];
 }
 
 /** Imperative escape hatch for search: Leaflet's own view isn't state, so
@@ -193,7 +197,7 @@ export interface MapCanvasHandle {
 }
 
 const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas(
-  { db, readOnly, onPick, onOpen, onDelete, onMoveRequest, onSetDungeonStatus },
+  { db, readOnly, onPick, onOpen, onDelete, onMoveRequest, onSetDungeonStatus, filters },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -212,8 +216,24 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
   moveRef.current = onMoveRequest;
   const roRef = useRef(readOnly);
   roRef.current = readOnly;
-  // Keyed `kind:id`, filled in during the marker redraw below.
-  const markersRef = useRef(new Map<string, L.Marker>());
+  // Keyed `kind:id`, filled in during the marker redraw below, each with the
+  // text a filter term is matched against.
+  const markersRef = useRef(new Map<string, { marker: L.Marker; hay: string }>());
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+
+  /** Lights the markers any active filter matches and dims the rest; with no
+   *  filters everything is back to normal. Reads refs only, so the redraw and
+   *  a filter change can both call it. */
+  const applyFilters = useCallback(() => {
+    const active = filtersRef.current.filter((f) => f.trim() !== '');
+    for (const { marker, hay } of markersRef.current.values()) {
+      const lit = active.length === 0 || matchesAny(hay, active);
+      marker.setOpacity(lit ? 1 : 0.2);
+      // Lit markers rise above the dimmed crowd so none is buried under one.
+      marker.setZIndexOffset(lit && active.length > 0 ? 1000 : 0);
+    }
+  }, []);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -333,7 +353,6 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
         `<div style="min-width:180px">
            <div style="font-weight:600">${esc(s.name)}</div>
            <div style="opacity:.7;font-size:12px">${esc(s.kind)}${s.location ? ' · ' + esc(s.location) : ''}</div>
-           ${s.yield ? `<div style="font-size:12px;margin-top:4px">${esc(s.yield)}</div>` : ''}
            <div style="font-size:11px;opacity:.6;margin-top:4px">${esc(s.x)}, ${esc(s.y)}</div>
            <div style="display:flex;gap:10px;margin-top:6px">
              <button data-act="open" style="${btn};color:inherit">Open</button>
@@ -353,7 +372,7 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
           });
       });
       marker.addTo(group);
-      markersRef.current.set(`spot:${s.id}`, marker);
+      markersRef.current.set(`spot:${s.id}`, { marker, hay: spotHay(s) });
       makeMovable(marker, 'spot', s.id, s.name);
     }
 
@@ -415,18 +434,22 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
           });
       });
       marker.addTo(group);
-      markersRef.current.set(`dungeon:${g.id}`, marker);
+      markersRef.current.set(`dungeon:${g.id}`, { marker, hay: dungeonHay(g) });
       makeMovable(marker, 'dungeon', g.id, g.name);
     }
 
+    applyFilters();
     return () => { for (const fn of cleanups) fn(); };
-  }, [db.spots, db.dungeons]);
+  }, [db.spots, db.dungeons, applyFilters]);
+
+  useEffect(() => { applyFilters(); }, [filters, applyFilters]);
 
   useImperativeHandle(ref, () => ({
     focus: (kind, id) => {
       const map = mapRef.current;
-      const marker = markersRef.current.get(`${kind}:${id}`);
-      if (!map || !marker) return false;
+      const hit = markersRef.current.get(`${kind}:${id}`);
+      if (!map || !hit) return false;
+      const { marker } = hit;
       // A held zoom (someone deep in a corner of the map) stays put; only a
       // zoomed-out view jumps in, so a search doesn't yank the view around.
       const targetZoom = Math.max(map.getZoom(), 4);
