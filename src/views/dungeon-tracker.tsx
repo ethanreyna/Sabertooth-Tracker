@@ -59,6 +59,48 @@ function parseDuration(text: string): number | null {
   return total > 0 ? total : null;
 }
 
+/** The typed digits as a clock face: "5" → 00:05, "543" → 05:43, "10543" →
+ *  1:05:43. Empty until something is typed, so the placeholder shows. */
+function formatDigits(digits: string): string {
+  if (!digits) return '';
+  const d = digits.padStart(4, '0');
+  const hours = d.slice(0, -4);
+  return `${hours ? hours + ':' : ''}${d.slice(-4, -2)}:${d.slice(-2)}`;
+}
+
+/**
+ * A duration field that reads like the countdown it sets: an empty __:__, and
+ * digits fill in from the right as they're typed — the way a microwave or a
+ * phone's timer takes a time — so there's no colon to type and no cursor to
+ * position. Backspace drops the last digit. The digits are the whole state;
+ * the clock face is derived from them and never edited directly.
+ */
+function DurationInput({ id, digits, onChange }: {
+  id: string;
+  digits: string;
+  onChange: (digits: string) => void;
+}) {
+  // Leading zeros are dropped so "0" then "5" still reads 00:05, and six
+  // digits is as long as a respawn timer gets.
+  const push = (raw: string) => onChange(raw.replace(/\D/g, '').replace(/^0+/, '').slice(-6));
+
+  return (
+    <Input
+      id={id} value={formatDigits(digits)} placeholder="__:__" inputMode="numeric" autoComplete="off"
+      className="text-center font-mono tabular-nums"
+      title="Type the digits and they fill in from the right — 543 becomes 05:43"
+      onKeyDown={(e) => {
+        if (/^\d$/.test(e.key)) { e.preventDefault(); push(digits + e.key); }
+        else if (e.key === 'Backspace') { e.preventDefault(); onChange(digits.slice(0, -1)); }
+        else if (e.key === 'Delete') { e.preventDefault(); onChange(''); }
+      }}
+      // Paste, and soft keyboards that don't raise per-digit key events, land
+      // here; whatever they produced, only its digits count.
+      onChange={(e) => push(e.target.value)}
+    />
+  );
+}
+
 /** "just now" / "12 min ago" / "3 hrs ago" — {@link ago} only tells days
  *  apart, too coarse when the whole timer runs in minutes. Falls back to it
  *  once something's been sitting long enough that the exact minute stops
@@ -146,16 +188,19 @@ function TrackDungeonForm({ untracked, onTrack }: {
   onTrack: (dungeonId: string, respawnSeconds: number) => void;
 }) {
   const [name, setName] = useState('');
+  const [digits, setDigits] = useState('');
+  const seconds = parseDuration(digits);
+  // Two records can share a name (one added from the map, one from the form);
+  // the picker wants each name once, and the first record is as good as any.
+  const names = [...new Set(untracked.map((g) => g.name))];
 
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const f = new FormData(e.currentTarget);
     const g = untracked.find((x) => x.name === name);
-    const seconds = parseDuration(String(f.get('duration') || ''));
     if (!g || !seconds) return;
     onTrack(g.id, seconds);
     setName('');
-    e.currentTarget.reset();
+    setDigits('');
   };
 
   if (untracked.length === 0) return null;
@@ -167,18 +212,14 @@ function TrackDungeonForm({ untracked, onTrack }: {
           <Field label="Dungeon" className="min-w-56 flex-1" htmlFor="track-dungeon">
             <Picker
               id="track-dungeon" value={name} onValueChange={setName}
-              options={choices(untracked.map((g) => g.name))} ariaLabel="Dungeon to track"
+              options={choices(names)} ariaLabel="Dungeon to track"
               placeholder="Search scouted dungeons…"
             />
           </Field>
-          <Field label="Respawn time" htmlFor="track-duration" className="w-32">
-            <Input
-              id="track-duration" name="duration" type="text" inputMode="numeric" required
-              placeholder="543" title="543, or 5:43 — however you'd rather type it"
-            />
-            <p className="text-[11px] text-muted-foreground">543 becomes 5:43</p>
+          <Field label="Respawn time" htmlFor="track-duration" className="w-28">
+            <DurationInput id="track-duration" digits={digits} onChange={setDigits} />
           </Field>
-          <Button type="submit" disabled={!name}><Plus />Start tracking</Button>
+          <Button type="submit" disabled={!name || !seconds}><Plus />Start tracking</Button>
         </form>
       </CardContent>
     </Card>

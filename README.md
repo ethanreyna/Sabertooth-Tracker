@@ -37,9 +37,11 @@ formatting helpers.
 - **Dungeons** — scouted dungeons with location, recommended party size,
   difficulty, notes, and map screenshots.
 - **Points of Interest** — ore veins, hunting grounds, ingredient patches,
-  fishing holes: kind, location, yield, respawn, coordinates, notes and
-  screenshots, plus a pasted link to keizaal.com/map. Tabbed by kind, and the
-  tabs come from the data, so a written-in kind gets its own tab.
+  fishing holes: kind, location, coordinates, notes and screenshots. Naming a
+  point after a catalogue item (Orichalcum Ore) sets its kind for you. Tabbed by
+  kind, and the tabs come from the data, so a written-in kind gets its own tab.
+  On the map, the search box can also apply a filter — "Filter: Orichalcum"
+  lights up every matching marker and dims the rest, for that viewer only.
 - **Recipes** — 482 blacksmith recipes, forge and smelter, with armour/damage
   and ingredients, searchable **by ingredient** ("what can I make with leather
   strips"). Baked in rather than synced — see *Recipes* below.

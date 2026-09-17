@@ -25,6 +25,11 @@ import type { BankItem, Barrel, CollectionTarget, DB, Dungeon, DungeonStatus, En
 import { durationFromText } from '@/lib/deadline';
 import type { BarrelDraft, JobDraft } from '@/lib/parse-import';
 
+/** Naming a point after a catalogue item says what kind of place it is: an
+ *  ore is mined, an ingredient gathered, a hide hunted. Categories not listed
+ *  leave the kind alone. */
+const ITEM_KIND: Record<string, string> = { ore: 'Ore', alchemy: 'Alchemy', leather: 'Hunting' };
+
 export type ModalKind = 'job' | 'barrel' | 'dungeon' | 'spot' | 'ledger' | 'bankItem' | 'item' | 'enchantment' | 'import' | 'member' | 'role' | 'sync';
 
 const DEADLINE_MODES: Choice[] = [
@@ -77,6 +82,10 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
 }) {
   const items = catalogue(customItems);
   const itemNames = items.map((i) => i.name);
+  const kindForItem = (name: string): string | null => {
+    const def = items.find((i) => i.name.toLowerCase() === name.trim().toLowerCase());
+    return def ? ITEM_KIND[def.cat.toLowerCase()] ?? null : null;
+  };
 
   const [tag, setTag] = useState(editJob?.tag ?? (draftJob?.items.length ? COLLECTION_TAG : TAGS[0]));
   // Resource-collection jobs are collection jobs by definition, so the box is
@@ -330,8 +339,6 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
       name: String(f.get('name') || '').trim(),
       kind: spotKind.trim() || 'Other',
       location: String(f.get('location') || '').trim(),
-      yield: String(f.get('yield') || '').trim(),
-      respawn: String(f.get('respawn') || '').trim(),
       x: coordOrEmpty(String(f.get('x') || '')),
       y: coordOrEmpty(String(f.get('y') || '')),
       mapUrl: '',
@@ -689,8 +696,12 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
           <form onSubmit={submitSpot} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Name" htmlFor="sp-name">
-                <Input id="sp-name" name="name" required autoFocus
-                  defaultValue={editSpot?.name ?? ''} placeholder="e.g. Halted Stream iron veins" />
+                {/* The item list doubles as autocomplete: "oric" offers
+                    Orichalcum Ore, and picking it sets the kind to Ore. Any
+                    other name is fine too — a camp isn't an item. */}
+                <NameField id="sp-name" name="name" options={itemNames} required
+                  defaultValue={editSpot?.name ?? ''} placeholder="e.g. Orichalcum Ore, or any name"
+                  onValueChange={(v) => { const k = kindForItem(v); if (k) setSpotKind(k); }} />
               </Field>
               <Field label="Kind">
                 {/* Controlled, because choosing Dungeon changes which fields
@@ -708,7 +719,13 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                 placeholder="e.g. Halted Stream Camp, north of Whiterun" />
             </Field>
 
-            {isDungeonKind ? (
+            <Field label="Added by" htmlFor="sp-by">
+              <NameField id="sp-by" name="addedBy" options={memberNames} required
+                defaultValue={editSpot?.addedBy ?? ''}
+                placeholder="Pick a member or write in" />
+            </Field>
+
+            {isDungeonKind && (
               <div className="space-y-3 rounded-lg border border-sky-500/25 bg-sky-500/10 p-3">
                 <p className="text-xs text-sky-700 dark:text-sky-400">
                   Dungeons live in the Dungeons section, so this will be saved there rather than as a
@@ -743,17 +760,6 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                     </Field>
                   </div>
                 )}
-              </div>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Yield" htmlFor="sp-yield">
-                  <Input id="sp-yield" name="yield"
-                    defaultValue={editSpot?.yield ?? ''} placeholder="e.g. 8 iron veins + transmute" />
-                </Field>
-                <Field label="Respawn" htmlFor="sp-respawn">
-                  <Input id="sp-respawn" name="respawn"
-                    defaultValue={editSpot?.respawn ?? ''} placeholder="e.g. every 10 days" />
-                </Field>
               </div>
             )}
 
@@ -817,12 +823,6 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
                 ))}
               </div>
             )}
-
-            <Field label="Added by" htmlFor="sp-by">
-              <NameField id="sp-by" name="addedBy" options={memberNames} required
-                defaultValue={editSpot?.addedBy ?? ''}
-                placeholder="Pick a member or write in" />
-            </Field>
 
             {footer(editSpot ? 'Save point' : 'Add point')}
           </form>

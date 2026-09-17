@@ -116,8 +116,6 @@ export interface Spot {
   name: string;
   kind: string; // Ore, Hunting, Alchemy, Fishing, Wood, …
   location: string;
-  yield: string; // what it gives, e.g. "3-4 iron veins"
-  respawn: string; // e.g. "10 days"
   /** Skyrim world coordinates, as strings so "not recorded" is just empty.
    *  Used to build a UESP map link. */
   x: string;

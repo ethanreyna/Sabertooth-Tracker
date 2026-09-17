@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
@@ -49,6 +49,23 @@ export function Field({ label, htmlFor, className, children }: {
 }
 
 /**
+ * Options matching what's been typed, best first: the ones that start with it,
+ * then the ones that merely contain it, each group in its original order. So
+ * typing "dark" puts Dark Water Pass at the top rather than wherever the data
+ * happened to leave it.
+ */
+function rank<T>(items: readonly T[], label: (item: T) => string, q: string): T[] {
+  const starts: T[] = [];
+  const contains: T[] = [];
+  for (const item of items) {
+    const l = label(item).toLowerCase();
+    if (l.startsWith(q)) starts.push(item);
+    else if (l.includes(q)) contains.push(item);
+  }
+  return [...starts, ...contains];
+}
+
+/**
  * A combobox that also accepts anything typed in, for the fields where the
  * suggestion list is help rather than law — a job can be posted for someone
  * who isn't on the roster, and a point of interest can be a kind nobody has
@@ -58,18 +75,24 @@ export function Field({ label, htmlFor, className, children }: {
  * reading their values straight off FormData. Base UI's own `name` would submit
  * the *selected* item, which would silently drop a written-in value.
  */
-export function NameField({ name, options, defaultValue = '', required, placeholder, id }: {
+export function NameField({ name, options, defaultValue = '', required, placeholder, id, onValueChange }: {
   name: string; options: string[];
   defaultValue?: string; required?: boolean; placeholder?: string; id?: string;
+  /** Fires with the text as it changes — typed, picked or cleared. */
+  onValueChange?: (value: string) => void;
 }) {
   const [value, setValue] = useState(defaultValue);
   const known = options.some((o) => o.toLowerCase() === value.trim().toLowerCase());
+  const q = value.trim().toLowerCase();
+  // Matched here and handed over, rather than left to the combobox — see Picker.
+  const shown = q ? rank(options, (o) => o, q) : options;
 
   return (
     <>
       <input type="hidden" name={name} value={value} />
       <Combobox
         items={options}
+        filteredItems={shown}
         inputValue={value}
         onInputValueChange={(v, details) => {
           // Base UI treats unmatched text as a mistake and wipes it when focus
@@ -79,7 +102,9 @@ export function NameField({ name, options, defaultValue = '', required, placehol
           // the clear button. The automatic resets are ignored.
           const { reason } = details;
           if (reason !== 'input-change' && reason !== 'item-press' && reason !== 'clear-press') return;
-          setValue(String(v ?? ''));
+          const next = String(v ?? '');
+          setValue(next);
+          onValueChange?.(next);
         }}
         openOnInputClick
       >
@@ -139,11 +164,26 @@ export function Picker({ id, value, onValueChange, options, placeholder, classNa
   const all = known || !value ? options : [...options, { value, label: value }];
   const selected = known ?? (value ? all[all.length - 1] : null);
 
+  // The typed text is tracked here and the matches handed over as
+  // `filteredItems`, rather than trusting the combobox to filter on its own:
+  // left to itself it showed the whole list unfiltered, with the match sitting
+  // wherever the data happened to put it. Ranking is ours too, so a prefix
+  // match comes first. Re-opening with a selection shows everything — the
+  // selected label isn't a query, it's last time's answer.
+  const selectedLabel = selected?.label ?? '';
+  const [typed, setTyped] = useState(selectedLabel);
+  useEffect(() => { setTyped(selectedLabel); }, [selectedLabel]);
+  const q = typed.trim().toLowerCase();
+  const shown = q === '' || typed.trim() === selectedLabel ? all : rank(all, (o) => o.label, q);
+
   return (
     <Combobox<Choice>
       items={all}
+      filteredItems={shown}
       value={selected}
       onValueChange={(v) => onValueChange(v ? v.value : '')}
+      inputValue={typed}
+      onInputValueChange={(v) => setTyped(String(v ?? ''))}
       itemToStringLabel={(o) => o.label}
       isItemEqualToValue={(a, b) => a.value === b.value}
       openOnInputClick

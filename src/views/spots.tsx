@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ExternalLink, ImageIcon, Map, MapPin, Pencil, RefreshCw, Search, Trash2, X } from 'lucide-react';
+import { ExternalLink, ImageIcon, Map, MapPin, Pencil, Search, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -51,19 +51,6 @@ function SpotCard({ spot, readOnly, onEdit, remove }: {
           <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
             <MapPin className="mt-0.5 size-3 shrink-0" />
             <span className="min-w-0">{spot.location}</span>
-          </p>
-        )}
-
-        {spot.yield && (
-          <p className="text-xs">
-            <span className="text-muted-foreground">Yield: </span>{spot.yield}
-          </p>
-        )}
-
-        {spot.respawn && (
-          <p className="flex items-center gap-1.5 text-xs">
-            <RefreshCw className="size-3 shrink-0 text-muted-foreground" />
-            <span>Respawns {spot.respawn}</span>
           </p>
         )}
 
@@ -146,7 +133,7 @@ export function Spots({ db, update, readOnly, onEdit }: {
     const terms = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
     return db.spots.filter((sp) => {
       if (!terms.length) return true;
-      const hay = `${sp.name} ${sp.kind} ${sp.location} ${sp.yield} ${sp.notes}`.toLowerCase();
+      const hay = `${sp.name} ${sp.kind} ${sp.location} ${sp.notes}`.toLowerCase();
       return terms.every((t) => hay.includes(t));
     });
   }, [db.spots, q]);

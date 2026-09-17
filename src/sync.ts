@@ -360,7 +360,7 @@ export function normalizeDb(raw: unknown): DB {
       return {
         id: s(x.id) || Math.random().toString(36).slice(2, 10),
         name: s(x.name), kind: s(x.kind, 'Other'),
-        location: s(x.location), yield: s(x.yield), respawn: s(x.respawn),
+        location: s(x.location),
         x: coordOrEmpty(x.x), y: coordOrEmpty(x.y),
         // Only http(s) links are kept, so a stored value can't become a
         // javascript: URL that runs when someone clicks "Open on map".
