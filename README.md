@@ -30,6 +30,12 @@ formatting helpers.
 - **Storage** — track owner, whether they're a guild member, weekly rate (50
   septims default), rental window, paid status, and a location screenshot.
 - **Ledger** — income and spending with a running treasury balance.
+- **Prices, Barter and Sales Tracker** — the market price list pulled from the
+  guild's Google Sheet; a two-sided barter calculator (what they give at buy
+  prices, what we give at sell, and the offset) that also costs recipes from
+  their ingredients and refuses outright — **DON'T MAKE THIS DEAL** — anything
+  the sheet marks N/A on that side; and a members-only log of trades actually
+  made, with values frozen at the time of the deal.
 - **Roles** — define guild ranks, each optionally with a progression track
   ("Initiate advances to Saberblooded after 3 completions").
 - **Roster** — assign roles, log completions and notes against a member, and

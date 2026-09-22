@@ -363,6 +363,35 @@ export interface Project {
   at: string;
 }
 
+/** One line of a logged trade: what changed hands, how many, and what it was
+ *  worth in septims at the time — frozen, so a later price change on the
+ *  sheet doesn't rewrite history. Septims themselves are a line named
+ *  "Septims" with qty and value equal. */
+export interface SaleLine {
+  item: string;
+  qty: number;
+  septims: number;
+}
+
+/**
+ * A trade the guild made, as it stood at the counter: what came in from the
+ * other party, what went out, who they were and who logged it. Values are
+ * recorded rather than recomputed, so the tracker is a ledger of what was
+ * agreed and not a live re-pricing of old deals.
+ */
+export interface Sale {
+  id: string;
+  /** The other party — a player, a merchant, another guild. */
+  party: string;
+  /** What they gave the guild. */
+  theirs: SaleLine[];
+  /** What the guild gave them. */
+  ours: SaleLine[];
+  note: string;
+  by: string;
+  at: string;
+}
+
 export interface DB {
   settings: Settings;
   members: Member[];
@@ -378,6 +407,7 @@ export interface DB {
   enchantments: EnchantmentRecord[];
   enchants: EnchantRequest[];
   projects: Project[];
+  sales: Sale[];
 }
 
 /** One row of the market price list, mirrored from the guild's Google Sheet.

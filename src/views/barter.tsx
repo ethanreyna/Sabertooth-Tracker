@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeftRight, Plus, Scale, Trash2, X } from 'lucide-react';
+import type { FormEvent } from 'react';
+import { ArrowLeftRight, Plus, Receipt, Scale, Trash2, TriangleAlert, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { EmptyState, TonedBadge } from '@/components/bits';
+import { EmptyState, Field, NameField, TonedBadge } from '@/components/bits';
 import { RECIPES } from '@/recipes';
 import type { Recipe } from '@/recipes';
-import { nameKey, priceIndex, priceOf, pricedItems, recipeCost, tidyCategory, tidyName } from '@/lib/prices';
+import { nameKey, priceIndex, priceOf, pricedItems, quote, recipeCost, tidyCategory, tidyName } from '@/lib/prices';
 import type { Basis } from '@/lib/prices';
 import { uid } from '@/lib/format';
-import type { Price } from '@/types';
+import { cn } from '@/lib/utils';
+import type { DB, Price, SaleLine } from '@/types';
 
 const KEY = 'sabretooth-barter-v3';
 // v1 was a two-sided swap with one basis switch; v2 a single list with a
@@ -91,33 +94,100 @@ interface Valued {
   detail: string;
   /** Names with no price behind them — the line itself, or its ingredients. */
   unpriced: string[];
+  /** Names the Ledger refuses outright on this basis (N/A, No) — the line
+   *  itself, or the ingredients a recipe would need. Not the same as
+   *  unpriced: this is the sheet saying don't, not the sheet saying nothing. */
+  refused: string[];
 }
 
+const VERB: Record<Basis, string> = { buy: 'buy', sell: 'sell' };
+
 function value(l: Line, index: Map<string, Price>, recipes: Map<string, Recipe>, basis: Basis): Valued {
+  const none = { each: 0, total: 0, approx: false };
   if (l.kind === 'recipe') {
     const r = recipes.get(l.name);
-    if (!r) return { each: 0, total: 0, approx: false, detail: 'no longer in the recipe list', unpriced: [l.name] };
+    if (!r) return { ...none, detail: 'no longer in the recipe list', unpriced: [l.name], refused: [] };
     const c = recipeCost(r, index, basis);
     return {
       each: c.each,
       total: c.each * l.qty,
       approx: c.approx,
       detail: c.lines
-        .map((g) => (g.each ? `${g.qty}× ${g.item} @ ${unit(g.each.each)}` : `${g.qty}× ${g.item} (no price)`))
+        .map((g) => (
+          g.refused ? `${g.qty}× ${g.item} (N/A)`
+            : g.each ? `${g.qty}× ${g.item} @ ${unit(g.each.each)}`
+              : `${g.qty}× ${g.item} (no price)`
+        ))
         .join(' · '),
       unpriced: c.unpriced,
+      refused: c.refused,
     };
   }
   const row = index.get(nameKey(l.name));
-  const m = row ? priceOf(row, basis) : null;
-  if (!m) return { each: 0, total: 0, approx: false, detail: 'not priced in the Ledger', unpriced: [l.name] };
+  const q = row ? quote(row, basis) : null;
+  if (q?.kind === 'refused') {
+    return {
+      ...none, unpriced: [], refused: [l.name],
+      detail: `the Ledger says ${VERB[basis] === 'buy' ? 'the guild doesn’t buy this' : 'the guild doesn’t sell this'} (${q.from}: N/A)`,
+    };
+  }
+  const m = q?.kind === 'money' ? q.money : null;
+  if (!m) return { ...none, detail: 'not priced in the Ledger', unpriced: [l.name], refused: [] };
   return {
     each: m.each,
     total: m.each * l.qty,
     approx: m.approx,
     detail: `${m.approx ? '≈' : ''}${unit(m.each)} each · ${m.from}`,
     unpriced: [],
+    refused: [],
   };
+}
+
+/** Writes the deal up as a sale, with what each side was worth right now. */
+function LogDealDialog({ close, onLog, memberNames }: {
+  close: () => void;
+  onLog: (party: string, by: string, note: string) => void;
+  memberNames: string[];
+}) {
+  const submit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    onLog(
+      String(f.get('party') || '').trim(),
+      String(f.get('by') || '').trim(),
+      String(f.get('note') || '').trim(),
+    );
+    close();
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) close(); }}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Add this deal to the Sales Tracker</DialogTitle>
+          <DialogDescription>
+            Both sides go in at today's prices, and the counter is cleared for the next one.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-4">
+          <Field label="Traded with" htmlFor="deal-party">
+            <Input id="deal-party" name="party" autoFocus placeholder="A player, a merchant, another guild" />
+          </Field>
+          <Field label="Logged by" htmlFor="deal-by">
+            <NameField id="deal-by" name="by" options={memberNames} required
+              defaultValue={memberNames[0] || ''} placeholder="Pick a member or write in" />
+          </Field>
+          <Field label="Note (optional)" htmlFor="deal-note">
+            <Input id="deal-note" name="note" placeholder="Anything worth remembering" />
+          </Field>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={close}>Cancel</Button>
+            <Button type="submit"><Receipt />Log it</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 /** Adds a line to one side, searching the Ledger's priced rows and the recipe list together. */
@@ -212,8 +282,16 @@ function AddItem({ rows, index, basis, onAdd }: {
  * Nothing here is written down: it is a counter-top calculator for while you
  * are haggling, kept in this browser so switching pages doesn't lose the pile.
  */
-export function Barter({ prices }: { prices: Price[] }) {
+export function Barter({ prices, update, readOnly, memberNames, onLogged }: {
+  prices: Price[];
+  update: (fn: (d: DB) => void) => void;
+  readOnly: boolean;
+  memberNames: string[];
+  /** Called once a deal has been written to the Sales Tracker. */
+  onLogged: () => void;
+}) {
   const [deal, setDeal] = useState<Deal>(() => load());
+  const [logging, setLogging] = useState(false);
   useEffect(() => { save(deal); }, [deal]);
 
   const rows = useMemo(() => pricedItems(prices), [prices]);
@@ -236,6 +314,25 @@ export function Barter({ prices }: { prices: Price[] }) {
   const gap = theirs - ours;
   const anything = deal.theirs.length > 0 || deal.ours.length > 0;
   const unpriced = valued('theirs').concat(valued('ours')).reduce((n, x) => n + x.v.unpriced.length, 0);
+
+  // Every line the Ledger says no to, with which side of the counter it's on.
+  // A recipe is flagged through its ingredients: if the guild won't sell an
+  // ingredient, it has no honest price to sell the thing made from it at.
+  const warnings = (['theirs', 'ours'] as Side[]).flatMap((side) => valued(side)
+    .filter(({ v }) => v.refused.length > 0)
+    .map(({ line, v }) => ({
+      side,
+      item: line.kind === 'item' ? tidyName(line.name) : line.name,
+      via: line.kind === 'recipe' ? v.refused : [],
+    })));
+
+  /** Freezes one side at today's prices. A line the Ledger won't price at
+   *  all goes in at 0 rather than being dropped — the trade still happened. */
+  const toLines = (side: Side): SaleLine[] => valued(side).map(({ line, v }) => ({
+    item: line.kind === 'item' ? tidyName(line.name) : line.name,
+    qty: line.qty,
+    septims: Math.round(v.total),
+  }));
 
   const column = (side: Side, title: string, hint: string) => (
     <Card className="flex flex-col">
@@ -271,10 +368,13 @@ export function Barter({ prices }: { prices: Price[] }) {
                     edit(side, (list) => list.map((x) => (x.id === l.id ? { ...x, qty: q } : x)));
                   }}
                 />
-                <span className="w-20 shrink-0 text-right text-sm font-semibold tabular-nums">
-                  {v.unpriced.length > 0 && v.each === 0
-                    ? '—'
-                    : `${v.approx ? '≈' : ''}${coin(v.total)}${v.unpriced.length > 0 ? '+' : ''}`}
+                <span className={cn(
+                  'w-20 shrink-0 text-right text-sm font-semibold tabular-nums',
+                  v.refused.length > 0 && 'text-red-600 dark:text-red-400',
+                )}>
+                  {v.refused.length > 0 ? 'N/A'
+                    : v.unpriced.length > 0 && v.each === 0 ? '—'
+                      : `${v.approx ? '≈' : ''}${coin(v.total)}${v.unpriced.length > 0 ? '+' : ''}`}
                 </span>
                 <Button
                   variant="ghost" size="icon-xs" aria-label={`Remove ${l.name}`}
@@ -322,6 +422,37 @@ export function Barter({ prices }: { prices: Price[] }) {
         )}
       </div>
 
+      {warnings.length > 0 && (
+        <Card className="border-red-500/40 bg-red-500/10 py-0">
+          <CardContent className="space-y-2 p-4">
+            <p className="flex items-center gap-2 text-sm font-bold tracking-wide text-red-700 dark:text-red-400">
+              <TriangleAlert className="size-4 shrink-0" />
+              DON’T MAKE THIS DEAL
+            </p>
+            <ul className="space-y-1">
+              {warnings.map((w, i) => (
+                <li key={`${w.side}-${w.item}-${i}`} className="flex flex-wrap items-center gap-2 text-sm">
+                  <span>
+                    Do not {VERB[BASIS[w.side]]} <strong>{w.item}</strong>
+                    {w.via.length > 0 && (
+                      <span className="text-muted-foreground">
+                        {' '}— it needs {w.via.join(', ')}, which the Ledger says the guild
+                        doesn’t {VERB[BASIS[w.side]]}
+                      </span>
+                    )}
+                  </span>
+                  <TonedBadge tone="red" className="uppercase">{VERB[BASIS[w.side]]}</TonedBadge>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-muted-foreground">
+              The price sheet marks these N/A on this side of the counter. Take them off, or take
+              the deal somewhere else.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-3 md:grid-cols-2">
         {column('theirs', 'They give', 'What is coming to the guild, at buy prices')}
         {column('ours', 'We give', 'What the guild is handing over, at sell prices')}
@@ -365,6 +496,39 @@ export function Barter({ prices }: { prices: Price[] }) {
           </span>
         </CardContent>
       </Card>
+
+      {!readOnly && (
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {warnings.length > 0 && (
+            <span className="text-xs text-red-700 dark:text-red-400">
+              Can’t log a deal the Ledger says not to make.
+            </span>
+          )}
+          <Button
+            variant="outline" disabled={!anything || warnings.length > 0}
+            onClick={() => setLogging(true)}
+          >
+            <Receipt />Add deal to Sales Tracker
+          </Button>
+        </div>
+      )}
+
+      {logging && (
+        <LogDealDialog
+          close={() => setLogging(false)}
+          memberNames={memberNames}
+          onLog={(party, by, note) => {
+            update((d) => {
+              d.sales.push({
+                id: uid(), party, theirs: toLines('theirs'), ours: toLines('ours'),
+                note, by, at: new Date().toISOString(),
+              });
+            });
+            setDeal(EMPTY);
+            onLogged();
+          }}
+        />
+      )}
     </div>
   );
 }

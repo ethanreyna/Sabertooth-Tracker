@@ -28,13 +28,13 @@ type Role = 'member' | 'guest';
 
 /** Sections a guest never receives. The UI hides them too, but stripping them
  *  server-side means an anonymous caller can't just read them off /api/db. */
-const GUEST_HIDDEN = ['ledger', 'bankItems', 'suggestions'] as const;
+const GUEST_HIDDEN = ['ledger', 'bankItems', 'suggestions', 'sales'] as const;
 
 const EMPTY_DB = {
   settings: { guildCutPct: 20 },
   members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [],
   ledger: [], bankItems: [], suggestions: [], items: [],
-  enchantments: [], enchants: [], projects: [],
+  enchantments: [], enchants: [], projects: [], sales: [],
 };
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_VISION_BYTES = 4 * 1024 * 1024;

@@ -1,6 +1,6 @@
 import { DEFAULT_GUILD_CUT_PCT } from './types';
 import { coordOrEmpty, httpUrlOrEmpty } from './lib/maps';
-import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, EnchantmentRecord, Job, ItemRecord, LedgerEntry, BankItem, Member, MemberEntry, Price, Project, ProjectContribution, ProjectRequirement, ProjectStage, Role, Spot, Suggestion, SyncCfg } from './types';
+import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, EnchantmentRecord, Job, ItemRecord, LedgerEntry, BankItem, Member, MemberEntry, Price, Project, ProjectContribution, ProjectRequirement, ProjectStage, Role, Sale, SaleLine, Spot, Suggestion, SyncCfg } from './types';
 
 const CFG_KEY = 'sabretooth-auth';
 const LEGACY_CFG_KEY = 'sabertooth-auth'; // pre-rename; read once so nobody is logged out
@@ -462,6 +462,18 @@ export function normalizeDb(raw: unknown): DB {
         addedBy: s(x.addedBy), at: s(x.at),
       };
     }).filter((p) => p.name),
+    sales: arr(o.sales).map((sale): Sale => {
+      const x = (sale || {}) as Record<string, unknown>;
+      const lines = (v: unknown) => arr(v).map((l): SaleLine => {
+        const lx = (l || {}) as Record<string, unknown>;
+        return { item: s(lx.item), qty: Math.max(0, n(lx.qty)), septims: Math.max(0, n(lx.septims)) };
+      }).filter((l) => l.item);
+      return {
+        id: s(x.id) || Math.random().toString(36).slice(2, 10),
+        party: s(x.party), theirs: lines(x.theirs), ours: lines(x.ours),
+        note: s(x.note), by: s(x.by), at: s(x.at),
+      };
+    }).filter((sale) => sale.theirs.length > 0 || sale.ours.length > 0),
   };
 
 }

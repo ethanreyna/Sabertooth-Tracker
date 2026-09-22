@@ -8,10 +8,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState, TonedBadge } from '@/components/bits';
 import { Barter } from '@/views/barter';
+import { SalesTracker } from '@/views/sales';
 import { fetchPrices, loadPrices } from '@/sync';
 import { ago } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { Price } from '@/types';
+import type { DB, Price } from '@/types';
 
 const SHEET_URL =
   'https://docs.google.com/spreadsheets/d/1XKxRsu-C_mu3uDYv0rLYcSPGAHUCnaMKj41CsNU5AJo/edit';
@@ -242,13 +243,22 @@ function PriceList({ prices, syncedAt, busy, err, load }: ReturnType<typeof useP
   );
 }
 
-/** The Ledger: the guild's price list, and the barter tool that reads it. */
-export function Prices() {
-  const [tab, setTab] = useState<'prices' | 'barter'>('prices');
+type LedgerTab = 'prices' | 'barter' | 'sales';
+
+/** The Ledger: the guild's price list, the barter tool that reads it, and
+ *  the record of trades actually made. Sales are guild money, so like the
+ *  bank they're kept from guests — the Worker strips them, and the tab goes. */
+export function Prices({ db, update, readOnly, memberNames }: {
+  db: DB;
+  update: (fn: (d: DB) => void) => void;
+  readOnly: boolean;
+  memberNames: string[];
+}) {
+  const [tab, setTab] = useState<LedgerTab>('prices');
   const priced = usePrices();
 
   return (
-    <Tabs value={tab} onValueChange={(v) => setTab(v === 'barter' ? 'barter' : 'prices')}>
+    <Tabs value={tab} onValueChange={(v) => setTab(v === 'barter' || v === 'sales' ? v : 'prices')}>
       <TabsList>
         <TabsTrigger value="prices">
           Prices{priced.prices.length > 0 && (
@@ -256,14 +266,29 @@ export function Prices() {
           )}
         </TabsTrigger>
         <TabsTrigger value="barter">Barter</TabsTrigger>
+        {!readOnly && (
+          <TabsTrigger value="sales">
+            Sales Tracker{db.sales.length > 0 && (
+              <span className="ml-1.5 text-muted-foreground">{db.sales.length}</span>
+            )}
+          </TabsTrigger>
+        )}
       </TabsList>
 
       <TabsContent value="prices" className="mt-4">
         <PriceList {...priced} />
       </TabsContent>
       <TabsContent value="barter" className="mt-4">
-        <Barter prices={priced.prices} />
+        <Barter
+          prices={priced.prices} update={update} readOnly={readOnly} memberNames={memberNames}
+          onLogged={() => setTab('sales')}
+        />
       </TabsContent>
+      {!readOnly && (
+        <TabsContent value="sales" className="mt-4">
+          <SalesTracker db={db} update={update} prices={priced.prices} memberNames={memberNames} />
+        </TabsContent>
+      )}
     </Tabs>
   );
 }
