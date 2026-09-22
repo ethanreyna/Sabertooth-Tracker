@@ -550,7 +550,9 @@ export default function App() {
               cfg={cfg} memberNames={memberNames} itemNames={itemNames}
               enchantmentNames={enchantmentNames(db)}
             />}
-          {view === 'ledger' && <Prices />}
+          {view === 'ledger' && (
+            <Prices db={db} update={update} readOnly={readOnly} memberNames={memberNames} />
+          )}
           {view === 'enchants' && (
             <Enchants db={db} update={update} readOnly={readOnly} memberNames={memberNames} />
           )}

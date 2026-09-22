@@ -17,8 +17,10 @@ export type Basis = 'sell' | 'buy';
 
 /** Column names that mean "what the guild sells it for", best first. */
 const SELL_COLUMNS = ['sell', 'price', 'price of 1', 'buy', 'make price', 'price to brew'];
-/** …and "what the guild pays for it". */
-const BUY_COLUMNS = ['buy', 'price to brew', 'make price', 'price of 1', 'sell', 'price'];
+/** …and "what the guild pays for it". "Price of 1" is the sheet's buy column
+ *  in all but name; "Make Price" is a crafting fee and comes after it, or an
+ *  N/A there (you can't make ore) would read as "don't buy ore". */
+const BUY_COLUMNS = ['buy', 'price of 1', 'price to brew', 'make price', 'sell', 'price'];
 
 /** Columns that are never money, whatever they are called. */
 const NOT_MONEY = new Set([
@@ -36,21 +38,29 @@ export interface Money {
 }
 
 /**
- * Reads one cell. Returns null for anything that isn't a number the guild
- * would actually charge — "N/A", "#DIV/0!", "TRUE", blanks and text.
+ * What one cell says. Three answers, and the difference between the last two
+ * is the whole point: a blank (or a dash, or a formula error) means nobody
+ * has written a price yet, while "N/A" or "No" means somebody has — the guild
+ * doesn't deal in this, on this side of the counter — and a trade built on
+ * it should be stopped, not quietly priced off another column.
  */
-export function readMoney(raw: string): Money | null {
+export type Cell = { kind: 'blank' } | { kind: 'refused' } | { kind: 'money'; money: Money };
+
+const REFUSED = /^(n\/?a|no|none|nope|never|not (for )?sale|not sold|not bought|don'?t|do not)$/i;
+const BLANK = /^(tbd|\?+|[-–—]+|#\w+[!?]?|true|false)$/i;
+
+export function readCell(raw: string): Cell {
   const t = (raw || '').trim();
-  if (!t) return null;
-  if (/^(n\/?a|tbd|-+|#\w+[!?]?|true|false)$/i.test(t)) return null;
+  if (!t || BLANK.test(t)) return { kind: 'blank' };
+  if (REFUSED.test(t)) return { kind: 'refused' };
 
   // "1g for 10" — a price for a bundle, so divide it out.
   const bundle = /^([\d.,]+)\s*g?\s*(?:for|per|\/)\s*([\d.,]+)\b/i.exec(t);
   if (bundle) {
     const total = num(bundle[1]);
     const count = num(bundle[2]);
-    if (total === null || count === null || count <= 0) return null;
-    return { each: total / count, from: '', approx: false };
+    if (total === null || count === null || count <= 0) return { kind: 'blank' };
+    return { kind: 'money', money: { each: total / count, from: '', approx: false } };
   }
 
   // "1500-3000" — quoted as a range, so take the middle and say so.
@@ -58,18 +68,25 @@ export function readMoney(raw: string): Money | null {
   if (range) {
     const lo = num(range[1]);
     const hi = num(range[2]);
-    if (lo === null || hi === null) return null;
-    return { each: (lo + hi) / 2, from: '', approx: true };
+    if (lo === null || hi === null) return { kind: 'blank' };
+    return { kind: 'money', money: { each: (lo + hi) / 2, from: '', approx: true } };
   }
 
   // "250", "5g", "0.25"
   const plain = /^([\d.,]+)\s*g?$/i.exec(t);
   if (plain) {
     const v = num(plain[1]);
-    return v === null ? null : { each: v, from: '', approx: false };
+    return v === null ? { kind: 'blank' } : { kind: 'money', money: { each: v, from: '', approx: false } };
   }
 
-  return null;
+  return { kind: 'blank' };
+}
+
+/** Reads one cell as money. Null for anything that isn't a number the guild
+ *  would actually charge — blanks, "N/A", "#DIV/0!", "TRUE", text. */
+export function readMoney(raw: string): Money | null {
+  const c = readCell(raw);
+  return c.kind === 'money' ? c.money : null;
 }
 
 const num = (v: string): number | null => {
@@ -77,26 +94,58 @@ const num = (v: string): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** What one of this row is worth, on the given basis. Null when unpriced. */
-export function priceOf(row: Price, basis: Basis = 'sell'): Money | null {
+/** A row's answer on one basis: a price, an explicit refusal (naming the
+ *  column that said so), or nothing at all. */
+export type Quote = { kind: 'money'; money: Money } | { kind: 'refused'; from: string } | null;
+
+/**
+ * Walks the basis's columns in order and takes the first that has anything
+ * to say. A refusal stops the walk: the sheet saying "N/A" under Buy is an
+ * answer about buying, and falling through to the Sell column would turn a
+ * "we don't buy this" into a price.
+ */
+export function quote(row: Price, basis: Basis = 'sell'): Quote {
   const order = basis === 'buy' ? BUY_COLUMNS : SELL_COLUMNS;
   const entries = Object.entries(row.values ?? {})
     .filter(([label]) => !NOT_MONEY.has(label.trim().toLowerCase()));
 
+  const consider = (label: string, value: string): Quote => {
+    const c = readCell(value);
+    if (c.kind === 'money') return { kind: 'money', money: { ...c.money, from: label } };
+    if (c.kind === 'refused') return { kind: 'refused', from: label };
+    return null;
+  };
+
+  const seen = new Set<string>();
   for (const want of order) {
     const hit = entries.find(([label]) => label.trim().toLowerCase() === want);
     if (!hit) continue;
-    const money = readMoney(hit[1]);
-    if (money) return { ...money, from: hit[0] };
+    seen.add(hit[0]);
+    const q = consider(hit[0], hit[1]);
+    if (q) return q;
   }
 
-  // Nothing recognised by name: take the first column that reads as money at
+  // Nothing recognised by name: take the first column that has an answer at
   // all, rather than calling a priced item unpriced.
   for (const [label, value] of entries) {
-    const money = readMoney(value);
-    if (money) return { ...money, from: label };
+    if (seen.has(label)) continue;
+    const q = consider(label, value);
+    if (q) return q;
   }
   return null;
+}
+
+/** What one of this row is worth, on the given basis. Null when unpriced —
+ *  including when the sheet refuses; see {@link refusedFor} for that case. */
+export function priceOf(row: Price, basis: Basis = 'sell'): Money | null {
+  const q = quote(row, basis);
+  return q?.kind === 'money' ? q.money : null;
+}
+
+/** The column that says the guild doesn't deal in this on that basis, or null. */
+export function refusedFor(row: Price, basis: Basis): string | null {
+  const q = quote(row, basis);
+  return q?.kind === 'refused' ? q.from : null;
 }
 
 /** The sheet shouts; the app doesn't. "IRON INGOT" -> "Iron Ingot". */
@@ -130,13 +179,15 @@ export function isTradeable(row: Price): boolean {
   // Headers, totals and prose.
   if (/[:()]|^\d|\b(total|notes?|header|example|prices?)\b/i.test(name)) return false;
   if (name.toLowerCase() === row.category.trim().toLowerCase()) return false;
-  return priceOf(row) !== null;
+  return priceOf(row, 'sell') !== null || priceOf(row, 'buy') !== null;
 }
 
-/** Anything the sheet puts a number against — a looser test than
- *  {@link isTradeable}, because bartering a row named "STEEL ARROW (80)" is
- *  fine when the name is shown as written, while stocking it as an item is not. */
-export const isPriced = (row: Price): boolean => priceOf(row) !== null;
+/** Anything the sheet has an answer for on either side of the counter — a
+ *  price, or an explicit N/A. Looser than {@link isTradeable}, because
+ *  bartering a row named "STEEL ARROW (80)" is fine when the name is shown as
+ *  written, while stocking it as an item is not; and a row the guild refuses
+ *  to buy still belongs in the barter list, so the tool can say so. */
+export const isPriced = (row: Price): boolean => quote(row, 'sell') !== null || quote(row, 'buy') !== null;
 
 /** Priced rows, one per name, in sheet order — the barter tool's catalogue. */
 export function pricedItems(rows: Price[]): Price[] {
@@ -167,6 +218,9 @@ export interface IngredientCost {
   qty: number;
   /** Per-unit money, or null when the Ledger has no price for it. */
   each: Money | null;
+  /** True when the Ledger says outright that the guild doesn't deal in this
+   *  ingredient on this basis — a stronger thing than having no price. */
+  refused: boolean;
 }
 
 export interface RecipeCost {
@@ -175,6 +229,9 @@ export interface RecipeCost {
   lines: IngredientCost[];
   /** Ingredients the Ledger doesn't price — `each` is short by these. */
   unpriced: string[];
+  /** Ingredients the Ledger refuses on this basis. A recipe built on one
+   *  can't be honestly priced at all. */
+  refused: string[];
   approx: boolean;
 }
 
@@ -189,15 +246,21 @@ export interface RecipeCost {
 export function recipeCost(recipe: Recipe, index: Map<string, Price>, basis: Basis): RecipeCost {
   const lines = recipe.ingredients.map((g): IngredientCost => {
     if (nameKey(g.item) === 'gold') {
-      return { item: g.item, qty: g.qty, each: { each: 1, from: 'septims', approx: false } };
+      return { item: g.item, qty: g.qty, each: { each: 1, from: 'septims', approx: false }, refused: false };
     }
     const row = index.get(nameKey(g.item));
-    return { item: g.item, qty: g.qty, each: row ? priceOf(row, basis) : null };
+    const q = row ? quote(row, basis) : null;
+    return {
+      item: g.item, qty: g.qty,
+      each: q?.kind === 'money' ? q.money : null,
+      refused: q?.kind === 'refused',
+    };
   });
   return {
     each: lines.reduce((sum, l) => sum + (l.each ? l.each.each * l.qty : 0), 0),
     lines,
-    unpriced: lines.filter((l) => !l.each).map((l) => l.item),
+    unpriced: lines.filter((l) => !l.each && !l.refused).map((l) => l.item),
+    refused: lines.filter((l) => l.refused).map((l) => l.item),
     approx: lines.some((l) => l.each?.approx ?? false),
   };
 }
