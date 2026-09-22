@@ -30,7 +30,7 @@ import type { BarrelDraft, JobDraft } from '@/lib/parse-import';
  *  leave the kind alone. */
 const ITEM_KIND: Record<string, string> = { ore: 'Ore', alchemy: 'Alchemy', leather: 'Hunting' };
 
-export type ModalKind = 'job' | 'barrel' | 'dungeon' | 'spot' | 'ledger' | 'bankItem' | 'item' | 'enchantment' | 'import' | 'member' | 'role' | 'sync';
+export type ModalKind = 'job' | 'barrel' | 'dungeon' | 'spot' | 'ledger' | 'bankItem' | 'bankImport' | 'item' | 'enchantment' | 'import' | 'member' | 'role' | 'sync';
 
 const DEADLINE_MODES: Choice[] = [
   { value: 'none', label: 'No time limit' },
@@ -150,8 +150,9 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
     ledger: 'Record a ledger entry',
     item: editItem ? 'Edit item' : 'Add an item',
     enchantment: editEnchantment ? 'Edit enchantment' : 'Add an enchantment',
-    // Handled by its own dialog; listed so the map of titles stays total.
+    // Handled by their own dialogs; listed so the map of titles stays total.
     import: 'Import from the job board',
+    bankImport: 'Stock the bank from a screenshot',
     bankItem: 'Log a storage item',
     member: 'Add a member',
     role: editRole ? 'Edit role' : 'Create a role',

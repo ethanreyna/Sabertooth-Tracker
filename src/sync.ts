@@ -205,9 +205,14 @@ export class NoVisionError extends Error {
   }
 }
 
-/** Reads the text off a screenshot of a job-board or storage post. */
-export async function readScreenshot(cfg: SyncCfg, file: File): Promise<string> {
-  const r = await fetch('/api/vision', {
+/** How the Worker should read a screenshot: as lines of text, or as a Skyrim
+ *  inventory list where each line is "item | count". */
+export type VisionMode = 'text' | 'inventory';
+
+/** Reads the text off a screenshot of a job-board or storage post — or, in
+ *  inventory mode, the item list out of a Skyrim inventory screen. */
+export async function readScreenshot(cfg: SyncCfg, file: File, mode: VisionMode = 'text'): Promise<string> {
+  const r = await fetch('/api/vision' + (mode === 'text' ? '' : `?mode=${mode}`), {
     method: 'POST',
     headers: { 'Content-Type': file.type || 'application/octet-stream', ...auth(cfg) },
     body: file,

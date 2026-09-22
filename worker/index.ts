@@ -100,6 +100,17 @@ const VISION_PROMPT =
   'Transcribe every line of text in this screenshot exactly as written, in reading order. '
   + 'Keep labels, colons, numbers and item names exactly. Output only the transcription, '
   + 'one line per line of text, with no commentary.';
+
+/** For a Skyrim inventory or container screen: the item list only, in a shape
+ *  the client can split without guessing where the name ends. */
+const INVENTORY_PROMPT =
+  'This is a screenshot of a Skyrim inventory or container menu. List every item in the list, '
+  + 'one per line, as: item name | count. The count is the number in parentheses after the '
+  + 'name; if there is none, the count is 1. Keep item names exactly as written. Skip category '
+  + 'headings (ALL, FAVORITES, WEAPONS, APPAREL, POTIONS, SCROLLS, FOOD, INGREDIENTS, BOOKS, KEYS, '
+  + 'MISC), and skip the weight, value, damage, armor and carry-weight readouts. Output only the '
+  + 'lines, with no commentary.';
+const VISION_PROMPTS: Record<string, string> = { text: VISION_PROMPT, inventory: INVENTORY_PROMPT };
 const MAX_DB_BYTES = 8 * 1024 * 1024;
 
 const json = (body: unknown, status = 200) =>
@@ -545,10 +556,11 @@ async function handleApi(req: Request, env: Env, url: URL): Promise<Response> {
     if (!buf.byteLength) return json({ error: 'empty body' }, 400);
     if (buf.byteLength > MAX_VISION_BYTES) return json({ error: 'screenshot too large (4MB max)' }, 413);
 
+    const prompt = VISION_PROMPTS[url.searchParams.get('mode') || 'text'] ?? VISION_PROMPT;
     let lastError = '';
     for (const model of VISION_MODELS) {
       try {
-        const out = await env.AI.run(model.id, visionInput(model.shape, buf, ct, VISION_PROMPT));
+        const out = await env.AI.run(model.id, visionInput(model.shape, buf, ct, prompt));
         const text = visionText(out);
         if (text) return json({ text, model: model.id });
         lastError = 'the model returned nothing';
