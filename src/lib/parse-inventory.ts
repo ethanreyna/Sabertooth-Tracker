@@ -74,30 +74,70 @@ export interface Match {
   confidence: Confidence;
 }
 
-/** Plurals and apostrophes, which the game and the model both play loose
- *  with — "Orc's Tusk" comes back as "Orcs Tusk" as often as not. */
-const stem = (s: string) => norm(s).replace(/['’]/g, '').replace(/(ies)$/, 'y').replace(/(s|es)$/, '');
+/** Words that carry no meaning for telling items apart: the game writes
+ *  "Spell Tome: Calm", the sheet "Spell Tome Of Calm", and they're one thing. */
+const STOP = new Set(['of', 'the', 'a', 'an']);
+
+/** A name as the words that matter, lowercased, punctuation and filler gone. */
+const words = (s: string): string[] => s
+  .toLowerCase()
+  .replace(/['’]/g, '')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim()
+  .split(' ')
+  .filter((w) => w && !STOP.has(w));
+
+/** A word with its plural worn off — "Ingots" → "ingot", but "Glass" stays. */
+const stemWord = (w: string) => (w.endsWith('ss') ? w : w.replace(/ies$/, 'y').replace(/(es|s)$/, ''));
 
 /**
- * Finds the guild's name for a transcribed one. Exact first; then the same
- * thing with a plural or an apostrophe worn off; then the shortest known name
- * that contains, or is contained by, what was read — "Ingot, Iron" against
- * "Iron Ingot" is a stretch, but "Potion of Minor Healing" against "Minor
- * Healing Potion" isn't, and the row is marked so someone looks.
+ * Finds the guild's name for a transcribed one.
+ *
+ * Exact first. Then the same words in the same order once punctuation and
+ * filler are gone — that's still exact, it's the same item written two ways.
+ * Then the same words with plurals worn off, marked close. Then the best
+ * overlap by words: a known name that has every word that was read (and a
+ * few more) beats one that has only some of them, so "Spell Tome: Calm" lands
+ * on "Spell Tome Of Calm" and not on the bare "Spell Tome" that also sits in
+ * the catalogue. A known name that's merely a fragment of what was read has
+ * to cover most of it, or the row is left unmatched rather than filed under
+ * something too generic.
  */
 export function matchItem(read: string, known: string[]): Match {
   const n = norm(read);
   const exact = known.find((k) => norm(k) === n);
   if (exact) return { name: exact, confidence: 'exact' };
 
-  const st = stem(read);
-  const stemmed = known.find((k) => stem(k) === st);
+  const rw = words(read);
+  if (rw.length === 0) return { name: read.trim(), confidence: 'none' };
+  const rkey = rw.join(' ');
+  const same = known.find((k) => words(k).join(' ') === rkey);
+  if (same) return { name: same, confidence: 'exact' };
+
+  const rstem = rw.map(stemWord).join(' ');
+  const stemmed = known.find((k) => words(k).map(stemWord).join(' ') === rstem);
   if (stemmed) return { name: stemmed, confidence: 'close' };
 
-  const loose = known
-    .filter((k) => { const kn = norm(k); return kn.length >= 4 && (kn.includes(n) || n.includes(kn)); })
-    .sort((a, b) => a.length - b.length)[0];
-  if (loose) return { name: loose, confidence: 'close' };
+  const rset = new Set(rw.map(stemWord));
+  let best: { name: string; score: number } | null = null;
+  for (const k of known) {
+    const kw = words(k).map(stemWord);
+    if (kw.length === 0) continue;
+    const kset = new Set(kw);
+    const shared = kw.filter((w) => rset.has(w)).length;
+    let score = 0;
+    if (shared === rset.size) {
+      // The known name says everything that was read, and then some.
+      score = 1 + shared / kset.size;
+    } else if (shared === kset.size && shared / rset.size >= 0.75) {
+      // The known name is a fragment of what was read; only a big one counts.
+      score = shared / rset.size;
+    }
+    if (score > 0 && (!best || score > best.score || (score === best.score && k.length < best.name.length))) {
+      best = { name: k, score };
+    }
+  }
+  if (best) return { name: best.name, confidence: 'close' };
 
   return { name: read.trim(), confidence: 'none' };
 }
