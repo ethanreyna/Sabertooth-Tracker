@@ -151,6 +151,9 @@ function AddItem({ rows, index, basis, onAdd }: {
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
+  // What's been added since the popover opened, so it can say so without
+  // the pile behind it being visible.
+  const [added, setAdded] = useState<string[]>([]);
 
   const terms = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const matches = (hay: string) => terms.every((t) => hay.includes(t));
@@ -161,14 +164,24 @@ function AddItem({ rows, index, basis, onAdd }: {
     .filter((r) => !terms.length || matches(`${r.name} ${r.category}`.toLowerCase()))
     .slice(0, 40);
 
+  // Picking keeps the popover open: a pile is usually several things, and
+  // reopening the search for each one is the slow part. The query clears so
+  // the next name can be typed straight away. Click away, Escape, or Enter
+  // on an empty box closes it.
   const pick = (kind: Kind, name: string) => {
     onAdd(kind, name);
+    setAdded((list) => [...list, kind === 'item' ? tidyName(name) : name]);
     setQ('');
-    setOpen(false);
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) setAdded([]);
+      }}
+    >
       <PopoverTrigger
         render={
           <Button type="button" variant="outline" className="w-full justify-between font-normal">
@@ -179,7 +192,17 @@ function AddItem({ rows, index, basis, onAdd }: {
       />
       <PopoverContent className="w-(--anchor-width) p-0" align="start">
         <Command shouldFilter={false}>
-          <CommandInput placeholder="e.g. iron ingot, iron greatsword" value={q} onValueChange={setQ} />
+          <CommandInput
+            placeholder="e.g. iron ingot, iron greatsword" value={q} onValueChange={setQ}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && q.trim() === '') { e.preventDefault(); setOpen(false); }
+            }}
+          />
+          {added.length > 0 && (
+            <p className="border-b px-3 py-1.5 text-xs text-muted-foreground">
+              Added {added.join(', ')} · keep typing, or press Enter to finish
+            </p>
+          )}
           <CommandList>
             {items.length === 0 && recipes.length === 0 && (
               <CommandEmpty>Nothing priced or craftable matches that.</CommandEmpty>
