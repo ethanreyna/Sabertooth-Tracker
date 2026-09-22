@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { ClipboardEvent, FormEvent } from 'react';
 import { FileImage, ScanText, Wand2, X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -9,10 +9,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Field, NameField, TonedBadge } from '@/components/bits';
 import { NoVisionError, readScreenshot } from '@/sync';
+import { usePrices } from '@/views/prices';
+import { useLedgerItemSync } from '@/lib/ledger-sync';
+import { pricedItems, tidyName } from '@/lib/prices';
 import { matchItem, parseInventory } from '@/lib/parse-inventory';
 import type { Confidence } from '@/lib/parse-inventory';
 import { sep, uid } from '@/lib/format';
-import type { BankItem, SyncCfg } from '@/types';
+import type { BankItem, DB, SyncCfg } from '@/types';
 
 interface Row {
   id: string;
@@ -39,14 +42,31 @@ const CONFIDENCE: Record<Confidence, { tone: 'green' | 'amber' | 'red'; label: s
  * anything is written. Pasted text works the same way, for when the model is
  * off or misreads a word.
  */
-export function ImportBankDialog({ cfg, itemNames, memberNames, close, onAdd }: {
+export function ImportBankDialog({ cfg, db, update, itemNames: catalogueNames, memberNames, close, onAdd }: {
   cfg: SyncCfg;
-  /** Every name the guild knows: catalogue, custom items, priced rows. */
+  db: DB;
+  update: (fn: (d: DB) => void) => void;
+  /** The catalogue and the guild's own items. The Ledger's names are added here. */
   itemNames: string[];
   memberNames: string[];
   close: () => void;
   onAdd: (items: BankItem[]) => void;
 }) {
+  // The Ledger names things the catalogue may not — and a pull here also
+  // files any of them the Database is missing, same as opening the Ledger.
+  const { prices } = usePrices();
+  useLedgerItemSync(prices, db, update, true);
+  const itemNames = useMemo(() => {
+    const seen = new Set(catalogueNames.map((n) => n.trim().toLowerCase()));
+    const out = [...catalogueNames];
+    for (const r of pricedItems(prices)) {
+      const name = tidyName(r.item);
+      const key = name.toLowerCase();
+      if (!seen.has(key)) { seen.add(key); out.push(name); }
+    }
+    return out;
+  }, [catalogueNames, prices]);
+
   const [text, setText] = useState('');
   const [rows, setRows] = useState<Row[]>([]);
   const [move, setMove] = useState<BankItem['type']>('in');

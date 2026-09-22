@@ -10,6 +10,7 @@ import { EmptyState, TonedBadge } from '@/components/bits';
 import { Barter } from '@/views/barter';
 import { SalesTracker } from '@/views/sales';
 import { fetchPrices, loadPrices } from '@/sync';
+import { useLedgerItemSync } from '@/lib/ledger-sync';
 import { ago } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { DB, Price } from '@/types';
@@ -237,7 +238,8 @@ function PriceList({ prices, syncedAt, busy, err, load }: ReturnType<typeof useP
         Pulled from the guild's Google Sheet through the server, since Google sends no CORS headers.
         Cached 5 minutes; Refresh forces a fresh pull. Columns come from the headers in each tab and
         a blank cell means the sheet has no value there — nothing is inferred, so a price is never
-        shown under a column it didn't come from.
+        shown under a column it didn't come from. Anything priced here that the Database doesn't
+        have yet is added to it automatically.
       </p>
     </div>
   );
@@ -256,6 +258,8 @@ export function Prices({ db, update, readOnly, memberNames }: {
 }) {
   const [tab, setTab] = useState<LedgerTab>('prices');
   const priced = usePrices();
+  // Anything the sheet prices that the Database hasn't got becomes an item.
+  useLedgerItemSync(priced.prices, db, update, !readOnly);
 
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v === 'barter' || v === 'sales' ? v : 'prices')}>

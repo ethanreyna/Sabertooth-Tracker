@@ -605,7 +605,7 @@ export default function App() {
 
       {modal === 'bankImport' && !readOnly && (
         <ImportBankDialog
-          cfg={cfg}
+          cfg={cfg} db={db} update={update}
           itemNames={itemNames}
           memberNames={memberNames}
           close={() => setModal(null)}
