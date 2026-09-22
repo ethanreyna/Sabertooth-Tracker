@@ -26,6 +26,7 @@ import { Projects } from '@/views/projects';
 import { Settings as SettingsView } from '@/views/settings';
 import type { SettingsTab } from '@/views/settings';
 import { ImportDialog } from '@/components/import-dialog';
+import { ImportBankDialog } from '@/components/import-bank-dialog';
 import type { Draft } from '@/lib/parse-import';
 import type { AddMode } from '@/views/map';
 import type { MapKind } from '@/components/map-canvas';
@@ -83,7 +84,11 @@ const ACTIONS: Partial<Record<View, Action[]>> = {
   jobs: [{ label: 'Import', modal: 'import', variant: 'outline' }, { label: 'New job', modal: 'job' }],
   storage: [{ label: 'Import', modal: 'import', variant: 'outline' }, { label: 'New storage', modal: 'barrel' }],
   map: [{ label: 'New point', modal: 'spot' }],
-  bank: [{ label: 'New item', modal: 'bankItem' }, { label: 'New entry', modal: 'ledger' }],
+  bank: [
+    { label: 'From a screenshot', modal: 'bankImport', variant: 'outline' },
+    { label: 'New item', modal: 'bankItem' },
+    { label: 'New entry', modal: 'ledger' },
+  ],
 };
 
 /** The Dungeons page holds three lists behind tabs, so its button depends on which. */
@@ -446,7 +451,7 @@ export default function App() {
             )}
             {actions?.map((a) => (
               <Button key={a.modal} size="sm" variant={a.variant} onClick={() => setModal(a.modal)}>
-                {a.modal === 'import' && <FileInput />}{a.label}
+                {(a.modal === 'import' || a.modal === 'bankImport') && <FileInput />}{a.label}
               </Button>
             ))}
           </div>
@@ -598,8 +603,18 @@ export default function App() {
         />
       )}
 
+      {modal === 'bankImport' && !readOnly && (
+        <ImportBankDialog
+          cfg={cfg}
+          itemNames={itemNames}
+          memberNames={memberNames}
+          close={() => setModal(null)}
+          onAdd={(items) => update((d) => { d.bankItems.push(...items); })}
+        />
+      )}
+
       {/* Guests get the connection dialog (to sign out) but no editing dialogs. */}
-      {modal && modal !== 'import' && (!readOnly || modal === 'sync') && (
+      {modal && modal !== 'import' && modal !== 'bankImport' && (!readOnly || modal === 'sync') && (
 
         <Modals
           key={`${modal}:${editRoleId ?? editJobId ?? editBarrelId ?? editDungeonId ?? editSpotId ?? editItemId ?? editEnchantmentId ?? (draft ? 'draft' : 'new')}`}
