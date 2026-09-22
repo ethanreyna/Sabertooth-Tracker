@@ -198,37 +198,47 @@ export function ImportBankDialog({ cfg, db, update, itemNames: catalogueNames, m
                 </span>
               </div>
 
+              {/* Headings once, above the rows. A row's height varies — a
+                  flagged name carries a badge and a hint under it — so a
+                  per-row label can't stay level with the one beside it. */}
+              <div className="grid grid-cols-[1fr_4.5rem_1.5rem] gap-2 px-2 text-xs text-muted-foreground">
+                <span>Item</span>
+                <span>Qty</span>
+                <span />
+              </div>
+
               <div className="space-y-2">
-                {rows.map((r, i) => (
-                  <div key={r.id} className="grid grid-cols-[1fr_4.5rem_auto] items-end gap-2">
-                    <div className="min-w-0">
-                      <Field label={i === 0 ? 'Item' : ''} htmlFor={`bank-row-${r.id}`}>
+                {rows.map((r) => (
+                  <div key={r.id} className="rounded-md border bg-card/40 p-2">
+                    {/* The controls line up with each other at the top; the
+                        badge and hint hang below, however tall they get. */}
+                    <div className="grid grid-cols-[1fr_4.5rem_1.5rem] items-start gap-2">
+                      <div className="min-w-0">
                         <NameField
                           id={`bank-row-${r.id}`} name={`row-${r.id}`} options={itemNames}
                           defaultValue={r.name} placeholder="Pick from the list or write in"
                           onValueChange={(v) => set(r.id, { name: v })}
                         />
-                      </Field>
-                      <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                        <TonedBadge tone={CONFIDENCE[r.confidence].tone}>{CONFIDENCE[r.confidence].label}</TonedBadge>
-                        {r.read.trim().toLowerCase() !== r.name.trim().toLowerCase() && (
-                          <span>read as “{r.read}”</span>
-                        )}
-                      </p>
-                    </div>
-                    <Field label={i === 0 ? 'Qty' : ''} htmlFor={`bank-qty-${r.id}`}>
+                      </div>
                       <Input
-                        id={`bank-qty-${r.id}`} type="number" min={1} value={r.qty}
+                        type="number" min={1} value={r.qty}
+                        aria-label={`Quantity of ${r.name || r.read}`}
                         onChange={(e) => set(r.id, { qty: Math.max(1, Math.round(Number(e.target.value) || 1)) })}
                       />
-                    </Field>
-                    <Button
-                      type="button" variant="ghost" size="icon-xs" aria-label={`Drop ${r.name}`}
-                      className={i === 0 ? 'mb-7' : 'mb-6'}
-                      onClick={() => setRows((list) => list.filter((x) => x.id !== r.id))}
-                    >
-                      <X />
-                    </Button>
+                      <Button
+                        type="button" variant="ghost" size="icon"
+                        aria-label={`Drop ${r.name || r.read}`}
+                        onClick={() => setRows((list) => list.filter((x) => x.id !== r.id))}
+                      >
+                        <X />
+                      </Button>
+                    </div>
+                    <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <TonedBadge tone={CONFIDENCE[r.confidence].tone}>{CONFIDENCE[r.confidence].label}</TonedBadge>
+                      {r.read.trim().toLowerCase() !== r.name.trim().toLowerCase() && (
+                        <span>read as “{r.read}”</span>
+                      )}
+                    </p>
                   </div>
                 ))}
               </div>
