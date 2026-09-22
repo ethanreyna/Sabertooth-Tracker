@@ -31,8 +31,10 @@ formatting helpers.
   septims default), rental window, paid status, and a location screenshot.
 - **Ledger** — income and spending with a running treasury balance.
 - **Bank from a screenshot** — paste a picture of a Skyrim inventory or
-  container and every item on it is read, matched to the guild's item list,
-  and shown for review before it's logged in or out of the bank.
+  container and every item on it is read, matched to the guild's item list
+  and the Ledger's, and shown for review before it's logged in or out of the
+  bank. Anything the Ledger prices that the Database lacks is added to it
+  automatically on each price pull.
 - **Prices, Barter and Sales Tracker** — the market price list pulled from the
   guild's Google Sheet; a two-sided barter calculator (what they give at buy
   prices, what we give at sell, and the offset) that also costs recipes from
