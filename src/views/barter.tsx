@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { FormEvent } from 'react';
 import { ArrowLeftRight, Plus, Receipt, Scale, Trash2, TriangleAlert, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { EmptyState, Field, NameField, TonedBadge } from '@/components/bits';
+import { EmptyState, TonedBadge } from '@/components/bits';
+import { SaleDialog } from '@/views/sales';
 import { RECIPES } from '@/recipes';
 import type { Recipe } from '@/recipes';
 import { nameKey, priceIndex, priceOf, pricedItems, quote, recipeCost, tidyCategory, tidyName } from '@/lib/prices';
@@ -141,53 +140,6 @@ function value(l: Line, index: Map<string, Price>, recipes: Map<string, Recipe>,
     unpriced: [],
     refused: [],
   };
-}
-
-/** Writes the deal up as a sale, with what each side was worth right now. */
-function LogDealDialog({ close, onLog, memberNames }: {
-  close: () => void;
-  onLog: (party: string, by: string, note: string) => void;
-  memberNames: string[];
-}) {
-  const submit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    onLog(
-      String(f.get('party') || '').trim(),
-      String(f.get('by') || '').trim(),
-      String(f.get('note') || '').trim(),
-    );
-    close();
-  };
-
-  return (
-    <Dialog open onOpenChange={(open) => { if (!open) close(); }}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Add this deal to the Sales Tracker</DialogTitle>
-          <DialogDescription>
-            Both sides go in at today's prices, and the counter is cleared for the next one.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={submit} className="space-y-4">
-          <Field label="Traded with" htmlFor="deal-party">
-            <Input id="deal-party" name="party" autoFocus placeholder="A player, a merchant, another guild" />
-          </Field>
-          <Field label="Logged by" htmlFor="deal-by">
-            <NameField id="deal-by" name="by" options={memberNames} required
-              defaultValue={memberNames[0] || ''} placeholder="Pick a member or write in" />
-          </Field>
-          <Field label="Note (optional)" htmlFor="deal-note">
-            <Input id="deal-note" name="note" placeholder="Anything worth remembering" />
-          </Field>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={close}>Cancel</Button>
-            <Button type="submit"><Receipt />Log it</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 /** Adds a line to one side, searching the Ledger's priced rows and the recipe list together. */
@@ -514,16 +466,13 @@ export function Barter({ prices, update, readOnly, memberNames, onLogged }: {
       )}
 
       {logging && (
-        <LogDealDialog
+        <SaleDialog
+          title="Add this deal to the Sales Tracker" action="Log it" preview
+          initial={{ party: '', by: '', note: '', theirs: toLines('theirs'), ours: toLines('ours') }}
           close={() => setLogging(false)}
           memberNames={memberNames}
-          onLog={(party, by, note) => {
-            update((d) => {
-              d.sales.push({
-                id: uid(), party, theirs: toLines('theirs'), ours: toLines('ours'),
-                note, by, at: new Date().toISOString(),
-              });
-            });
+          onSave={(draft) => {
+            update((d) => { d.sales.push({ id: uid(), ...draft, at: new Date().toISOString() }); });
             setDeal(EMPTY);
             onLogged();
           }}
