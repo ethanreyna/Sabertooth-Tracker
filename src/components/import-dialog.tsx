@@ -115,7 +115,7 @@ export function ImportDialog({ cfg, kind, close, onUse }: {
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) close(); }}>
-      <DialogContent className="max-h-[calc(100vh-4rem)] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{fmt.title}</DialogTitle>
           <DialogDescription>{fmt.help}</DialogDescription>

@@ -147,7 +147,7 @@ export function ImportBankDialog({ cfg, db, update, itemNames: catalogueNames, m
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) close(); }}>
-      <DialogContent className="max-h-[calc(100vh-4rem)] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Stock the bank from a screenshot</DialogTitle>
           <DialogDescription>

@@ -519,7 +519,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) close(); }}>
-      <DialogContent className="max-h-[calc(100vh-4rem)] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{titles[modal]}</DialogTitle>
           {modal === 'sync' && (
