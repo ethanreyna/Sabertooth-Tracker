@@ -57,7 +57,8 @@ function SkillDialog({ title, action, initial, memberNames, close, onSave }: {
       who,
       skill: skill.trim(),
       tier,
-      xpToNext: Math.max(0, Math.round(Number(f.get('xp') || 0))),
+      xpEarned: Math.max(0, Math.round(Number(f.get('xpEarned') || 0))),
+      xpNeeded: Math.max(0, Math.round(Number(f.get('xpNeeded') || 0))),
       // Hours and minutes here, so "230" is two and a half hours.
       cooldownSeconds: parseDigits(digits, 'min') ?? 0,
     });
@@ -89,7 +90,7 @@ function SkillDialog({ title, action, initial, memberNames, close, onSave }: {
             </Field>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end">
             <Field label="Tier">
               <Picker
                 value={String(tier)} onValueChange={(v) => setTier(Number(v) || 0)}
@@ -97,10 +98,22 @@ function SkillDialog({ title, action, initial, memberNames, close, onSave }: {
                 options={SKILL_TIERS.map((name, i) => ({ value: String(i), label: `${i} · ${name}` }))}
               />
             </Field>
-            <Field label={tier >= MASTER ? 'XP to next' : `XP to ${tierName(tier + 1)}`} htmlFor="skill-xp">
+            {/* Both halves of the game's "800 / 2300", in that order, so the
+                panel can be copied across without any arithmetic. */}
+            <Field
+              label={tier >= MASTER ? 'XP earned' : `XP toward ${tierName(tier + 1)}`}
+              htmlFor="skill-xp-earned" className="sm:w-28"
+            >
               <Input
-                id="skill-xp" name="xp" type="number" min={0} defaultValue={initial.xpToNext || ''}
-                placeholder={tier >= MASTER ? 'Nothing left to train' : 'e.g. 1200'}
+                id="skill-xp-earned" name="xpEarned" type="number" min={0}
+                defaultValue={initial.xpEarned || ''} placeholder="800"
+                disabled={tier >= MASTER}
+              />
+            </Field>
+            <Field label="out of" htmlFor="skill-xp-needed" className="sm:w-28">
+              <Input
+                id="skill-xp-needed" name="xpNeeded" type="number" min={0}
+                defaultValue={initial.xpNeeded || ''} placeholder="2300"
                 disabled={tier >= MASTER}
               />
             </Field>
@@ -144,9 +157,11 @@ function SkillRow({ sk, now, readOnly, onTrained, onEdit, onRemove }: {
         <p className="text-xs text-muted-foreground">
           {sk.tier >= MASTER
             ? 'Mastered'
-            : sk.xpToNext > 0
-              ? `${sep(sk.xpToNext)} XP to ${tierName(sk.tier + 1)}`
-              : `No XP recorded toward ${tierName(sk.tier + 1)}`}
+            : sk.xpNeeded > 0
+              ? `${sep(sk.xpEarned)} / ${sep(sk.xpNeeded)} XP toward ${tierName(sk.tier + 1)}`
+              : sk.xpEarned > 0
+                ? `${sep(sk.xpEarned)} XP toward ${tierName(sk.tier + 1)}`
+                : `No XP recorded toward ${tierName(sk.tier + 1)}`}
           {timed && ` · trained ${sinceShort(sk.lastTrained, now)}`}
           {sk.cooldownSeconds > 0 && ` · comes back after ${formatCountdown(sk.cooldownSeconds * 1000)}`}
         </p>
@@ -282,7 +297,7 @@ export function SkillTracker({ db, update, readOnly, memberNames }: {
       {adding && (
         <SkillDialog
           title="Track a skill" action="Start tracking"
-          initial={{ who: '', skill: '', tier: 0, xpToNext: 0, cooldownSeconds: 0 }}
+          initial={{ who: '', skill: '', tier: 0, xpEarned: 0, xpNeeded: 0, cooldownSeconds: 0 }}
           memberNames={memberNames}
           close={() => setAdding(false)}
           onSave={(draft) => update((d) => {
