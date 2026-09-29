@@ -485,7 +485,11 @@ export function normalizeDb(raw: unknown): DB {
         id: s(x.id) || Math.random().toString(36).slice(2, 10),
         who: s(x.who), skill: s(x.skill),
         tier: Math.min(SKILL_TIERS.length - 1, Math.max(0, Math.round(n(x.tier)))),
-        xpToNext: Math.max(0, Math.round(n(x.xpToNext))),
+        xpEarned: Math.max(0, Math.round(n(x.xpEarned))),
+        // Records written before the field split held only what was left to
+        // earn. With nothing banked that is exactly what the tier costs, so
+        // the old number lands on `needed` and reads the same as it always did.
+        xpNeeded: Math.max(0, Math.round(n(x.xpNeeded ?? x.xpToNext))),
         cooldownSeconds: Math.max(0, Math.round(n(x.cooldownSeconds))),
         lastTrained: s(x.lastTrained), at: s(x.at),
       };

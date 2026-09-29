@@ -412,9 +412,12 @@ export interface SkillEntry {
   skill: string;
   /** 0–5, indexing {@link SKILL_TIERS}. */
   tier: number;
-  /** XP still to earn before the next tier. 0 when nobody has said, and
-   *  meaningless at Master, which has nothing to advance to. */
-  xpToNext: number;
+  /** XP banked toward the next tier, and what the tier costs — the two halves
+   *  of the game's own "800 / 2300 XP toward Adept". Either is 0 when nobody
+   *  has said, and both are meaningless at Master, which has nothing to
+   *  advance to. */
+  xpEarned: number;
+  xpNeeded: number;
   /** How long training takes to come back, in seconds. 0 means no timer —
    *  the record is just a note of where they are. */
   cooldownSeconds: number;
