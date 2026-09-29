@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Boxes, Coins, Construction, FileInput, Hammer, Inbox, LayoutDashboard, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, Settings, Shield, Skull, Sun, Users, Briefcase,
+  Boxes, Coins, Construction, FileInput, GraduationCap, Hammer, Inbox, LayoutDashboard, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, Settings, Shield, Skull, Sun, Users, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,8 @@ import { Enchants } from '@/views/enchants';
 import { Projects } from '@/views/projects';
 import { Settings as SettingsView } from '@/views/settings';
 import type { SettingsTab } from '@/views/settings';
+import { SkillsSection } from '@/views/skills-section';
+import type { SkillsTab } from '@/views/skills-section';
 import { ImportDialog } from '@/components/import-dialog';
 import { ImportBankDialog } from '@/components/import-bank-dialog';
 import type { Draft } from '@/lib/parse-import';
@@ -40,25 +42,28 @@ import {
 import { cn } from '@/lib/utils';
 import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
-type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'enchants' | 'projects' | 'recipes' | 'settings' | 'suggestions' | 'suggest';
+type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'enchants' | 'projects' | 'recipes' | 'skills' | 'settings' | 'suggestions' | 'suggest';
 
 /** What a read-only guest is allowed to see. `ledger` is the market price list,
  *  which comes from the public sheet; `bank` (the guild's septims) stays hidden,
  *  and the Worker strips those transactions from a guest response entirely.
  *  `enchants` is deliberately absent — see the note by NAV below. */
-const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'items', 'projects', 'recipes', 'settings', 'suggest'];
+const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'items', 'projects', 'recipes', 'skills', 'settings', 'suggest'];
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
+// Ordered by how often the guild actually opens them, not by when they were
+// built: the six the day runs on first, then everything else.
 const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard /> },
+  { id: 'ledger', label: 'Ledger', icon: <Scale /> },
+  { id: 'map', label: 'Map', icon: <MapIcon /> },
+  { id: 'dungeons', label: 'Dungeons', icon: <Skull /> },
+  { id: 'recipes', label: 'Recipes', icon: <Hammer /> },
+  { id: 'bank', label: 'Bank', icon: <Coins /> },
+  { id: 'skills', label: 'Skills', icon: <GraduationCap /> },
   { id: 'jobs', label: 'Jobs', icon: <Briefcase /> },
   { id: 'storage', label: 'Storage', icon: <Package /> },
-  { id: 'map', label: 'Map', icon: <MapIcon /> },
-  { id: 'bank', label: 'Bank', icon: <Coins /> },
-  { id: 'ledger', label: 'Ledger', icon: <Scale /> },
-  { id: 'recipes', label: 'Recipes', icon: <Hammer /> },
-  { id: 'dungeons', label: 'Dungeons', icon: <Skull /> },
   { id: 'items', label: 'Database', icon: <Boxes /> },
   { id: 'settings', label: 'Settings', icon: <Users /> },
   { id: 'suggestions', label: 'Suggestions', icon: <Inbox /> },
@@ -73,7 +78,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
 const TITLES: Record<View, string> = {
   dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', map: 'Map',
   bank: 'Bank', ledger: 'Ledger', items: 'Database', enchants: 'Enchanting waitlist',
-  projects: 'Projects', recipes: 'Recipes',
+  projects: 'Projects', recipes: 'Recipes', skills: 'Skills',
   settings: 'Settings', suggestions: 'Guest suggestions', suggest: 'Suggest a change',
 };
 
@@ -126,6 +131,7 @@ export default function App() {
   const [editEnchantmentId, setEditEnchantmentId] = useState<string | null>(null);
   const [dbTab, setDbTab] = useState<DatabaseTab>('items');
   const [dungeonsTab, setDungeonsTab] = useState<DungeonsTab>('database');
+  const [skillsTab, setSkillsTab] = useState<SkillsTab>('tracker');
   // A job or storage record read off a pasted board post, waiting to be
   // reviewed in the normal form. Never saved straight from the importer.
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -574,6 +580,12 @@ export default function App() {
                 setEditEnchantmentId(id || null);
                 setModal('enchantment');
               }}
+            />
+          )}
+          {view === 'skills' && (
+            <SkillsSection
+              db={db} update={update} readOnly={readOnly} memberNames={memberNames}
+              tab={skillsTab} onTabChange={setSkillsTab}
             />
           )}
           {view === 'recipes' && <Recipes />}

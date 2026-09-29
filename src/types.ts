@@ -392,6 +392,37 @@ export interface Sale {
   at: string;
 }
 
+/** Every skill the server trains, in the order the guild lists them. */
+export const SKILLS = [
+  'One Handed', 'Two Handed', 'Shields', 'Armor', 'Dual Wielding',
+  'Miner', 'Blacksmith', 'Tailor', 'Hunter', 'Charcoal Maker', 'Scholar',
+  'Harvester', 'Artifact Salvaging', 'Lockpicking', 'First Aid',
+];
+
+/** Rank 0 through 5. A skill's tier is stored as the number, so renaming a
+ *  rank here doesn't rewrite anybody's record. */
+export const SKILL_TIERS = ['Novice', 'Apprentice', 'Journeyman', 'Adept', 'Expert', 'Master'];
+
+/** Where one member stands on one skill, and when they can train it again. */
+export interface SkillEntry {
+  id: string;
+  /** Whose skill this is. */
+  who: string;
+  /** One of {@link SKILLS}, or anything written in if the server adds one. */
+  skill: string;
+  /** 0–5, indexing {@link SKILL_TIERS}. */
+  tier: number;
+  /** XP still to earn before the next tier. 0 when nobody has said, and
+   *  meaningless at Master, which has nothing to advance to. */
+  xpToNext: number;
+  /** How long training takes to come back, in seconds. 0 means no timer —
+   *  the record is just a note of where they are. */
+  cooldownSeconds: number;
+  /** When they last trained it, blank if never. */
+  lastTrained: string;
+  at: string;
+}
+
 export interface DB {
   settings: Settings;
   members: Member[];
@@ -408,6 +439,7 @@ export interface DB {
   enchants: EnchantRequest[];
   projects: Project[];
   sales: Sale[];
+  skills: SkillEntry[];
 }
 
 /** One row of the market price list, mirrored from the guild's Google Sheet.

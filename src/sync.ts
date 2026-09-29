@@ -1,6 +1,6 @@
-import { DEFAULT_GUILD_CUT_PCT } from './types';
+import { DEFAULT_GUILD_CUT_PCT, SKILL_TIERS } from './types';
 import { coordOrEmpty, httpUrlOrEmpty } from './lib/maps';
-import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, EnchantmentRecord, Job, ItemRecord, LedgerEntry, BankItem, Member, MemberEntry, Price, Project, ProjectContribution, ProjectRequirement, ProjectStage, Role, Sale, SaleLine, Spot, Suggestion, SyncCfg } from './types';
+import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, EnchantmentRecord, Job, ItemRecord, LedgerEntry, BankItem, Member, MemberEntry, Price, Project, ProjectContribution, ProjectRequirement, ProjectStage, Role, Sale, SaleLine, SkillEntry, Spot, Suggestion, SyncCfg } from './types';
 
 const CFG_KEY = 'sabretooth-auth';
 const LEGACY_CFG_KEY = 'sabertooth-auth'; // pre-rename; read once so nobody is logged out
@@ -479,6 +479,17 @@ export function normalizeDb(raw: unknown): DB {
         note: s(x.note), by: s(x.by), at: s(x.at),
       };
     }).filter((sale) => sale.theirs.length > 0 || sale.ours.length > 0),
+    skills: arr(o.skills).map((sk): SkillEntry => {
+      const x = (sk || {}) as Record<string, unknown>;
+      return {
+        id: s(x.id) || Math.random().toString(36).slice(2, 10),
+        who: s(x.who), skill: s(x.skill),
+        tier: Math.min(SKILL_TIERS.length - 1, Math.max(0, Math.round(n(x.tier)))),
+        xpToNext: Math.max(0, Math.round(n(x.xpToNext))),
+        cooldownSeconds: Math.max(0, Math.round(n(x.cooldownSeconds))),
+        lastTrained: s(x.lastTrained), at: s(x.at),
+      };
+    }).filter((sk) => sk.who && sk.skill),
   };
 
 }

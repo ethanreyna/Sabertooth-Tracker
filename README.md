@@ -45,6 +45,9 @@ formatting helpers.
   ("Initiate advances to Saberblooded after 3 completions").
 - **Roster** — assign roles, log completions and notes against a member, and
   watch their progress toward the next rank. Promote in one click when ready.
+- **Skills** — where each member stands on the server's fifteen skills: their
+  tier (Novice through Master), the XP left to the next one, and a live
+  countdown to when training comes back up.
 - **Dungeons** — scouted dungeons with location, recommended party size,
   difficulty, notes, and map screenshots.
 - **Points of Interest** — ore veins, hunting grounds, ingredient patches,
