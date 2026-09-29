@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList,
 } from '@/components/ui/combobox';
+import { formatDigits, onlyDigits } from '@/lib/countdown';
+import type { Grain } from '@/lib/countdown';
 import { cn } from '@/lib/utils';
 import type { JobStatus } from '@/types';
 
@@ -200,6 +203,42 @@ export function Picker({ id, value, onValueChange, options, placeholder, classNa
         </ComboboxList>
       </ComboboxContent>
     </Combobox>
+  );
+}
+
+/**
+ * A duration field that reads like the countdown it sets: an empty __:__, and
+ * digits fill in from the right as they're typed — the way a microwave or a
+ * phone's timer takes a time — so there's no colon to type and no cursor to
+ * position. Backspace drops the last digit. The digits are the whole state;
+ * the clock face is derived from them and never edited directly.
+ */
+export function DurationInput({ id, digits, onChange, grain = 'sec' }: {
+  id?: string;
+  digits: string;
+  onChange: (digits: string) => void;
+  /** Whether the rightmost pair of digits is seconds or minutes. */
+  grain?: Grain;
+}) {
+  const push = (raw: string) => onChange(onlyDigits(raw));
+  const hint = grain === 'min'
+    ? 'Type the digits and they fill in from the right — 230 becomes 2:30'
+    : 'Type the digits and they fill in from the right — 543 becomes 05:43';
+
+  return (
+    <Input
+      id={id} value={formatDigits(digits, grain)} placeholder="__:__"
+      inputMode="numeric" autoComplete="off" title={hint}
+      className="text-center font-mono tabular-nums"
+      onKeyDown={(e) => {
+        if (/^\d$/.test(e.key)) { e.preventDefault(); push(digits + e.key); }
+        else if (e.key === 'Backspace') { e.preventDefault(); onChange(digits.slice(0, -1)); }
+        else if (e.key === 'Delete') { e.preventDefault(); onChange(''); }
+      }}
+      // Paste, and soft keyboards that don't raise per-digit key events, land
+      // here; whatever they produced, only its digits count.
+      onChange={(e) => push(e.target.value)}
+    />
   );
 }
 
