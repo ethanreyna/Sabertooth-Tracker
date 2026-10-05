@@ -1,4 +1,4 @@
-# Sabretooth Adventurers Guild Tracker
+# Orgimm Tracker
 
 Guild management app for the Keizaal Skyrim RP server: job board with searchable
 Skyrim item collection lists, barrel storage tracking with location screenshots,
@@ -191,6 +191,18 @@ does with the messy bits:
 - Several smelter inputs make the same ingot, so those are named
   "`<ingot> — from <input>`". Recipe names must be unique (the bench keys its
   plan by name), and the build fails if they aren't.
+
+## What the names mean
+
+The app is **Orgimm Tracker** everywhere a person reads it. The infrastructure
+still answers to the old name, deliberately: the Worker (`sabretooth-tracker`),
+its domain, the D1 database (`sabertooth`) and the R2 bucket
+(`sabertooth-images`) are live identifiers, and renaming them in `wrangler.toml`
+doesn't rename anything at Cloudflare — it points the deploy at something that
+doesn't exist yet, abandoning the guild's data and screenshots behind the old
+names. Same for the `sabretooth-*` keys in `localStorage`: renaming those signs
+everyone out and throws away their cached copy. Renaming any of it is a
+migration, not an edit.
 
 ## How syncing works
 

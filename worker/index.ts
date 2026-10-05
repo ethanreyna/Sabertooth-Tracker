@@ -1,6 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 
-// Sabretooth Tracker backend.
+// Orgimm Tracker backend.
 //
 //   GET  /api/db        -> { db, version }
 //   PUT  /api/db        -> { version }        body: { db, version }   409 on stale version
@@ -334,7 +334,7 @@ async function handlePrices(env: Env, url: URL): Promise<Response> {
     try {
       const res = await fetch(src, {
         cf: { cacheTtl: bypass ? 0 : PRICES_TTL_SECONDS, cacheEverything: true },
-        headers: { 'User-Agent': 'sabretooth-tracker' },
+        headers: { 'User-Agent': 'orgimm-tracker' },
       });
       if (!res.ok) return { tab, status: res.status, rows: [] as PriceRow[] };
       return { tab, status: 200, rows: parsePriceSheet(tab, await res.text()) };

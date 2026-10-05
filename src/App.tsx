@@ -393,7 +393,7 @@ export default function App() {
           </div>
           <div className="min-w-0 leading-tight">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Keizaal</p>
-            <p className="truncate text-xs font-bold tracking-tight">Sabretooth Adventurers</p>
+            <p className="truncate text-xs font-bold tracking-tight">Orgimm Tracker</p>
           </div>
         </div>
 

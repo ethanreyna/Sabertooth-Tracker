@@ -27,7 +27,7 @@ export const demoDb = (): DB => ({
     {
       id: 'm5', name: 'Soul in Sap', role: 'Initiate', joined: d(12),
       log: [
-        { id: 'e1', kind: 'credit', text: 'Sabretooth Daily: Healing brews', jobId: '', by: 'Karina', at: d(4) },
+        { id: 'e1', kind: 'credit', text: 'Orgimm Daily: Healing brews', jobId: '', by: 'Karina', at: d(4) },
         { id: 'e2', kind: 'credit', text: 'Escort to Riften', jobId: 'j2', by: 'Zahir Alazar', at: d(1) },
         { id: 'e3', kind: 'note', text: 'Keen tracker — pair with a veteran for the next bounty.', jobId: '', by: 'Karina', at: d(3) },
       ],
