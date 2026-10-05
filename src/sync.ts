@@ -1,6 +1,6 @@
 import { DEFAULT_GUILD_CUT_PCT, SKILL_TIERS } from './types';
 import { coordOrEmpty, httpUrlOrEmpty } from './lib/maps';
-import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, EnchantmentRecord, Job, ItemRecord, LedgerEntry, BankItem, Member, MemberEntry, Price, Project, ProjectContribution, ProjectRequirement, ProjectStage, Role, Sale, SaleLine, SkillEntry, Spot, Suggestion, SyncCfg } from './types';
+import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, EnchantmentRecord, Job, ItemRecord, LedgerEntry, BankItem, Member, MemberEntry, Price, Project, ProjectContribution, ProjectRequirement, ProjectStage, Role, Sale, SaleLine, SavedPoster, SkillEntry, Spot, Suggestion, SyncCfg } from './types';
 
 const CFG_KEY = 'sabretooth-auth';
 const LEGACY_CFG_KEY = 'sabertooth-auth'; // pre-rename; read once so nobody is logged out
@@ -494,6 +494,13 @@ export function normalizeDb(raw: unknown): DB {
         lastTrained: s(x.lastTrained), at: s(x.at),
       };
     }).filter((sk) => sk.who && sk.skill),
+    posters: arr(o.posters).map((p): SavedPoster => {
+      const x = (p || {}) as Record<string, unknown>;
+      return {
+        id: s(x.id) || Math.random().toString(36).slice(2, 10),
+        title: s(x.title), template: s(x.template), at: s(x.at),
+      };
+    }).filter((p) => p.template.trim()),
   };
 
 }

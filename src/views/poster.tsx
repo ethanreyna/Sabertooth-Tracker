@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ClipboardCopy, Eraser, FileText, Printer } from 'lucide-react';
+import { ClipboardCopy, Eraser, FileText, Image as ImageIcon, Printer, Save, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { TonedBadge } from '@/components/bits';
+import { ago, uid } from '@/lib/format';
+import type { DB } from '@/types';
 import {
   formatCell, formatQty, isQtyColumn, numericColumns, parsePoster, posterToText, qtyWorthShowing,
 } from '@/lib/parse-poster';
 import type { Poster, PosterBlock, PosterTable } from '@/lib/parse-poster';
+import { POSTER_SERIF, posterFilename, posterToCanvas } from '@/lib/poster-canvas';
 import { cn } from '@/lib/utils';
 
 const KEY = 'orgimm-poster-v1';
@@ -60,8 +64,9 @@ Muffle, A, 300, 1
 `;
 
 /** The sheet is set in a serif and on paper whatever the app's theme is: it's
- *  a printed notice, not another panel, and it has to print as one. */
-const SERIF = 'ui-serif, Georgia, "Times New Roman", serif';
+ *  a printed notice, not another panel, and it has to print as one. Shared
+ *  with the canvas renderer so the picture matches what's on screen. */
+const SERIF = POSTER_SERIF;
 
 function Table({ table }: { table: PosterTable }) {
   const numeric = numericColumns(table);
@@ -203,7 +208,10 @@ const HELP: Array<[string, string]> = [
  * appears on it that nobody typed. Numbers are set with separators, a quantity
  * of one is left off, and rows stay in the order they were written.
  */
-export function PosterMaker() {
+export function PosterMaker({ db, update }: {
+  db: DB;
+  update: (fn: (d: DB) => void) => void;
+}) {
   const [src, setSrc] = useState(() => {
     try {
       return localStorage.getItem(KEY) ?? '';
@@ -211,7 +219,11 @@ export function PosterMaker() {
       return '';
     }
   });
+  // Which saved poster the draft came from, so Save goes back to the same one
+  // rather than leaving a copy behind every time.
+  const [openId, setOpenId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [err, setErr] = useState('');
 
   useEffect(() => {
     try {
@@ -228,6 +240,33 @@ export function PosterMaker() {
     0,
   );
 
+  const saved = db.posters.slice().sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+  const open = openId ? db.posters.find((p) => p.id === openId) ?? null : null;
+  const dirty = open ? open.template !== src : src.trim() !== '';
+
+  const store = (id: string | null) => {
+    const title = poster.title.trim() || 'Untitled poster';
+    const at = new Date().toISOString();
+    if (id) {
+      update((d) => {
+        const p = d.posters.find((x) => x.id === id);
+        if (p) { p.title = title; p.template = src; p.at = at; }
+      });
+      setOpenId(id);
+      return;
+    }
+    const fresh = uid();
+    update((d) => { d.posters.push({ id: fresh, title, template: src, at }); });
+    setOpenId(fresh);
+  };
+
+  /** Loading over unsaved work asks first — the draft is the only copy. */
+  const load = (id: string, template: string) => {
+    if (dirty && !confirm('Open this poster? The draft on screen hasn’t been saved.')) return;
+    setSrc(template);
+    setOpenId(id);
+  };
+
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(posterToText(poster));
@@ -238,11 +277,33 @@ export function PosterMaker() {
     }
   };
 
+  // Drawn at 2x, so the picture holds up pinned next to a Discord message.
+  const savePng = () => {
+    setErr('');
+    try {
+      posterToCanvas(poster, 2).toBlob((blob) => {
+        if (!blob) { setErr('The picture could not be made. Print to PDF instead.'); return; }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = posterFilename(poster);
+        a.click();
+        // Freed on the next turn, once the browser has taken the blob.
+        window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      }, 'image/png');
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'The picture could not be made.');
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={() => window.print()} disabled={!src.trim()}>
           <Printer />Print or save as PDF
+        </Button>
+        <Button size="sm" variant="outline" onClick={savePng} disabled={!src.trim()}>
+          <ImageIcon />Save as PNG
         </Button>
         <Button size="sm" variant="outline" onClick={() => void copy()} disabled={!src.trim()}>
           <ClipboardCopy />{copied ? 'Copied' : 'Copy as text'}
@@ -250,18 +311,42 @@ export function PosterMaker() {
         <Button size="sm" variant="outline" onClick={() => setSrc(EXAMPLE)}>
           <FileText />Load the example
         </Button>
+        <Button size="sm" variant="outline" onClick={() => store(open ? open.id : null)} disabled={!src.trim() || !dirty}>
+          <Save />{open ? 'Save changes' : 'Save to the guild'}
+        </Button>
+        {open && (
+          <Button size="sm" variant="ghost" onClick={() => store(null)} disabled={!src.trim()}>
+            Save a copy
+          </Button>
+        )}
         {src.trim() && (
           <Button
             size="sm" variant="ghost" className="text-destructive"
-            onClick={() => { if (confirm('Clear the template?')) setSrc(''); }}
+            onClick={() => {
+              if (confirm('Clear the template? The saved copy, if there is one, stays.')) {
+                setSrc('');
+                setOpenId(null);
+              }
+            }}
           >
             <Eraser />Clear
           </Button>
         )}
-        <span className="ml-auto text-xs text-muted-foreground">
+        <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+          {open && (
+            <TonedBadge tone={dirty ? 'amber' : 'green'}>
+              {dirty ? 'Unsaved changes' : `Saved · ${open.title}`}
+            </TonedBadge>
+          )}
           {poster.sections.length} section{poster.sections.length === 1 ? '' : 's'} · {rows} row{rows === 1 ? '' : 's'}
         </span>
       </div>
+
+      {err && (
+        <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive print:hidden">
+          {err}
+        </p>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
         <div className="space-y-3 print:hidden">
@@ -272,6 +357,49 @@ export function PosterMaker() {
             placeholder={'@title: What this is\n@columns: Item, Price\n\n# A section\nSomething, 250\n\n> A line of prose.'}
             className="h-[28rem] font-mono text-xs"
           />
+          {saved.length > 0 && (
+            <Card>
+              <CardContent className="space-y-1.5 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Saved posters
+                </p>
+                <div className="divide-y overflow-hidden rounded-md border">
+                  {saved.map((p) => (
+                    <div
+                      key={p.id}
+                      className={cn(
+                        'flex items-center gap-2 bg-card px-2 py-1.5',
+                        p.id === openId && 'bg-sky-500/10',
+                      )}
+                    >
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 text-left"
+                        onClick={() => load(p.id, p.template)}
+                      >
+                        <span className="block truncate text-sm">{p.title}</span>
+                        <span className="block text-[11px] text-muted-foreground">
+                          saved {ago(p.at)}
+                        </span>
+                      </button>
+                      <Button
+                        variant="ghost" size="icon-xs" className="text-destructive"
+                        aria-label={`Delete ${p.title}`}
+                        onClick={() => {
+                          if (!confirm(`Delete “${p.title}” from the saved posters?`)) return;
+                          update((d) => { d.posters = d.posters.filter((x) => x.id !== p.id); });
+                          if (p.id === openId) setOpenId(null);
+                        }}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardContent className="space-y-1.5 p-3">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -296,8 +424,10 @@ export function PosterMaker() {
 
       <p className="text-xs text-muted-foreground print:hidden">
         The sheet is laid out from the template, never generated — the same template always gives
-        the same poster. Printing shows only the sheet, so “Save as PDF” gives a clean copy; Copy as
-        text gives a version to paste into Discord. The draft is kept in this browser.
+        the same poster. Printing shows only the sheet, so “Save as PDF” gives a clean copy; Save as
+        PNG draws the same poster at double size as a picture; Copy as text gives a version to paste
+        into Discord. The draft is kept in this browser; saving puts the template itself in the
+        guild database, so an old poster opens as something still editable rather than a picture.
       </p>
     </div>
   );

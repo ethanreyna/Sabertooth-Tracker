@@ -426,6 +426,20 @@ export interface SkillEntry {
   at: string;
 }
 
+/**
+ * A poster kept so it can be run again. Only the template is stored — the
+ * sheet is drawn from it, so re-opening an old poster gives something still
+ * editable rather than a picture nobody can change.
+ */
+export interface SavedPoster {
+  id: string;
+  /** The template's own @title when it was saved, for the list. */
+  title: string;
+  template: string;
+  /** When it was last saved, so the list can lead with what's in use. */
+  at: string;
+}
+
 export interface DB {
   settings: Settings;
   members: Member[];
@@ -443,6 +457,7 @@ export interface DB {
   projects: Project[];
   sales: Sale[];
   skills: SkillEntry[];
+  posters: SavedPoster[];
 }
 
 /** One row of the market price list, mirrored from the guild's Google Sheet.
