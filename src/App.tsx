@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Boxes, Coins, Construction, FileInput, GraduationCap, Hammer, Inbox, LayoutDashboard, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, Settings, Shield, Skull, Sun, Users, Briefcase,
+  Boxes, Coins, Construction, FileInput, GraduationCap, Hammer, Inbox, LayoutDashboard, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, ScrollText, Settings, Shield, Skull, Sun, Users, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +27,7 @@ import { Settings as SettingsView } from '@/views/settings';
 import type { SettingsTab } from '@/views/settings';
 import { SkillsSection } from '@/views/skills-section';
 import type { SkillsTab } from '@/views/skills-section';
+import { PosterMaker } from '@/views/poster';
 import { ImportDialog } from '@/components/import-dialog';
 import { ImportBankDialog } from '@/components/import-bank-dialog';
 import type { Draft } from '@/lib/parse-import';
@@ -42,7 +43,7 @@ import {
 import { cn } from '@/lib/utils';
 import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
-type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'enchants' | 'projects' | 'recipes' | 'skills' | 'settings' | 'suggestions' | 'suggest';
+type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'enchants' | 'projects' | 'recipes' | 'skills' | 'poster' | 'settings' | 'suggestions' | 'suggest';
 
 /** What a read-only guest is allowed to see. `ledger` is the market price list,
  *  which comes from the public sheet; `bank` (the guild's septims) stays hidden,
@@ -62,6 +63,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'recipes', label: 'Recipes', icon: <Hammer /> },
   { id: 'bank', label: 'Bank', icon: <Coins /> },
   { id: 'skills', label: 'Skills', icon: <GraduationCap /> },
+  { id: 'poster', label: 'Poster', icon: <ScrollText /> },
   { id: 'jobs', label: 'Jobs', icon: <Briefcase /> },
   { id: 'storage', label: 'Storage', icon: <Package /> },
   { id: 'items', label: 'Database', icon: <Boxes /> },
@@ -78,7 +80,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
 const TITLES: Record<View, string> = {
   dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', map: 'Map',
   bank: 'Bank', ledger: 'Ledger', items: 'Database', enchants: 'Enchanting waitlist',
-  projects: 'Projects', recipes: 'Recipes', skills: 'Skills',
+  projects: 'Projects', recipes: 'Recipes', skills: 'Skills', poster: 'Poster',
   settings: 'Settings', suggestions: 'Guest suggestions', suggest: 'Suggest a change',
 };
 
@@ -588,6 +590,7 @@ export default function App() {
               tab={skillsTab} onTabChange={setSkillsTab}
             />
           )}
+          {view === 'poster' && <PosterMaker />}
           {view === 'recipes' && <Recipes />}
           {view === 'settings' && (
             <SettingsView
