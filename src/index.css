@@ -152,3 +152,28 @@
   filter: drop-shadow(0 0 8px rgb(56 189 248 / 1)) brightness(1.2);
   cursor: grabbing;
 }
+
+/* Printing a poster should give the poster, not a screenshot of the app around
+   it. Hiding by visibility rather than display keeps the sheet's own layout
+   intact — a display:none ancestor would take its column flow with it. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .poster-sheet,
+  .poster-sheet * {
+    visibility: visible;
+  }
+  .poster-sheet {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-width: none;
+    box-shadow: none;
+    --tw-ring-shadow: 0 0 #0000;
+  }
+  @page {
+    margin: 14mm;
+  }
+}
