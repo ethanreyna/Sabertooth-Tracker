@@ -62,7 +62,7 @@ export function Login({ onLogin, onGuest, notice, theme, toggleTheme }: {
             </div>
             <div className="min-w-0 flex-1 leading-tight">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Keizaal</p>
-              <p className="text-sm font-bold tracking-tight">Sabretooth Adventurers</p>
+              <p className="text-sm font-bold tracking-tight">Orgimm Tracker</p>
             </div>
             <Button
               type="button" variant="ghost" size="icon-sm" onClick={toggleTheme}

@@ -1009,7 +1009,7 @@ export function Modals({ modal, close, roles, settings, memberNames, editRole, e
             </Field>
 
             <Field label="Where it went (optional)" htmlFor="bank-item-note">
-              <Input id="bank-item-note" name="note" placeholder="e.g. Left barrel, Sabretooth hall" />
+              <Input id="bank-item-note" name="note" placeholder="e.g. Left barrel, Orgimm hall" />
             </Field>
 
             <Field label="Logged by" htmlFor="bank-item-by">

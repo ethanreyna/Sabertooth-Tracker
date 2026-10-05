@@ -237,7 +237,7 @@ export function Suggest({ cfg, memberNames, itemNames, enchantmentNames }: {
                 </Field>
 
                 <Field label="Where it went (optional)" htmlFor="sg-item-note">
-                  <Input id="sg-item-note" name="itemNote" placeholder="e.g. Left barrel, Sabretooth hall" />
+                  <Input id="sg-item-note" name="itemNote" placeholder="e.g. Left barrel, Orgimm hall" />
                 </Field>
 
                 {who}
