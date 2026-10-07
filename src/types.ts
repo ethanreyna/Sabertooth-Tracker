@@ -440,6 +440,15 @@ export interface SavedPoster {
   at: string;
 }
 
+/** A picture uploaded to sit behind a poster. The image itself lives in R2
+ *  like a barrel screenshot; this is just the guild's list of them. */
+export interface PosterBackground {
+  id: string;
+  name: string;
+  url: string;
+  at: string;
+}
+
 export interface DB {
   settings: Settings;
   members: Member[];
@@ -458,6 +467,7 @@ export interface DB {
   sales: Sale[];
   skills: SkillEntry[];
   posters: SavedPoster[];
+  backgrounds: PosterBackground[];
 }
 
 /** One row of the market price list, mirrored from the guild's Google Sheet.

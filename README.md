@@ -29,6 +29,10 @@ formatting helpers.
   after the guild's cut (20% by default, editable). See *Reward splits* below.
 - **Storage** — track owner, whether they're a guild member, weekly rate (50
   septims default), rental window, paid status, and a location screenshot.
+- **Poster** — write a template (`@title`, `@columns`, `# sections`, rows) and it
+  is drawn as a poster: an uploaded screenshot behind, torn parchment over it.
+  `@panel` adds another parchment beside the last. Save as PNG, print, copy as
+  text for Discord, or keep the template in the guild database to run again.
 - **Ledger** — income and spending with a running treasury balance.
 - **Bank from a screenshot** — paste a picture of a Skyrim inventory or
   container and every item on it is read, matched to the guild's item list
