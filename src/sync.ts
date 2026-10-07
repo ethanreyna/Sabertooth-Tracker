@@ -1,6 +1,17 @@
 import { DEFAULT_GUILD_CUT_PCT, SKILL_TIERS } from './types';
 import { coordOrEmpty, httpUrlOrEmpty } from './lib/maps';
-import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, EnchantmentRecord, Job, ItemRecord, LedgerEntry, BankItem, Member, MemberEntry, Price, Project, ProjectContribution, ProjectRequirement, ProjectStage, Role, Sale, SaleLine, SavedPoster, SkillEntry, Spot, Suggestion, SyncCfg } from './types';
+import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, EnchantmentRecord, Job, ItemRecord, LedgerEntry, BankItem, Member, MemberEntry, Price, Project, ProjectContribution, ProjectRequirement, ProjectStage, PosterBackground, Role, Sale, SaleLine, SavedPoster, SkillEntry, Spot, Suggestion, SyncCfg } from './types';
+
+/**
+ * A picture this app will actually load: one of our own uploads, or a plain
+ * http(s) address. Anything else — a `javascript:` or `data:` url someone put
+ * in the document by hand — is dropped rather than handed to an <img>.
+ */
+const imageUrlOrEmpty = (raw: string): string => {
+  const v = raw.trim();
+  if (/^\/api\/img\/[\w.-]+$/.test(v)) return v;
+  return httpUrlOrEmpty(v);
+};
 
 const CFG_KEY = 'sabretooth-auth';
 const LEGACY_CFG_KEY = 'sabertooth-auth'; // pre-rename; read once so nobody is logged out
@@ -501,6 +512,13 @@ export function normalizeDb(raw: unknown): DB {
         title: s(x.title), template: s(x.template), at: s(x.at),
       };
     }).filter((p) => p.template.trim()),
+    backgrounds: arr(o.backgrounds).map((b): PosterBackground => {
+      const x = (b || {}) as Record<string, unknown>;
+      return {
+        id: s(x.id) || Math.random().toString(36).slice(2, 10),
+        name: s(x.name), url: imageUrlOrEmpty(s(x.url)), at: s(x.at),
+      };
+    }).filter((b) => b.url),
   };
 
 }

@@ -590,7 +590,7 @@ export default function App() {
               tab={skillsTab} onTabChange={setSkillsTab}
             />
           )}
-          {view === 'poster' && <PosterMaker db={db} update={update} />}
+          {view === 'poster' && <PosterMaker db={db} update={update} cfg={cfg} />}
           {view === 'recipes' && <Recipes />}
           {view === 'settings' && (
             <SettingsView

@@ -4,17 +4,18 @@
  * A poster is written as plain lines so it can be drafted anywhere — a Discord
  * message, a notes app — and pasted in. Nothing here invents content: the
  * parser only sorts lines into headings, rows and paragraphs, and the renderer
- * lays out exactly what was written, in the order it was written.
+ * draws exactly what was written, in the order it was written.
  *
- *   @key: value     poster settings. title, subtitle and footer are known;
- *                   anything else is carried through as metadata. Commas in an
- *                   @ line are ordinary text.
+ *   @key: value     poster settings. title, subtitle, footer and background
+ *                   are known; anything else is carried through as metadata.
+ *                   Commas in an @ line are ordinary text.
+ *   @background:    the picture behind everything, as an uploaded image URL.
  *   @columns: A, B  names the columns for every row after it, until changed.
- *   # Text          starts a section.
- *   a, b, c         a row in the current section, split on commas. A cell that
- *                   needs a comma goes in "double quotes".
- *   > Text          a paragraph in the current section, or up top if there
- *                   isn't one yet.
+ *   @panel          starts another parchment. Panels sit side by side.
+ *   # Text          starts a section inside the current parchment.
+ *   a, b, c         a row, split on commas. A cell that needs a comma goes in
+ *                   "double quotes".
+ *   > Text          a paragraph.
  *   // Text         a comment, ignored. Blank lines are ignored.
  */
 
@@ -37,6 +38,13 @@ export interface PosterSection {
   blocks: PosterBlock[];
 }
 
+/** One torn parchment. Several sit side by side across the poster. */
+export interface PosterPanel {
+  /** Anything written before the first heading in this parchment. */
+  blocks: PosterBlock[];
+  sections: PosterSection[];
+}
+
 /** An `@key` the poster doesn't know by name, kept so it can still be shown. */
 export interface PosterMeta {
   key: string;
@@ -47,10 +55,10 @@ export interface Poster {
   title: string;
   subtitle: string;
   footer: string;
+  /** URL of the picture behind the poster, blank for a plain ground. */
+  background: string;
   meta: PosterMeta[];
-  /** Anything written before the first heading. */
-  blocks: PosterBlock[];
-  sections: PosterSection[];
+  panels: PosterPanel[];
 }
 
 /**
@@ -77,16 +85,22 @@ export function splitCells(line: string): string[] {
   return out;
 }
 
+const emptyPanel = (): PosterPanel => ({ blocks: [], sections: [] });
+
 export function parsePoster(src: string): Poster {
-  const poster: Poster = { title: '', subtitle: '', footer: '', meta: [], blocks: [], sections: [] };
+  const poster: Poster = {
+    title: '', subtitle: '', footer: '', background: '', meta: [], panels: [],
+  };
   let columns: string[] = [];
+  let panel = emptyPanel();
   let section: PosterSection | null = null;
   // The run of rows being gathered. Anything that isn't another row ends it,
   // so a paragraph or a change of columns starts a fresh table rather than
   // silently joining rows that were never meant to line up.
   let table: PosterTable | null = null;
 
-  const into = () => (section ? section.blocks : poster.blocks);
+  poster.panels.push(panel);
+  const into = () => (section ? section.blocks : panel.blocks);
 
   for (const raw of src.split(/\r?\n/)) {
     const line = raw.trim();
@@ -97,16 +111,23 @@ export function parsePoster(src: string): Poster {
       const key = (at >= 0 ? line.slice(1, at) : line.slice(1)).trim().toLowerCase();
       const value = at >= 0 ? line.slice(at + 1).trim() : '';
       if (key === 'columns') { columns = splitCells(value).filter(Boolean); table = null; }
+      else if (key === 'panel') {
+        panel = emptyPanel();
+        poster.panels.push(panel);
+        section = null;
+        table = null;
+      }
       else if (key === 'title') poster.title = value;
       else if (key === 'subtitle') poster.subtitle = value;
       else if (key === 'footer') poster.footer = value;
+      else if (key === 'background') poster.background = value;
       else if (key) poster.meta.push({ key, value });
       continue;
     }
 
     if (line.startsWith('#')) {
       section = { heading: line.replace(/^#+/, '').trim(), blocks: [] };
-      poster.sections.push(section);
+      panel.sections.push(section);
       table = null;
       continue;
     }
@@ -124,6 +145,8 @@ export function parsePoster(src: string): Poster {
     table.rows.push(splitCells(line));
   }
 
+  // An opening `@panel`, or a poster of nothing but settings, leaves empties.
+  poster.panels = poster.panels.filter((p) => p.blocks.length > 0 || p.sections.length > 0);
   return poster;
 }
 
@@ -159,6 +182,18 @@ export function qtyWorthShowing(table: PosterTable, index: number): boolean {
   return table.rows.some((r) => formatQty(r[index] ?? '') !== '');
 }
 
+/** Every row the poster holds, for a count worth showing in the editor. */
+export function countRows(poster: Poster): number {
+  const inBlocks = (blocks: PosterBlock[]) =>
+    blocks.reduce((n, b) => n + (b.kind === 'table' ? b.rows.length : 0), 0);
+  return poster.panels.reduce((n, p) => (
+    n + inBlocks(p.blocks) + p.sections.reduce((m, s) => m + inBlocks(s.blocks), 0)
+  ), 0);
+}
+
+export const countSections = (poster: Poster) =>
+  poster.panels.reduce((n, p) => n + p.sections.length, 0);
+
 /**
  * The poster as plain text, for pasting somewhere that won't take a picture —
  * which, for this guild, is usually Discord.
@@ -180,10 +215,12 @@ export function posterToText(poster: Poster): string {
     }
   };
 
-  for (const b of poster.blocks) { block(b); out.push(''); }
-  for (const s of poster.sections) {
-    out.push('', `**${s.heading}**`);
-    for (const b of s.blocks) block(b);
+  for (const panel of poster.panels) {
+    for (const b of panel.blocks) { out.push(''); block(b); }
+    for (const s of panel.sections) {
+      out.push('', `**${s.heading}**`);
+      for (const b of s.blocks) block(b);
+    }
   }
   if (poster.footer) out.push('', poster.footer);
 

@@ -1,22 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ClipboardCopy, Eraser, FileText, Image as ImageIcon, Printer, Save, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ClipboardCopy, Eraser, FileText, Image as ImageIcon, ImagePlus, Printer, Save, Trash2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { TonedBadge } from '@/components/bits';
+import { countRows, countSections, parsePoster, posterToText } from '@/lib/parse-poster';
+import { POSTER_W, loadBackground, posterFilename, posterToCanvas } from '@/lib/poster-render';
+import { uploadImage } from '@/sync';
 import { ago, uid } from '@/lib/format';
-import type { DB } from '@/types';
-import {
-  formatCell, formatQty, isQtyColumn, numericColumns, parsePoster, posterToText, qtyWorthShowing,
-} from '@/lib/parse-poster';
-import type { Poster, PosterBlock, PosterTable } from '@/lib/parse-poster';
-import { POSTER_SERIF, posterFilename, posterToCanvas } from '@/lib/poster-canvas';
 import { cn } from '@/lib/utils';
+import type { DB, SyncCfg } from '@/types';
 
 const KEY = 'orgimm-poster-v1';
 
 /** A real poster, so the format is legible from the first look rather than
- *  from the notes under it. */
+ *  from the notes under it. Two parchments, to show what @panel does. */
 const EXAMPLE = `@title: Clan Orgrimm Spell Tomes For Sale
 @subtitle: N = Novice · A = Apprentice · Ad = Adept · E = Expert · M = Master
 @columns: Item, Tier, Price, Qty
@@ -38,6 +39,8 @@ Circle of Protection, E, 1200, 1
 Steadfast Ward, A, 800, 3
 Lesser Ward, N, 400, 4
 
+@panel
+
 # Destruction
 Blizzard, M, 10000, 1
 Icy Spear, E, 3000, 1
@@ -46,7 +49,6 @@ Ice Spike, A, 1000, 1
 Fire Rune, A, 800, 1
 Firebolt, A, 800, 2
 Frost Rune, A, 800, 2
-Lightning Rune, A, 800, 1
 Flames, N, 400, 1
 Sparks, N, 400, 2
 
@@ -57,160 +59,35 @@ Mayhem, M, 1000, 1
 Calm, A, 400, 2
 Courage, N, 300, 4
 Fear, N, 300, 2
-Fury, N, 300, 1
 Muffle, A, 300, 1
 
 @footer: If you're interested, send a pigeon to me or head to the Stronghold Gol-Razhkbur (located at Halted Stream Camp north of Whiterun) and someone will help you purchase the tome if any of our clan is awake.
 `;
 
-/** The sheet is set in a serif and on paper whatever the app's theme is: it's
- *  a printed notice, not another panel, and it has to print as one. Shared
- *  with the canvas renderer so the picture matches what's on screen. */
-const SERIF = POSTER_SERIF;
-
-function Table({ table }: { table: PosterTable }) {
-  const numeric = numericColumns(table);
-  const qty = table.columns.findIndex(isQtyColumn);
-  // An all-ones Qty column is an empty column under a heading, so it goes.
-  const showQty = qty >= 0 && qtyWorthShowing(table, qty);
-  const hidden = (i: number) => i === qty && !showQty;
-  const width = Math.max(table.columns.length, ...table.rows.map((r) => r.length));
-  const heads = table.columns.length > 0;
-
-  return (
-    <table className="w-full border-collapse" style={{ fontVariantNumeric: 'tabular-nums' }}>
-      {heads && (
-        <thead>
-          <tr>
-            {table.columns.map((name, i) => hidden(i) ? null : (
-              <th
-                key={name + i}
-                className={cn(
-                  'border-b border-[#cdc3b4] pb-0.5 text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-[#8a7f70]',
-                  numeric[i] ? 'text-right' : 'text-left',
-                )}
-              >
-                {isQtyColumn(name) ? '' : name}
-              </th>
-            ))}
-          </tr>
-        </thead>
-      )}
-      <tbody>
-        {table.rows.map((row, r) => (
-          <tr key={r} className="align-baseline">
-            {Array.from({ length: width }, (_, i) => hidden(i) ? null : (
-              <td
-                key={i}
-                className={cn(
-                  'py-[0.15rem] text-[0.95rem] leading-snug',
-                  numeric[i] ? 'text-right tabular-nums' : 'text-left',
-                  i === qty && 'pl-2 text-[0.8rem] text-[#8a7f70]',
-                  i === 0 && 'pr-3',
-                )}
-              >
-                {i === qty ? formatQty(row[i] ?? '') : formatCell(row[i] ?? '')}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-const Blocks = ({ blocks }: { blocks: PosterBlock[] }) => (
-  <>
-    {blocks.map((b, i) => (b.kind === 'table'
-      ? <Table key={i} table={b} />
-      : <p key={i} className="my-1.5 text-[0.95rem] leading-relaxed">{b.text}</p>))}
-  </>
-);
-
-/** The poster itself. Nothing in here depends on the app's theme, so what is
- *  on screen is what comes out of the printer. */
-function Sheet({ poster }: { poster: Poster }) {
-  const empty = !poster.title && poster.sections.length === 0 && poster.blocks.length === 0;
-
-  return (
-    <article
-      className="poster-sheet mx-auto w-full max-w-[52rem] rounded-sm bg-[#faf7f0] px-8 py-10 text-[#1c1917] shadow-sm ring-1 ring-black/10"
-      style={{ fontFamily: SERIF }}
-    >
-      {empty ? (
-        <p className="py-16 text-center text-sm text-[#8a7f70]">
-          The poster appears here as you type.
-        </p>
-      ) : (
-        <>
-          <header className="text-center">
-            {poster.title && (
-              <h1 className="text-[1.75rem] leading-tight font-bold tracking-wide uppercase">
-                {poster.title}
-              </h1>
-            )}
-            {poster.subtitle && (
-              <p className="mt-1.5 text-[0.85rem] text-[#6b625a]">{poster.subtitle}</p>
-            )}
-            {poster.meta.length > 0 && (
-              <p className="mt-1 text-[0.75rem] uppercase tracking-[0.1em] text-[#8a7f70]">
-                {poster.meta.map((m) => `${m.key}: ${m.value}`).join(' · ')}
-              </p>
-            )}
-            <hr className="mt-4 border-0 border-t-2 border-[#1c1917]" />
-          </header>
-
-          {poster.blocks.length > 0 && (
-            <div className="mt-4"><Blocks blocks={poster.blocks} /></div>
-          )}
-
-          {/* Two columns on a wide sheet and on paper, so a long list reads as
-              one notice instead of a scroll. A section is never split. */}
-          <div className="mt-5 gap-8 sm:columns-2">
-            {poster.sections.map((s, i) => (
-              <section key={i} className="mb-5 break-inside-avoid">
-                <h2 className="mb-1 border-b border-[#cdc3b4] pb-1 text-[0.95rem] font-bold uppercase tracking-[0.08em]">
-                  {s.heading}
-                </h2>
-                <Blocks blocks={s.blocks} />
-              </section>
-            ))}
-          </div>
-
-          {poster.footer && (
-            <footer className="mt-5 border-t-2 border-[#1c1917] pt-3">
-              <p className="text-center text-[0.85rem] leading-relaxed text-[#4a423b]">
-                {poster.footer}
-              </p>
-            </footer>
-          )}
-        </>
-      )}
-    </article>
-  );
-}
-
 const HELP: Array<[string, string]> = [
-  ['@title:  @subtitle:  @footer:', 'the poster’s own lines'],
+  ['@title:  @subtitle:  @footer:', 'the strips of parchment'],
+  ['@background: …', 'the picture behind it — pick one below'],
   ['@columns: Item, Price, Qty', 'names the columns for the rows after it'],
-  ['@anything: value', 'carried through and printed under the subtitle'],
-  ['# Heading', 'starts a section'],
+  ['@panel', 'starts another parchment beside the last'],
+  ['# Heading', 'a section inside the current parchment'],
   ['Item, Ad, 2500, 3', 'a row — "quote a cell" that needs a comma'],
   ['> Some words', 'a paragraph'],
   ['// Some words', 'a note to yourself, never printed'],
 ];
 
 /**
- * Turns a written template into a printable poster.
+ * Turns a written template into a poster: a picture, with torn parchment laid
+ * over it. The title and subtitle sit top left, the parchments tile the width
+ * beneath them, and the footnote runs along the bottom.
  *
- * Deliberately not generated: the layout is fixed and the parser only sorts
- * lines, so the same template always produces the same sheet and nothing
- * appears on it that nobody typed. Numbers are set with separators, a quantity
- * of one is left off, and rows stay in the order they were written.
+ * Deliberately not generated — the parser only sorts lines and the layout is
+ * fixed, so the same template always draws the same poster and nothing appears
+ * on it that nobody typed.
  */
-export function PosterMaker({ db, update }: {
+export function PosterMaker({ db, update, cfg }: {
   db: DB;
   update: (fn: (d: DB) => void) => void;
+  cfg: SyncCfg | null;
 }) {
   const [src, setSrc] = useState(() => {
     try {
@@ -223,7 +100,11 @@ export function PosterMaker({ db, update }: {
   // rather than leaving a copy behind every time.
   const [openId, setOpenId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [bg, setBg] = useState<HTMLImageElement | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const viewRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     try {
@@ -235,10 +116,27 @@ export function PosterMaker({ db, update }: {
   }, [src]);
 
   const poster = useMemo(() => parsePoster(src), [src]);
-  const rows = poster.sections.reduce(
-    (n, s) => n + s.blocks.reduce((m, b) => m + (b.kind === 'table' ? b.rows.length : 0), 0),
-    0,
-  );
+
+  // The picture is fetched once per address, not once per keystroke.
+  useEffect(() => {
+    let alive = true;
+    void loadBackground(poster.background).then((img) => { if (alive) setBg(img); });
+    return () => { alive = false; };
+  }, [poster.background]);
+
+  // The preview is the export: the same draw, copied onto the canvas on screen.
+  useEffect(() => {
+    const host = viewRef.current;
+    if (!host) return;
+    try {
+      const drawn = posterToCanvas(poster, bg, 2);
+      host.width = drawn.width;
+      host.height = drawn.height;
+      host.getContext('2d')?.drawImage(drawn, 0, 0);
+    } catch {
+      /* nothing to draw yet */
+    }
+  }, [poster, bg]);
 
   const saved = db.posters.slice().sort((a, b) => (b.at || '').localeCompare(a.at || ''));
   const open = openId ? db.posters.find((p) => p.id === openId) ?? null : null;
@@ -267,6 +165,40 @@ export function PosterMaker({ db, update }: {
     setOpenId(id);
   };
 
+  /** Rewrites the @background line, or adds one at the top if there isn't one. */
+  const useBackground = (url: string) => setSrc((prev) => {
+    const lines = prev.split('\n');
+    const at = lines.findIndex((l) => /^@background\s*:/i.test(l.trim()));
+    if (at >= 0) {
+      lines[at] = `@background: ${url}`;
+      return lines.join('\n');
+    }
+    return `@background: ${url}\n${prev}`;
+  });
+
+  const upload = async (file: File) => {
+    if (!cfg) { setErr('Sign in before uploading a background.'); return; }
+    setBusy(true);
+    setErr('');
+    try {
+      const url = await uploadImage(cfg, file);
+      if (!url) throw new Error('The upload came back empty.');
+      update((d) => {
+        d.backgrounds.push({
+          id: uid(),
+          name: file.name.replace(/\.[^.]+$/, '').slice(0, 60) || 'Background',
+          url,
+          at: new Date().toISOString(),
+        });
+      });
+      useBackground(url);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'That background could not be uploaded.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(posterToText(poster));
@@ -277,18 +209,16 @@ export function PosterMaker({ db, update }: {
     }
   };
 
-  // Drawn at 2x, so the picture holds up pinned next to a Discord message.
   const savePng = () => {
     setErr('');
     try {
-      posterToCanvas(poster, 2).toBlob((blob) => {
+      posterToCanvas(poster, bg, 2).toBlob((blob) => {
         if (!blob) { setErr('The picture could not be made. Print to PDF instead.'); return; }
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         a.download = posterFilename(poster);
         a.click();
-        // Freed on the next turn, once the browser has taken the blob.
         window.setTimeout(() => URL.revokeObjectURL(url), 0);
       }, 'image/png');
     } catch (e) {
@@ -296,20 +226,20 @@ export function PosterMaker({ db, update }: {
     }
   };
 
+  const sections = countSections(poster);
+  const rows = countRows(poster);
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" onClick={() => window.print()} disabled={!src.trim()}>
-          <Printer />Print or save as PDF
-        </Button>
-        <Button size="sm" variant="outline" onClick={savePng} disabled={!src.trim()}>
+      <div className="flex flex-wrap items-center gap-2 print:hidden">
+        <Button size="sm" onClick={savePng} disabled={!src.trim()}>
           <ImageIcon />Save as PNG
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => window.print()} disabled={!src.trim()}>
+          <Printer />Print
         </Button>
         <Button size="sm" variant="outline" onClick={() => void copy()} disabled={!src.trim()}>
           <ClipboardCopy />{copied ? 'Copied' : 'Copy as text'}
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => setSrc(EXAMPLE)}>
-          <FileText />Load the example
         </Button>
         <Button size="sm" variant="outline" onClick={() => store(open ? open.id : null)} disabled={!src.trim() || !dirty}>
           <Save />{open ? 'Save changes' : 'Save to the guild'}
@@ -319,6 +249,9 @@ export function PosterMaker({ db, update }: {
             Save a copy
           </Button>
         )}
+        <Button size="sm" variant="outline" onClick={() => setSrc(EXAMPLE)}>
+          <FileText />Load the example
+        </Button>
         {src.trim() && (
           <Button
             size="sm" variant="ghost" className="text-destructive"
@@ -338,7 +271,7 @@ export function PosterMaker({ db, update }: {
               {dirty ? 'Unsaved changes' : `Saved · ${open.title}`}
             </TonedBadge>
           )}
-          {poster.sections.length} section{poster.sections.length === 1 ? '' : 's'} · {rows} row{rows === 1 ? '' : 's'}
+          {poster.panels.length} parchment{poster.panels.length === 1 ? '' : 's'} · {sections} section{sections === 1 ? '' : 's'} · {rows} row{rows === 1 ? '' : 's'}
         </span>
       </div>
 
@@ -354,9 +287,78 @@ export function PosterMaker({ db, update }: {
             value={src}
             onChange={(e) => setSrc(e.target.value)}
             spellCheck={false}
-            placeholder={'@title: What this is\n@columns: Item, Price\n\n# A section\nSomething, 250\n\n> A line of prose.'}
-            className="h-[28rem] font-mono text-xs"
+            placeholder={'@title: What this is\n@columns: Item, Price\n\n# A section\nSomething, 250\n\n@panel\n# Another parchment\nSomething else, 400'}
+            className="h-80 font-mono text-xs"
           />
+
+          <Card>
+            <CardContent className="space-y-2 p-3">
+              <div className="flex items-center gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Background
+                </p>
+                <Button
+                  size="xs" variant="outline" className="ml-auto" disabled={busy}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <ImagePlus />{busy ? 'Uploading…' : 'Upload'}
+                </Button>
+                <Input
+                  ref={fileRef} type="file" accept="image/*" className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = '';
+                    if (f) void upload(f);
+                  }}
+                />
+              </div>
+              {db.backgrounds.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Upload a screenshot to sit behind the parchment. It's kept for the whole guild.
+                </p>
+              ) : (
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    className={cn(
+                      'flex h-14 items-center justify-center rounded border border-dashed text-[11px] text-muted-foreground',
+                      !poster.background && 'border-sky-500 text-foreground',
+                    )}
+                    onClick={() => useBackground('')}
+                  >
+                    None
+                  </button>
+                  {db.backgrounds.map((b) => (
+                    <div key={b.id} className="group relative">
+                      <button
+                        type="button"
+                        className={cn(
+                          'block h-14 w-full overflow-hidden rounded border',
+                          poster.background === b.url ? 'border-sky-500 ring-1 ring-sky-500' : 'border-border',
+                        )}
+                        title={b.name}
+                        onClick={() => useBackground(b.url)}
+                      >
+                        <img src={b.url} alt={b.name} className="h-full w-full object-cover" />
+                      </button>
+                      <Button
+                        variant="destructive" size="icon-xs"
+                        className="absolute right-0.5 top-0.5 opacity-0 group-hover:opacity-100"
+                        aria-label={`Remove ${b.name}`}
+                        onClick={() => {
+                          if (!confirm(`Remove “${b.name}” from the backgrounds?`)) return;
+                          update((d) => { d.backgrounds = d.backgrounds.filter((x) => x.id !== b.id); });
+                        }}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {saved.length > 0 && (
             <Card>
               <CardContent className="space-y-1.5 p-3">
@@ -378,9 +380,7 @@ export function PosterMaker({ db, update }: {
                         onClick={() => load(p.id, p.template)}
                       >
                         <span className="block truncate text-sm">{p.title}</span>
-                        <span className="block text-[11px] text-muted-foreground">
-                          saved {ago(p.at)}
-                        </span>
+                        <span className="block text-[11px] text-muted-foreground">saved {ago(p.at)}</span>
                       </button>
                       <Button
                         variant="ghost" size="icon-xs" className="text-destructive"
@@ -418,16 +418,25 @@ export function PosterMaker({ db, update }: {
         </div>
 
         <div className="min-w-0">
-          <Sheet poster={poster} />
+          {src.trim() ? (
+            <canvas
+              ref={viewRef}
+              className="poster-sheet h-auto w-full rounded-sm shadow-sm ring-1 ring-black/10"
+              style={{ maxWidth: POSTER_W }}
+            />
+          ) : (
+            <div className="rounded-xl border border-dashed p-16 text-center text-sm text-muted-foreground">
+              The poster appears here as you type.
+            </div>
+          )}
         </div>
       </div>
 
       <p className="text-xs text-muted-foreground print:hidden">
-        The sheet is laid out from the template, never generated — the same template always gives
-        the same poster. Printing shows only the sheet, so “Save as PDF” gives a clean copy; Save as
-        PNG draws the same poster at double size as a picture; Copy as text gives a version to paste
-        into Discord. The draft is kept in this browser; saving puts the template itself in the
-        guild database, so an old poster opens as something still editable rather than a picture.
+        The poster is drawn from the template, never generated — the same template always gives the
+        same picture, and what's on screen is exactly what Save as PNG writes out, at twice the size.
+        Copy as text gives a version to paste into Discord. The draft is kept in this browser; saving
+        puts the template itself in the guild database, so an old poster opens still editable.
       </p>
     </div>
   );
