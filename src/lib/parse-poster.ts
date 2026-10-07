@@ -40,6 +40,8 @@ export interface PosterSection {
 
 /** One torn parchment. Several sit side by side across the poster. */
 export interface PosterPanel {
+  /** A heading on its own strip above this parchment, if it was given one. */
+  title: string;
   /** Anything written before the first heading in this parchment. */
   blocks: PosterBlock[];
   sections: PosterSection[];
@@ -57,8 +59,25 @@ export interface Poster {
   footer: string;
   /** URL of the picture behind the poster, blank for a plain ground. */
   background: string;
+  /** How wide each parchment should be, in poster points. 0 lets them share
+   *  the full width, which is what they did before anyone could say. */
+  panelWidth: number;
   meta: PosterMeta[];
   panels: PosterPanel[];
+}
+
+/** The poster is this many points across; a width given as a percentage is
+ *  read against it. */
+export const POSTER_POINTS = 1280;
+
+/** `@width: 420` is points, `@width: 35%` is a share of the poster. Anything
+ *  unreadable leaves the parchments sharing the width as before. */
+export function readWidth(value: string): number {
+  const text = value.trim();
+  const pct = /^(\d+(?:\.\d+)?)\s*%$/.exec(text);
+  const raw = pct ? (Number(pct[1]) / 100) * POSTER_POINTS : Number(text);
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return Math.round(Math.min(POSTER_POINTS, Math.max(140, raw)));
 }
 
 /**
@@ -85,11 +104,11 @@ export function splitCells(line: string): string[] {
   return out;
 }
 
-const emptyPanel = (): PosterPanel => ({ blocks: [], sections: [] });
+const emptyPanel = (title = ''): PosterPanel => ({ title, blocks: [], sections: [] });
 
 export function parsePoster(src: string): Poster {
   const poster: Poster = {
-    title: '', subtitle: '', footer: '', background: '', meta: [], panels: [],
+    title: '', subtitle: '', footer: '', background: '', panelWidth: 0, meta: [], panels: [],
   };
   let columns: string[] = [];
   let panel = emptyPanel();
@@ -112,11 +131,13 @@ export function parsePoster(src: string): Poster {
       const value = at >= 0 ? line.slice(at + 1).trim() : '';
       if (key === 'columns') { columns = splitCells(value).filter(Boolean); table = null; }
       else if (key === 'panel') {
-        panel = emptyPanel();
+        // Whatever follows the colon titles the parchment: `@panel: Weapons`.
+        panel = emptyPanel(value);
         poster.panels.push(panel);
         section = null;
         table = null;
       }
+      else if (key === 'width') poster.panelWidth = readWidth(value);
       else if (key === 'title') poster.title = value;
       else if (key === 'subtitle') poster.subtitle = value;
       else if (key === 'footer') poster.footer = value;
@@ -146,7 +167,10 @@ export function parsePoster(src: string): Poster {
   }
 
   // An opening `@panel`, or a poster of nothing but settings, leaves empties.
-  poster.panels = poster.panels.filter((p) => p.blocks.length > 0 || p.sections.length > 0);
+  // A titled one is kept — the title is content in its own right.
+  poster.panels = poster.panels.filter((p) => (
+    p.blocks.length > 0 || p.sections.length > 0 || p.title !== ''
+  ));
   return poster;
 }
 
@@ -216,6 +240,7 @@ export function posterToText(poster: Poster): string {
   };
 
   for (const panel of poster.panels) {
+    if (panel.title) out.push('', `**${panel.title}**`);
     for (const b of panel.blocks) { out.push(''); block(b); }
     for (const s of panel.sections) {
       out.push('', `**${s.heading}**`);

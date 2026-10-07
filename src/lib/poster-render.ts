@@ -330,19 +330,36 @@ function layout(pen: Pen, poster: Poster, height: number): number {
   const count = poster.panels.length;
   let panelsBottom = panelsTop;
   if (count > 0) {
-    // Parchments tile the width evenly, as asked: one spans it, two halve it.
-    const width = (inner - GAP * (count - 1)) / count;
-    const startX = MARGIN;
+    // Parchments share the width evenly unless @width says how wide each one
+    // should be, in which case the row of them is centred.
+    const even = (inner - GAP * (count - 1)) / count;
+    const width = poster.panelWidth > 0
+      ? Math.min(poster.panelWidth, even * count + GAP * (count - 1))
+      : even;
+    const rowWidth = width * count + GAP * (count - 1);
+    const startX = MARGIN + Math.max(0, (inner - rowWidth) / 2);
+
+    // Every titled parchment gets the same strip height, so the sheets
+    // beneath them start on one line rather than stepping down the poster.
+    ctx.font = font('bold 22px');
+    const titled = poster.panels.some((p) => p.title);
+    const titleH = titled ? LINE.heading + 20 : 0;
+    const bodyTop = panelsTop + titleH;
 
     const heights = poster.panels.map((p) => panelBody({ ctx, dry: true }, p, 0, 0, width - PAD * 2));
     const tallest = Math.max(...heights, 0) + PAD * 2;
 
     poster.panels.forEach((p, i) => {
       const x = startX + i * (width + GAP);
-      parchment(pen, x, panelsTop, width, tallest, 101 + i * 17);
-      panelBody(pen, p, x + PAD, panelsTop + PAD - 6, width - PAD * 2);
+      if (p.title) {
+        ctx.font = font('bold 22px');
+        strip(pen, [clip(ctx, p.title, width - PAD * 4)], x + width / 2, panelsTop,
+          width - PAD * 2, LINE.heading, INK, 211 + i * 13, 'center');
+      }
+      parchment(pen, x, bodyTop, width, tallest, 101 + i * 17);
+      panelBody(pen, p, x + PAD, bodyTop + PAD - 6, width - PAD * 2);
     });
-    panelsBottom = panelsTop + tallest;
+    panelsBottom = bodyTop + tallest;
   }
 
   if (poster.footer) {
