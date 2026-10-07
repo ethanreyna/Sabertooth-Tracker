@@ -67,6 +67,7 @@ Muffle, A, 300, 1
 const HELP: Array<[string, string]> = [
   ['@title:  @title2:', 'a strip in each top corner, set the same'],
   ['@subtitle:  @footer:', 'the strips under the titles and along the bottom'],
+  ['@titlesize: 34  @footersize: 14', 'how big those are set, in points'],
   ['@background: …', 'the picture behind it — pick one below'],
   ['@columns: Item, Price, Qty', 'names the columns for the rows after it'],
   ['@panel', 'starts another parchment beside the last'],
