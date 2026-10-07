@@ -18,6 +18,8 @@
  *   @width: 420     how wide each parchment is; left out, they share.
  *   @gap: 120       how far apart they stand, which is how far each one
  *                   sits from the middle of the poster.
+ *   @titlesize: 34  how big the titles are set, in points.
+ *   @footersize: 14 how big the footer is set.
  *   # Text          starts a section inside the current parchment.
  *   a, b, c         a row, split on commas. A cell that needs a comma goes in
  *                   "double quotes".
@@ -73,6 +75,10 @@ export interface Poster {
   /** How far apart the parchments stand, in poster points. With two of them
    *  that is how far each sits from the middle. -1 keeps the usual spacing. */
   panelGap: number;
+  /** How big the titles are set, in points. 0 leaves them at their usual size. */
+  titleSize: number;
+  /** How big the footer is set, in points. 0 leaves it at its usual size. */
+  footerSize: number;
   meta: PosterMeta[];
   panels: PosterPanel[];
 }
@@ -96,6 +102,20 @@ export function readWidth(value: string): number {
   if (!(raw > 0)) return 0;
   return Math.round(Math.min(POSTER_POINTS, Math.max(140, raw)));
 }
+
+/** A type size in points, kept inside what the poster can actually hold.
+ *  Anything unreadable leaves the size alone. */
+function readSize(value: string, smallest: number, largest: number): number {
+  const raw = Number(value.trim());
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return Math.round(Math.min(largest, Math.max(smallest, raw)));
+}
+
+/** `@titlesize: 34` sets the corner titles; 12 to 96 points. */
+export const readTitleSize = (value: string) => readSize(value, 12, 96);
+
+/** `@footersize: 14` sets the line along the bottom; 8 to 48 points. */
+export const readFooterSize = (value: string) => readSize(value, 8, 48);
 
 /** `@gap: 120` is how far apart the parchments stand. Nothing readable, or a
  *  negative number, leaves the spacing alone. Zero puts them edge to edge. */
@@ -134,7 +154,7 @@ const emptyPanel = (title = ''): PosterPanel => ({ title, blocks: [], sections: 
 export function parsePoster(src: string): Poster {
   const poster: Poster = {
     title: '', title2: '', subtitle: '', footer: '', background: '',
-    panelWidth: 0, panelGap: -1, meta: [], panels: [],
+    panelWidth: 0, panelGap: -1, titleSize: 0, footerSize: 0, meta: [], panels: [],
   };
   let columns: string[] = [];
   let panel = emptyPanel();
@@ -165,6 +185,8 @@ export function parsePoster(src: string): Poster {
       }
       else if (key === 'width') poster.panelWidth = readWidth(value);
       else if (key === 'gap') poster.panelGap = readGap(value);
+      else if (key === 'titlesize') poster.titleSize = readTitleSize(value);
+      else if (key === 'footersize') poster.footerSize = readFooterSize(value);
       else if (key === 'title' || key === 'title1') poster.title = value;
       else if (key === 'title2') poster.title2 = value;
       else if (key === 'subtitle') poster.subtitle = value;

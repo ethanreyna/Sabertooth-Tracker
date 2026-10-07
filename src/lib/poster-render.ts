@@ -35,7 +35,15 @@ const GROUND = '#2b2622';
 export const POSTER_SERIF = 'Georgia, "Times New Roman", serif';
 const font = (spec: string) => `${spec} ${POSTER_SERIF}`;
 
-const LINE = { title: 46, subtitle: 30, meta: 20, heading: 26, colhead: 16, row: 23, para: 23, footer: 22 };
+const LINE = { subtitle: 30, meta: 20, heading: 26, colhead: 16, row: 23, para: 23 };
+
+/** The sizes @titlesize and @footersize start from, in points. */
+const TITLE_PX = 40;
+const FOOTER_PX = 16;
+/** How much room a line of each wants, as a multiple of its own size, so that
+ *  resizing moves the lines apart with the letters rather than cramming them. */
+const LEADING = { title: 1.15, panel: 1.267, footer: 1.375 };
+const leading = (px: number, of: keyof typeof LEADING) => Math.round(px * LEADING[of]);
 
 interface Pen {
   ctx: CanvasRenderingContext2D;
@@ -307,19 +315,21 @@ function layout(pen: Pen, poster: Poster, height: number): number {
   // The two titles share the top line: the first against the left edge, the
   // second against the right, set the same so neither reads as the lesser.
   // Alone, either one has the whole width to itself.
+  const titlePx = poster.titleSize > 0 ? poster.titleSize : TITLE_PX;
   if (poster.title || poster.title2) {
-    ctx.font = font('bold 40px');
+    ctx.font = font(`bold ${titlePx}px`);
+    const line = leading(titlePx, 'title');
     const both = poster.title !== '' && poster.title2 !== '';
     const room = (both ? (inner - GAP) / 2 : inner) - PAD * 2;
     let tall = 0;
     if (poster.title) {
       const lines = wrap(ctx, poster.title.toUpperCase(), room);
-      tall = Math.max(tall, strip(pen, lines, MARGIN, y, room, LINE.title, INK, 11, 'left', true).height);
+      tall = Math.max(tall, strip(pen, lines, MARGIN, y, room, line, INK, 11, 'left', true).height);
     }
     if (poster.title2) {
       const lines = wrap(ctx, poster.title2.toUpperCase(), room);
       const x = POSTER_W - MARGIN;
-      tall = Math.max(tall, strip(pen, lines, x, y, room, LINE.title, INK, 29, 'right', true).height);
+      tall = Math.max(tall, strip(pen, lines, x, y, room, line, INK, 29, 'right', true).height);
     }
     y += tall + 12;
   }
@@ -339,12 +349,14 @@ function layout(pen: Pen, poster: Poster, height: number): number {
 
   // The footer sits on the bottom edge, so it has to be measured before the
   // parchments can know how much room is left.
+  const footerPx = poster.footerSize > 0 ? poster.footerSize : FOOTER_PX;
+  const footerLine = leading(footerPx, 'footer');
   let footerH = 0;
   let footerLines: string[] = [];
   if (poster.footer) {
-    ctx.font = font('italic 16px');
+    ctx.font = font(`italic ${footerPx}px`);
     footerLines = wrap(ctx, poster.footer, inner * 0.78);
-    footerH = footerLines.length * LINE.footer + 18 + 14;
+    footerH = footerLines.length * footerLine + 18 + 14;
   }
 
   const count = poster.panels.length;
@@ -367,8 +379,9 @@ function layout(pen: Pen, poster: Poster, height: number): number {
     // With no @title over the poster, the parchments' own titles are the top
     // line of it, so they are set at a title's size rather than a heading's.
     const lead = !poster.title && !poster.title2;
-    const titleFont = font(lead ? 'bold 30px' : 'bold 22px');
-    const titleLine = lead ? 38 : LINE.heading;
+    const panelPx = lead ? Math.round(titlePx * 0.75) : 22;
+    const titleFont = font(`bold ${panelPx}px`);
+    const titleLine = lead ? leading(panelPx, 'panel') : LINE.heading;
     // Every titled parchment gets the same strip height, so the sheets
     // beneath them start on one line rather than stepping down the poster.
     const titled = poster.panels.some((p) => p.title);
@@ -392,9 +405,9 @@ function layout(pen: Pen, poster: Poster, height: number): number {
   }
 
   if (poster.footer) {
-    ctx.font = font('italic 16px');
+    ctx.font = font(`italic ${footerPx}px`);
     const top = Math.max(panelsBottom + 16, height - MARGIN - footerH + 14);
-    strip(pen, footerLines, POSTER_W / 2, top, inner * 0.78, LINE.footer, INK, 59, 'center');
+    strip(pen, footerLines, POSTER_W / 2, top, inner * 0.78, footerLine, INK, 59, 'center');
     return top + footerH;
   }
   return panelsBottom + MARGIN;
