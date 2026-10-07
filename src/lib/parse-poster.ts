@@ -6,8 +6,11 @@
  * parser only sorts lines into headings, rows and paragraphs, and the renderer
  * draws exactly what was written, in the order it was written.
  *
- *   @key: value     poster settings. title, subtitle, footer and background
- *                   are known; anything else is carried through as metadata.
+ *   @key: value     poster settings. title, title2, subtitle, footer and
+ *                   background are known; anything else is carried through
+ *                   as metadata.
+ *   @title: / @title2:  a strip at each top corner, set the same. The
+ *                   stronghold on the left, say, and the shop on the right.
  *                   Commas in an @ line are ordinary text.
  *   @background:    the picture behind everything, as an uploaded image URL.
  *   @columns: A, B  names the columns for every row after it, until changed.
@@ -58,6 +61,8 @@ export interface PosterMeta {
 
 export interface Poster {
   title: string;
+  /** A second title, set like the first but against the right edge. */
+  title2: string;
   subtitle: string;
   footer: string;
   /** URL of the picture behind the poster, blank for a plain ground. */
@@ -128,7 +133,7 @@ const emptyPanel = (title = ''): PosterPanel => ({ title, blocks: [], sections: 
 
 export function parsePoster(src: string): Poster {
   const poster: Poster = {
-    title: '', subtitle: '', footer: '', background: '',
+    title: '', title2: '', subtitle: '', footer: '', background: '',
     panelWidth: 0, panelGap: -1, meta: [], panels: [],
   };
   let columns: string[] = [];
@@ -160,7 +165,8 @@ export function parsePoster(src: string): Poster {
       }
       else if (key === 'width') poster.panelWidth = readWidth(value);
       else if (key === 'gap') poster.panelGap = readGap(value);
-      else if (key === 'title') poster.title = value;
+      else if (key === 'title' || key === 'title1') poster.title = value;
+      else if (key === 'title2') poster.title2 = value;
       else if (key === 'subtitle') poster.subtitle = value;
       else if (key === 'footer') poster.footer = value;
       else if (key === 'background') poster.background = value;
@@ -247,6 +253,7 @@ export const countSections = (poster: Poster) =>
 export function posterToText(poster: Poster): string {
   const out: string[] = [];
   if (poster.title) out.push(`**${poster.title}**`);
+  if (poster.title2) out.push(`**${poster.title2}**`);
   if (poster.subtitle) out.push(poster.subtitle);
   for (const m of poster.meta) out.push(`${m.key}: ${m.value}`);
 

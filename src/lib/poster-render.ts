@@ -272,18 +272,21 @@ function strip(
   const w = Math.min(maxWidth, widest) + PAD * 2;
   const h = lines.length * lineHeight + 18;
 
-  const left = align === 'center' ? x - w / 2 : x;
+  // x is whichever edge the strip is anchored by: its left, its middle or,
+  // for a strip hung off the right of the poster, its right.
+  const left = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x;
   parchment(pen, left, top, w, h, seed);
 
   if (!pen.dry) ctx.fillStyle = colour;
   let y = top + 9;
   for (const l of lines) {
     y += lineHeight;
-    const tx = align === 'center' ? left + w / 2 : left + PAD;
-    say(pen, l, tx, y - 4, align === 'center' ? 'center' : 'left');
+    const tx = align === 'center' ? left + w / 2 : align === 'right' ? left + w - PAD : left + PAD;
+    say(pen, l, tx, y - 4, align);
     if (underline && !pen.dry) {
       const lw = ctx.measureText(l).width;
-      const ux = align === 'center' ? left + w / 2 - lw / 2 : left + PAD;
+      const ux = align === 'center' ? left + w / 2 - lw / 2
+        : align === 'right' ? left + w - PAD - lw : left + PAD;
       ctx.fillRect(ux, y + 1, lw, 2);
     }
   }
@@ -291,9 +294,9 @@ function strip(
 }
 
 /**
- * Lays the whole poster out. Title and subtitle sit as strips at the top left;
- * the parchments tile the width beneath them; the footer is a strip along the
- * bottom. Returns the height it needed — 16:9 unless the contents want more,
+ * Lays the whole poster out. The titles take the top corners and the subtitle
+ * sits under them; the parchments tile the width beneath; the footer is a
+ * strip along the bottom. Returns the height it needed — 16:9 unless the contents want more,
  * in which case the poster grows rather than running off the edge.
  */
 function layout(pen: Pen, poster: Poster, height: number): number {
@@ -301,10 +304,24 @@ function layout(pen: Pen, poster: Poster, height: number): number {
   const inner = POSTER_W - MARGIN * 2;
   let y = MARGIN;
 
-  if (poster.title) {
+  // The two titles share the top line: the first against the left edge, the
+  // second against the right, set the same so neither reads as the lesser.
+  // Alone, either one has the whole width to itself.
+  if (poster.title || poster.title2) {
     ctx.font = font('bold 40px');
-    const lines = wrap(ctx, poster.title.toUpperCase(), inner - PAD * 2);
-    y += strip(pen, lines, MARGIN, y, inner - PAD * 2, LINE.title, INK, 11, 'left', true).height + 12;
+    const both = poster.title !== '' && poster.title2 !== '';
+    const room = (both ? (inner - GAP) / 2 : inner) - PAD * 2;
+    let tall = 0;
+    if (poster.title) {
+      const lines = wrap(ctx, poster.title.toUpperCase(), room);
+      tall = Math.max(tall, strip(pen, lines, MARGIN, y, room, LINE.title, INK, 11, 'left', true).height);
+    }
+    if (poster.title2) {
+      const lines = wrap(ctx, poster.title2.toUpperCase(), room);
+      const x = POSTER_W - MARGIN;
+      tall = Math.max(tall, strip(pen, lines, x, y, room, LINE.title, INK, 29, 'right', true).height);
+    }
+    y += tall + 12;
   }
   if (poster.subtitle) {
     ctx.font = font('600 22px');
@@ -349,7 +366,7 @@ function layout(pen: Pen, poster: Poster, height: number): number {
 
     // With no @title over the poster, the parchments' own titles are the top
     // line of it, so they are set at a title's size rather than a heading's.
-    const lead = !poster.title;
+    const lead = !poster.title && !poster.title2;
     const titleFont = font(lead ? 'bold 30px' : 'bold 22px');
     const titleLine = lead ? 38 : LINE.heading;
     // Every titled parchment gets the same strip height, so the sheets
@@ -377,7 +394,7 @@ function layout(pen: Pen, poster: Poster, height: number): number {
   if (poster.footer) {
     ctx.font = font('italic 16px');
     const top = Math.max(panelsBottom + 16, height - MARGIN - footerH + 14);
-    strip(pen, footerLines, POSTER_W / 2, top, inner * 0.78, LINE.footer, INK_SOFT, 59, 'center');
+    strip(pen, footerLines, POSTER_W / 2, top, inner * 0.78, LINE.footer, INK, 59, 'center');
     return top + footerH;
   }
   return panelsBottom + MARGIN;
@@ -433,7 +450,7 @@ export function loadBackground(url: string): Promise<HTMLImageElement | null> {
 
 /** A filename from the title: "Spell Tomes For Sale" -> spell-tomes-for-sale.png */
 export function posterFilename(poster: Poster): string {
-  const slug = poster.title
+  const slug = (poster.title || poster.title2)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
