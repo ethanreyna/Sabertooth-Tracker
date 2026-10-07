@@ -18,7 +18,10 @@ export const POSTER_W = 1280;
 export const POSTER_H = 720;
 
 const MARGIN = 44;
+/** How far apart parchments stand when @gap hasn't said otherwise. */
 const GAP = 20;
+/** No parchment is squeezed narrower than this, however wide a gap is asked for. */
+const MIN_PANEL = 140;
 const PAD = 22; // inside a parchment
 /** How much width one column of a list wants before a second is worth having. */
 const COLUMN_WIDTH = 330;
@@ -330,31 +333,40 @@ function layout(pen: Pen, poster: Poster, height: number): number {
   const count = poster.panels.length;
   let panelsBottom = panelsTop;
   if (count > 0) {
-    // Parchments share the width evenly unless @width says how wide each one
+    // @gap is how far apart the parchments stand — with two of them, how far
+    // each sits from the middle — but never so far that a sheet is squeezed
+    // narrower than a line of a list needs.
+    const roomForGaps = count > 1 ? (inner - MIN_PANEL * count) / (count - 1) : 0;
+    const asked = poster.panelGap >= 0 ? poster.panelGap : GAP;
+    const gap = Math.max(0, Math.min(asked, roomForGaps));
+
+    // Parchments share what's left evenly unless @width says how wide each one
     // should be, in which case the row of them is centred.
-    const even = (inner - GAP * (count - 1)) / count;
-    const width = poster.panelWidth > 0
-      ? Math.min(poster.panelWidth, even * count + GAP * (count - 1))
-      : even;
-    const rowWidth = width * count + GAP * (count - 1);
+    const even = (inner - gap * (count - 1)) / count;
+    const width = poster.panelWidth > 0 ? Math.min(poster.panelWidth, even) : even;
+    const rowWidth = width * count + gap * (count - 1);
     const startX = MARGIN + Math.max(0, (inner - rowWidth) / 2);
 
+    // With no @title over the poster, the parchments' own titles are the top
+    // line of it, so they are set at a title's size rather than a heading's.
+    const lead = !poster.title;
+    const titleFont = font(lead ? 'bold 30px' : 'bold 22px');
+    const titleLine = lead ? 38 : LINE.heading;
     // Every titled parchment gets the same strip height, so the sheets
     // beneath them start on one line rather than stepping down the poster.
-    ctx.font = font('bold 22px');
     const titled = poster.panels.some((p) => p.title);
-    const titleH = titled ? LINE.heading + 20 : 0;
+    const titleH = titled ? titleLine + 26 : 0;
     const bodyTop = panelsTop + titleH;
 
     const heights = poster.panels.map((p) => panelBody({ ctx, dry: true }, p, 0, 0, width - PAD * 2));
     const tallest = Math.max(...heights, 0) + PAD * 2;
 
     poster.panels.forEach((p, i) => {
-      const x = startX + i * (width + GAP);
+      const x = startX + i * (width + gap);
       if (p.title) {
-        ctx.font = font('bold 22px');
-        strip(pen, [clip(ctx, p.title, width - PAD * 4)], x + width / 2, panelsTop,
-          width - PAD * 2, LINE.heading, INK, 211 + i * 13, 'center');
+        ctx.font = titleFont;
+        strip(pen, [clip(ctx, p.title, width - PAD * 2)], x + width / 2, panelsTop,
+          width - PAD * 2, titleLine, INK, 211 + i * 13, 'center', lead);
       }
       parchment(pen, x, bodyTop, width, tallest, 101 + i * 17);
       panelBody(pen, p, x + PAD, bodyTop + PAD - 6, width - PAD * 2);

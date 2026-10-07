@@ -12,6 +12,9 @@
  *   @background:    the picture behind everything, as an uploaded image URL.
  *   @columns: A, B  names the columns for every row after it, until changed.
  *   @panel          starts another parchment. Panels sit side by side.
+ *   @width: 420     how wide each parchment is; left out, they share.
+ *   @gap: 120       how far apart they stand, which is how far each one
+ *                   sits from the middle of the poster.
  *   # Text          starts a section inside the current parchment.
  *   a, b, c         a row, split on commas. A cell that needs a comma goes in
  *                   "double quotes".
@@ -62,6 +65,9 @@ export interface Poster {
   /** How wide each parchment should be, in poster points. 0 lets them share
    *  the full width, which is what they did before anyone could say. */
   panelWidth: number;
+  /** How far apart the parchments stand, in poster points. With two of them
+   *  that is how far each sits from the middle. -1 keeps the usual spacing. */
+  panelGap: number;
   meta: PosterMeta[];
   panels: PosterPanel[];
 }
@@ -70,14 +76,28 @@ export interface Poster {
  *  read against it. */
 export const POSTER_POINTS = 1280;
 
-/** `@width: 420` is points, `@width: 35%` is a share of the poster. Anything
- *  unreadable leaves the parchments sharing the width as before. */
-export function readWidth(value: string): number {
+/** `420` is poster points, `35%` is a share of the width; NaN if it's neither. */
+function readPoints(value: string): number {
   const text = value.trim();
   const pct = /^(\d+(?:\.\d+)?)\s*%$/.exec(text);
   const raw = pct ? (Number(pct[1]) / 100) * POSTER_POINTS : Number(text);
-  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return Number.isFinite(raw) ? raw : NaN;
+}
+
+/** `@width: 420` is points, `@width: 35%` is a share of the poster. Anything
+ *  unreadable leaves the parchments sharing the width as before. */
+export function readWidth(value: string): number {
+  const raw = readPoints(value);
+  if (!(raw > 0)) return 0;
   return Math.round(Math.min(POSTER_POINTS, Math.max(140, raw)));
+}
+
+/** `@gap: 120` is how far apart the parchments stand. Nothing readable, or a
+ *  negative number, leaves the spacing alone. Zero puts them edge to edge. */
+export function readGap(value: string): number {
+  const raw = readPoints(value);
+  if (!(raw >= 0)) return -1;
+  return Math.round(Math.min(POSTER_POINTS, raw));
 }
 
 /**
@@ -108,7 +128,8 @@ const emptyPanel = (title = ''): PosterPanel => ({ title, blocks: [], sections: 
 
 export function parsePoster(src: string): Poster {
   const poster: Poster = {
-    title: '', subtitle: '', footer: '', background: '', panelWidth: 0, meta: [], panels: [],
+    title: '', subtitle: '', footer: '', background: '',
+    panelWidth: 0, panelGap: -1, meta: [], panels: [],
   };
   let columns: string[] = [];
   let panel = emptyPanel();
@@ -138,6 +159,7 @@ export function parsePoster(src: string): Poster {
         table = null;
       }
       else if (key === 'width') poster.panelWidth = readWidth(value);
+      else if (key === 'gap') poster.panelGap = readGap(value);
       else if (key === 'title') poster.title = value;
       else if (key === 'subtitle') poster.subtitle = value;
       else if (key === 'footer') poster.footer = value;

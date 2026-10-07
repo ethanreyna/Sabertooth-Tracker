@@ -65,12 +65,13 @@ Muffle, A, 300, 1
 `;
 
 const HELP: Array<[string, string]> = [
-  ['@title:  @subtitle:  @footer:', 'the strips of parchment'],
+  ['@title:  @subtitle:  @footer:', 'the strips of parchment; with no @title the panel titles lead'],
   ['@background: …', 'the picture behind it — pick one below'],
   ['@columns: Item, Price, Qty', 'names the columns for the rows after it'],
   ['@panel', 'starts another parchment beside the last'],
   ['@panel: Weapons', '…and gives that parchment a title above it'],
   ['@width: 420  or  35%', 'how wide each parchment is; left out, they share'],
+  ['@gap: 120', 'how far apart they stand, so how far each is from the middle'],
   ['# Heading', 'a section inside the current parchment'],
   ['Item, Ad, 2500, 3', 'a row — "quote a cell" that needs a comma'],
   ['> Some words', 'a paragraph'],
