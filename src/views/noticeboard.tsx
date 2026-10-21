@@ -3,7 +3,8 @@ import type { FormEvent, ReactNode } from 'react';
 import { AuthError, fetchBoard, loadBoard } from '@/sync';
 import type { PublicBoard } from '@/sync';
 import { defaultBoard } from '@/data';
-import type { CatalogueItem, Notice, Noticeboard as Board } from '@/types';
+import { priceGroups } from '@/lib/price-tabs';
+import type { CatalogueItem, Notice, Noticeboard as Board, PriceTab } from '@/types';
 import './noticeboard.css';
 
 /** How often an open board checks for a changed price list. */
@@ -33,7 +34,7 @@ export function Noticeboard({ live, onEnter, onGuest, onBack, notice }: {
   notice?: string;
 }) {
   const fetched = usePublicBoard(!live);
-  const { board, catalogue } = live ?? fetched;
+  const { board, catalogue, priceTabs } = live ?? fetched;
 
   // #prices opens straight onto the price list, so a post can link there
   // directly; #clan opens the entrance, for a member's bookmark.
@@ -103,7 +104,7 @@ export function Noticeboard({ live, onEnter, onGuest, onBack, notice }: {
         </div>
       </div>
 
-      {listOpen && <PriceList board={board} items={visible} onClose={() => openList(false)} />}
+      {listOpen && <PriceList board={board} items={visible} tabs={priceTabs} onClose={() => openList(false)} />}
       {doorOpen && onEnter && (
         <Entrance
           board={board} notice={notice} onEnter={onEnter} onGuest={onGuest}
@@ -129,6 +130,7 @@ function usePublicBoard(enabled: boolean): PublicBoard {
   const [data, setData] = useState<PublicBoard>(() => loadBoard() ?? {
     board: defaultBoard(),
     catalogue: [],
+    priceTabs: [],
   });
 
   useEffect(() => {
@@ -281,13 +283,25 @@ function bySection(items: CatalogueItem[]): Array<[string, CatalogueItem[]]> {
   return [...groups.entries()];
 }
 
-function PriceList({ board, items, onClose }: { board: Board; items: CatalogueItem[]; onClose: () => void }) {
+function PriceList({ board, items, tabs, onClose }: {
+  board: Board; items: CatalogueItem[]; tabs: PriceTab[]; onClose: () => void;
+}) {
   const [q, setQ] = useState('');
+  // Tabs with nothing on them aren't shown: an empty tab is a dead end.
+  const tabbed = priceGroups(items, tabs).filter((g) => g.items.length > 0);
+  const [tabId, setTabId] = useState(() => tabbed[0]?.id ?? '');
+  const active = tabbed.find((g) => g.id === tabId) ?? tabbed[0];
+  const showTabs = tabbed.length > 1;
+
+  // A search looks through every tab, since someone hunting for one tome
+  // shouldn't have to guess which tab it's under. Each heading then says
+  // which tab its section came from.
   const term = q.trim().toLowerCase();
-  const shown = term
-    ? items.filter((i) => `${i.section} ${i.name} ${i.note}`.toLowerCase().includes(term))
-    : items;
-  const groups = bySection(shown);
+  const groups: Array<[string, CatalogueItem[]]> = term
+    ? tabbed.flatMap((g) => bySection(
+      g.items.filter((i) => `${g.name} ${i.section} ${i.name} ${i.note}`.toLowerCase().includes(term)),
+    ).map(([section, list]): [string, CatalogueItem[]] => [showTabs ? `${g.name} · ${section}` : section, list]))
+    : bySection(active?.items ?? []);
 
   return (
     <Overlay onClose={onClose} label="Price list" className="nb-overlay-list">
@@ -299,10 +313,25 @@ function PriceList({ board, items, onClose }: { board: Board; items: CatalogueIt
           <h2 className="nb-list-title">{board.listTitle || 'Price list'}</h2>
           <Divider />
 
+          {showTabs && (
+            <div className="nb-tabs" role="tablist" aria-label="Price list tabs">
+              {tabbed.map((g) => (
+                <button
+                  key={g.id || 'other'} type="button" role="tab"
+                  aria-selected={!term && g.id === active?.id}
+                  className="nb-tab"
+                  onClick={() => { setTabId(g.id); setQ(''); }}
+                >
+                  {g.name}
+                </button>
+              ))}
+            </div>
+          )}
+
           {items.length > 0 && (
             <input
               className="nb-search" type="search" value={q} onChange={(e) => setQ(e.target.value)}
-              placeholder="Search the list…" aria-label="Search the price list"
+              placeholder={showTabs ? 'Search every tab…' : 'Search the list…'} aria-label="Search the price list"
             />
           )}
 

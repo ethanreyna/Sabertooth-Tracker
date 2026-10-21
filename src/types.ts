@@ -476,6 +476,8 @@ export interface DB {
   backgrounds: PosterBackground[];
   /** The public price list, shown on the noticeboard to anyone. */
   catalogue: CatalogueItem[];
+  /** The price list's tabs, in the order they are shown. */
+  priceTabs: PriceTab[];
   /** The public noticeboard's own words. */
   board: Noticeboard;
 }
@@ -503,9 +505,17 @@ export type AccessRole = 'member' | 'guest';
 
 export type SyncStatus = 'local' | 'syncing' | 'synced' | 'error' | 'denied';
 
+/** A tab of the public price list: Tomes, Forge, Tailor. */
+export interface PriceTab {
+  id: string;
+  name: string;
+}
+
 /** One line of the public price list. */
 export interface CatalogueItem {
   id: string;
+  /** The PriceTab it is listed under; '' (or a deleted tab) lists it under Other. */
+  tab: string;
   /** The heading it is listed under: "Spell Tomes", "Smithing". */
   section: string;
   name: string;

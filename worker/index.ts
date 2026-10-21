@@ -7,7 +7,7 @@
 //   POST /api/upload    -> { url }            body: raw image bytes
 //   POST /api/vision    -> { text }           body: raw image bytes (members only)
 //   GET  /api/img/:key  -> the image          (public: <img src> can't send headers)
-//   GET  /api/board     -> { board, catalogue } (public: the noticeboard)
+//   GET  /api/board     -> { board, catalogue, priceTabs } (public: the noticeboard)
 //
 // Everything except /api/img/* and /api/board requires `Authorization: Bearer <guild password>`.
 // Static assets are served by the [assets] binding; only /api/* runs this Worker
@@ -36,7 +36,7 @@ const EMPTY_DB = {
   members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [],
   ledger: [], bankItems: [], suggestions: [], items: [],
   enchantments: [], enchants: [], projects: [], sales: [], skills: [],
-  posters: [], backgrounds: [], catalogue: [],
+  posters: [], backgrounds: [], catalogue: [], priceTabs: [],
 };
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_VISION_BYTES = 4 * 1024 * 1024;
@@ -433,7 +433,8 @@ async function handleApi(req: Request, env: Env, url: URL): Promise<Response> {
     const doc = (db && typeof db === 'object' ? db : {}) as Record<string, unknown>;
     const catalogue = (Array.isArray(doc.catalogue) ? doc.catalogue : [])
       .filter((c) => !(c && typeof c === 'object' && (c as { hidden?: unknown }).hidden === true));
-    return json({ board: doc.board ?? null, catalogue });
+    const priceTabs = Array.isArray(doc.priceTabs) ? doc.priceTabs : [];
+    return json({ board: doc.board ?? null, catalogue, priceTabs });
   }
 
   const role = authRole(req, env);

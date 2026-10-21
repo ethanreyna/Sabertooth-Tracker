@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
-  ArrowDown, ArrowUp, ClipboardPaste, Eye, EyeOff, ImageUp, Pencil, Plus, RotateCcw, Save, Trash2, X,
+  ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ClipboardPaste, Eye, EyeOff, ImageUp, Pencil, Plus, RotateCcw, Save, Trash2, X,
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,8 @@ import { uid } from '@/lib/format';
 import { parseCatalogueText } from '@/lib/parse-catalogue';
 import { uploadImage } from '@/sync';
 import { cn } from '@/lib/utils';
-import type { CatalogueItem, DB, Notice, Noticeboard, PosterBackground, SyncCfg } from '@/types';
+import { OTHER_TAB, tabOf } from '@/lib/price-tabs';
+import type { CatalogueItem, DB, Notice, Noticeboard, PosterBackground, PriceTab, SyncCfg } from '@/types';
 
 export type BoardTab = 'notices' | 'board' | 'list';
 
@@ -93,9 +94,19 @@ function PriceListEditor({ db, update }: { db: DB; update: (fn: (d: DB) => void)
   const [editing, setEditing] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [pasting, setPasting] = useState(false);
+  const [picked, setPicked] = useState<string>(() => db.priceTabs[0]?.id ?? '');
+  const [tabForm, setTabForm] = useState<null | { id: string | null; name: string }>(null);
   const nameRef = useRef<HTMLInputElement>(null);
 
-  const sections = useMemo(() => groups(db.catalogue).map(([s]) => s), [db.catalogue]);
+  const tabs = db.priceTabs;
+  // The tab picked may have just been deleted, here or by someone else.
+  const tab = picked === '' || tabs.some((t) => t.id === picked) ? picked : (tabs[0]?.id ?? '');
+  const inTab = (c: CatalogueItem) => tabOf(c, tabs) === tab;
+  const here = db.catalogue.filter(inTab);
+  const untabbed = tabs.length > 0 ? db.catalogue.filter((c) => tabOf(c, tabs) === '').length : 0;
+  const tabName = tab ? tabs.find((t) => t.id === tab)?.name ?? '' : (tabs.length ? OTHER_TAB : '');
+
+  const sections = useMemo(() => groups(here).map(([sec]) => sec), [here]);
   const itemNames = useMemo(() => itemCatalogue(db.items).map((i) => i.name), [db.items]);
 
   const add = (e: FormEvent) => {
@@ -104,7 +115,7 @@ function PriceListEditor({ db, update }: { db: DB; update: (fn: (d: DB) => void)
     if (!clean) return;
     update((d) => {
       d.catalogue.push({
-        id: uid(), section: section.trim(), name: clean, price: priceOf(price), note: note.trim(), hidden: false,
+        id: uid(), tab, section: section.trim(), name: clean, price: priceOf(price), note: note.trim(), hidden: false,
       });
     });
     // Section stays: lists are usually typed a section at a time.
@@ -112,31 +123,32 @@ function PriceListEditor({ db, update }: { db: DB; update: (fn: (d: DB) => void)
     nameRef.current?.focus();
   };
 
-  /** Swaps with the neighbour in the same section, leaving other sections be. */
+  /** Swaps with the neighbour in the same tab and section, leaving the rest be. */
   const move = (id: string, dir: -1 | 1) => update((d) => {
     const i = d.catalogue.findIndex((c) => c.id === id);
     if (i < 0) return;
-    const key = sectionOf(d.catalogue[i]);
+    const same = (c: CatalogueItem) => tabOf(c, d.priceTabs) === tab && sectionOf(c) === sectionOf(d.catalogue[i]);
     let j = i + dir;
-    while (j >= 0 && j < d.catalogue.length && sectionOf(d.catalogue[j]) !== key) j += dir;
+    while (j >= 0 && j < d.catalogue.length && !same(d.catalogue[j])) j += dir;
     if (j < 0 || j >= d.catalogue.length) return;
     [d.catalogue[i], d.catalogue[j]] = [d.catalogue[j], d.catalogue[i]];
   });
 
-  /** Moves a whole section ahead of, or behind, its neighbour. */
+  /** Moves a whole section ahead of, or behind, its neighbour in this tab. */
   const moveSection = (key: string, dir: -1 | 1) => update((d) => {
-    const order = groups(d.catalogue).map(([s]) => s);
+    const mine = (c: CatalogueItem) => tabOf(c, d.priceTabs) === tab;
+    const order = groups(d.catalogue.filter(mine)).map(([sec]) => sec);
     const at = order.indexOf(key);
     const to = at + dir;
     if (at < 0 || to < 0 || to >= order.length) return;
     [order[at], order[to]] = [order[to], order[at]];
-    const by = new Map(groups(d.catalogue));
-    d.catalogue = order.flatMap((s) => by.get(s) ?? []);
+    const by = new Map(groups(d.catalogue.filter(mine)));
+    d.catalogue = [...d.catalogue.filter((c) => !mine(c)), ...order.flatMap((sec) => by.get(sec) ?? [])];
   });
 
   const renameSection = (from: string, to: string) => update((d) => {
     const clean = to.trim();
-    for (const c of d.catalogue) if (sectionOf(c) === from) c.section = clean;
+    for (const c of d.catalogue) if (tabOf(c, d.priceTabs) === tab && sectionOf(c) === from) c.section = clean;
   });
 
   const remove = (id: string) => update((d) => { d.catalogue = d.catalogue.filter((c) => c.id !== id); });
@@ -146,15 +158,101 @@ function PriceListEditor({ db, update }: { db: DB; update: (fn: (d: DB) => void)
     if (c) c.hidden = !c.hidden;
   });
 
-  const list = groups(db.catalogue);
+  const saveTab = () => {
+    if (!tabForm) return;
+    const clean = tabForm.name.trim();
+    if (!clean) return;
+    if (tabForm.id) {
+      const id = tabForm.id;
+      update((d) => { const t = d.priceTabs.find((x) => x.id === id); if (t) t.name = clean; });
+    } else {
+      const id = uid();
+      update((d) => {
+        // The first tab takes in everything already listed, so a list that
+        // gets tabs doesn't suddenly have all of it filed under Other.
+        if (d.priceTabs.length === 0) for (const c of d.catalogue) c.tab = id;
+        d.priceTabs.push({ id, name: clean });
+      });
+      setPicked(id);
+    }
+    setTabForm(null);
+  };
+
+  const moveTab = (dir: -1 | 1) => update((d) => {
+    const i = d.priceTabs.findIndex((t) => t.id === tab);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= d.priceTabs.length) return;
+    [d.priceTabs[i], d.priceTabs[j]] = [d.priceTabs[j], d.priceTabs[i]];
+  });
+
+  const deleteTab = () => {
+    const count = here.length;
+    if (!confirm(count
+      ? `Delete the “${tabName}” tab? Its ${count} item${count === 1 ? '' : 's'} move to ${OTHER_TAB}, not away.`
+      : `Delete the “${tabName}” tab?`)) return;
+    update((d) => {
+      d.priceTabs = d.priceTabs.filter((t) => t.id !== tab);
+      for (const c of d.catalogue) if (c.tab === tab) c.tab = '';
+    });
+    setPicked(tabs.find((t) => t.id !== tab)?.id ?? '');
+  };
+
+  const list = groups(here);
+  const tabIndex = tabs.findIndex((t) => t.id === tab);
 
   return (
     <div className="space-y-4">
       <Card>
+        <CardContent className="space-y-2 p-4">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {tabs.map((t) => (
+              <Button key={t.id} size="sm" variant={t.id === tab ? 'default' : 'outline'} onClick={() => setPicked(t.id)}>
+                {t.name}
+                <span className="opacity-60">{db.catalogue.filter((c) => c.tab === t.id).length}</span>
+              </Button>
+            ))}
+            {untabbed > 0 && (
+              <Button size="sm" variant={tab === '' ? 'default' : 'outline'} onClick={() => setPicked('')}>
+                {OTHER_TAB}<span className="opacity-60">{untabbed}</span>
+              </Button>
+            )}
+            {tabForm ? (
+              <form className="flex items-center gap-1" onSubmit={(e) => { e.preventDefault(); saveTab(); }}>
+                <Input
+                  autoFocus value={tabForm.name} onChange={(e) => setTabForm({ ...tabForm, name: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === 'Escape') setTabForm(null); }}
+                  placeholder="e.g. Tomes" aria-label="Tab name" className="h-8 w-40"
+                />
+                <Button type="submit" size="sm" disabled={!tabForm.name.trim()}>{tabForm.id ? 'Rename' : 'Add tab'}</Button>
+                <Button type="button" size="icon-sm" variant="ghost" aria-label="Cancel" onClick={() => setTabForm(null)}><X /></Button>
+              </form>
+            ) : (
+              <Button size="sm" variant="ghost" onClick={() => setTabForm({ id: null, name: '' })}><Plus />New tab</Button>
+            )}
+            {tab && !tabForm && (
+              <div className="ml-auto flex items-center">
+                <Button size="icon-xs" variant="ghost" aria-label={`Rename ${tabName}`} onClick={() => setTabForm({ id: tab, name: tabName })}><Pencil /></Button>
+                <Button size="icon-xs" variant="ghost" aria-label={`Move ${tabName} left`} disabled={tabIndex <= 0} onClick={() => moveTab(-1)}><ArrowLeft /></Button>
+                <Button size="icon-xs" variant="ghost" aria-label={`Move ${tabName} right`} disabled={tabIndex >= tabs.length - 1} onClick={() => moveTab(1)}><ArrowRight /></Button>
+                <Button size="icon-xs" variant="ghost" aria-label={`Delete ${tabName}`} onClick={deleteTab}><Trash2 /></Button>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {tabs.length === 0
+              ? 'Tabs split the public list into Tomes, Forge, Tailor and so on. Without any, it is one list; the first tab you add takes in everything already on it.'
+              : tab === ''
+                ? `Items not in any tab. The public list shows them under ${OTHER_TAB}; edit one to give it a tab.`
+                : 'A tab with nothing in it is left off the public list.'}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardContent className="space-y-3 p-4">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <p className="text-sm font-medium">Add to the price list</p>
+              <p className="text-sm font-medium">{tabName ? `Add to ${tabName}` : 'Add to the price list'}</p>
               <p className="text-xs text-muted-foreground">
                 Anything here is on the public noticeboard within seconds. A price of 0 reads as “Ask”.
               </p>
@@ -168,7 +266,7 @@ function PriceListEditor({ db, update }: { db: DB; update: (fn: (d: DB) => void)
             <Field label="Section" htmlFor="cat-section">
               <Input
                 id="cat-section" list="cat-sections" value={section} onChange={(e) => setSection(e.target.value)}
-                placeholder="e.g. Spell Tomes"
+                placeholder="e.g. Alteration"
               />
             </Field>
             <Field label="Item" htmlFor="cat-name">
@@ -188,7 +286,7 @@ function PriceListEditor({ db, update }: { db: DB; update: (fn: (d: DB) => void)
             </Field>
             <Button type="submit" disabled={!name.trim()}><Plus />Add</Button>
           </form>
-          <datalist id="cat-sections">{sections.map((s) => <option key={s} value={s} />)}</datalist>
+          <datalist id="cat-sections">{sections.map((sec) => <option key={sec} value={sec} />)}</datalist>
           <datalist id="cat-items">{itemNames.map((n) => <option key={n} value={n} />)}</datalist>
         </CardContent>
       </Card>
@@ -196,8 +294,9 @@ function PriceListEditor({ db, update }: { db: DB; update: (fn: (d: DB) => void)
       {list.length === 0 ? (
         <Card>
           <CardContent className="p-6 text-center text-sm text-muted-foreground">
-            The price list is empty, so the noticeboard says it is still being written. Add a line above, or paste a
-            poster template you already have.
+            {db.catalogue.length === 0
+              ? 'The price list is empty, so the noticeboard says it is still being written. Add a line above, or paste a poster template you already have.'
+              : `Nothing in ${tabName || 'this tab'} yet. Add a line above, or paste a list.`}
           </CardContent>
         </Card>
       ) : list.map(([key, items], si) => (
@@ -224,7 +323,7 @@ function PriceListEditor({ db, update }: { db: DB; update: (fn: (d: DB) => void)
                 <li key={it.id} className={cn('px-4 py-2', it.hidden && 'bg-muted/50')}>
                   {editing === it.id ? (
                     <RowEdit
-                      item={it}
+                      item={it} tabs={tabs}
                       onCancel={() => setEditing(null)}
                       onSave={(next) => {
                         update((d) => {
@@ -271,12 +370,15 @@ function PriceListEditor({ db, update }: { db: DB; update: (fn: (d: DB) => void)
 
       {pasting && (
         <PasteDialog
-          hasList={db.catalogue.length > 0}
+          hasList={here.length > 0}
+          into={tabName}
           close={() => setPasting(false)}
           onUse={(lines, replace) => {
             update((d) => {
-              const fresh = lines.map((l) => ({ ...l, id: uid() }));
-              d.catalogue = replace ? fresh : [...d.catalogue, ...fresh];
+              const fresh = lines.map((l) => ({ ...l, tab, id: uid() }));
+              d.catalogue = replace
+                ? [...d.catalogue.filter((c) => tabOf(c, d.priceTabs) !== tab), ...fresh]
+                : [...d.catalogue, ...fresh];
             });
             setPasting(false);
           }}
@@ -304,11 +406,13 @@ function SectionRename({ initial, onDone }: { initial: string; onDone: (to: stri
   );
 }
 
-function RowEdit({ item, onSave, onCancel }: {
+function RowEdit({ item, tabs, onSave, onCancel }: {
   item: CatalogueItem;
-  onSave: (next: Pick<CatalogueItem, 'section' | 'name' | 'price' | 'note'>) => void;
+  tabs: PriceTab[];
+  onSave: (next: Pick<CatalogueItem, 'tab' | 'section' | 'name' | 'price' | 'note'>) => void;
   onCancel: () => void;
 }) {
+  const [tab, setTab] = useState(tabOf(item, tabs));
   const [section, setSection] = useState(item.section);
   const [name, setName] = useState(item.name);
   const [price, setPrice] = useState(item.price ? String(item.price) : '');
@@ -320,10 +424,21 @@ function RowEdit({ item, onSave, onCancel }: {
       onSubmit={(e) => {
         e.preventDefault();
         if (!name.trim()) return;
-        onSave({ section: section.trim(), name: name.trim(), price: priceOf(price), note: note.trim() });
+        onSave({ tab, section: section.trim(), name: name.trim(), price: priceOf(price), note: note.trim() });
       }}
       onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); }}
     >
+      {tabs.length > 0 && (
+        <Field label="Tab" htmlFor={`t-${id}`} className="sm:col-span-full sm:max-w-56">
+          <select
+            id={`t-${id}`} value={tab} onChange={(e) => setTab(e.target.value)}
+            className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm"
+          >
+            {tabs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            <option value="">{OTHER_TAB}</option>
+          </select>
+        </Field>
+      )}
       <Field label="Section" htmlFor={`s-${id}`}>
         <Input id={`s-${id}`} list="cat-sections" value={section} onChange={(e) => setSection(e.target.value)} />
       </Field>
@@ -353,10 +468,12 @@ Oakflesh, N, 500, 2
 # Restoration
 Healing Hands, A, 1000, 4`;
 
-function PasteDialog({ hasList, close, onUse }: {
+function PasteDialog({ hasList, into, close, onUse }: {
   hasList: boolean;
+  /** The tab the lines go into, for the title. */
+  into: string;
   close: () => void;
-  onUse: (lines: Array<Omit<CatalogueItem, 'id'>>, replace: boolean) => void;
+  onUse: (lines: Array<Omit<CatalogueItem, 'id' | 'tab'>>, replace: boolean) => void;
 }) {
   const [text, setText] = useState('');
   const lines = useMemo(() => parseCatalogueText(text), [text]);
@@ -366,7 +483,7 @@ function PasteDialog({ hasList, close, onUse }: {
     <Dialog open onOpenChange={(open) => { if (!open) close(); }}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Paste a price list</DialogTitle>
+          <DialogTitle>{into ? `Paste a list into ${into}` : 'Paste a price list'}</DialogTitle>
           <DialogDescription>
             Written the way posters are: <code># Section</code> on its own line, then one item per line as
             {' '}<code>Name, …, Price</code>. A poster template pastes straight in — the Price column is the price,
@@ -406,9 +523,9 @@ function PasteDialog({ hasList, close, onUse }: {
           {hasList && (
             <Button
               variant="outline" disabled={lines.length === 0}
-              onClick={() => { if (confirm('Replace the whole price list with these?')) onUse(lines, true); }}
+              onClick={() => { if (confirm(into ? `Replace everything in ${into} with these?` : 'Replace the whole price list with these?')) onUse(lines, true); }}
             >
-              Replace the list
+              {into ? `Replace ${into}` : 'Replace the list'}
             </Button>
           )}
           <Button disabled={lines.length === 0} onClick={() => onUse(lines, false)}>

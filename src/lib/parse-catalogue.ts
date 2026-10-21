@@ -35,7 +35,7 @@ export function parseCatalogueText(src: string): Array<Omit<CatalogueItem, 'id'>
           .map((c) => c.trim())
           .join(' · ');
         out.push({
-          section, name, note, hidden: false,
+          tab: '', section, name, note, hidden: false,
           price: Number.isFinite(price) && price > 0 ? Math.round(price) : 0,
         });
       }

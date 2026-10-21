@@ -48,7 +48,7 @@ export const DEFAULT_BOARD: Noticeboard = {
 /** A fresh copy, so nothing that edits a board can reach back into the default. */
 export const defaultBoard = (): Noticeboard => JSON.parse(JSON.stringify(DEFAULT_BOARD));
 
-export const emptyDb = (): DB => ({ settings: { guildCutPct: DEFAULT_GUILD_CUT_PCT, hiddenSections: [...DEFAULT_HIDDEN_SECTIONS] }, members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [], ledger: [], bankItems: [], suggestions: [], items: [], enchantments: [], enchants: [], projects: [], sales: [], skills: [], posters: [], backgrounds: [], catalogue: [], board: defaultBoard() });
+export const emptyDb = (): DB => ({ settings: { guildCutPct: DEFAULT_GUILD_CUT_PCT, hiddenSections: [...DEFAULT_HIDDEN_SECTIONS] }, members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [], ledger: [], bankItems: [], suggestions: [], items: [], enchantments: [], enchants: [], projects: [], sales: [], skills: [], posters: [], backgrounds: [], catalogue: [], priceTabs: [], board: defaultBoard() });
 
 /** Sensible starting ranks, offered when the roster has no roles yet. The
  *  Initiate -> Saberblooded track mirrors the guild's blooding process. */
@@ -171,5 +171,6 @@ export const demoDb = (): DB => ({
   posters: [],
   backgrounds: [],
   catalogue: [],
+  priceTabs: [],
   board: defaultBoard(),
 });

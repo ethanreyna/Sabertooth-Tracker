@@ -14,7 +14,10 @@ go in by the clan entrance at the foot of the board, with the guild password.
   heading, words, a list and a sign-off, on clean or torn paper, and they
   share themselves between the two columns so neither runs long. *Board* is
   everything else: the poster, the corners, the price-list tag, the entrance.
-  *Price list* is the list the public opens. A blank field comes off the board.
+  *Price list* is the list the public opens, split into tabs the clan names
+  (Tomes, Forge, Tailor…); items outside every tab show under Other, a tab
+  with nothing in it is left off, and the public search looks through every
+  tab at once. A blank field comes off the board.
 - Strangers read it from `GET /api/board`, which needs no password and carries
   only the board and the visible price list — nothing else of the guild's. An
   open board re-reads it every 15 seconds, so a price changed in the tracker is
