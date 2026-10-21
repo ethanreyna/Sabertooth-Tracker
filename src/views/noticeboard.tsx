@@ -161,7 +161,8 @@ const paragraphs = (text: string) => text.split(/\n\s*\n/).map((p) => p.trim()).
 
 function MainPoster({ board }: { board: Board }) {
   return (
-    <article className="nb-paper nb-poster" style={{ order: 0 }}>
+    <div className="nb-shadow" style={{ order: 0 }}>
+    <article className="nb-paper nb-poster nb-wear nb-wear-poster nb-ragged-corner">
       <span className="nb-nail nb-nail-l" aria-hidden />
       <span className="nb-nail nb-nail-r" aria-hidden />
       <div className="nb-poster-frame">
@@ -182,6 +183,7 @@ function MainPoster({ board }: { board: Board }) {
         {board.posterFoot && <p className="nb-smallcaps nb-poster-foot">{board.posterFoot}</p>}
       </div>
     </article>
+    </div>
   );
 }
 
@@ -195,7 +197,7 @@ function PriceTag({ board, count, onOpen }: { board: Board; count: number; onOpe
         <span className="nb-tag-big">{board.tagTitle || 'Price list'}</span>
         <span className="nb-tag-rule" aria-hidden />
         <span className="nb-tag-hint">
-          {[board.tagHint, count > 0 ? String(count) : ''].filter(Boolean).join(' · ')}
+          {[board.tagHint, count > 0 ? String(count) : ''].filter(Boolean).join(' - ')}
         </span>
       </span>
     </button>
@@ -243,7 +245,9 @@ function NoticeSheet({ notice: n, tilt }: { notice: Notice; tilt: number }) {
     // The shadow sits on a wrapper: the torn edge is a clip-path, and a clip
     // takes the paper's own shadow off with everything else outside it.
     <div className="nb-shadow" style={{ transform: `rotate(${TILTS[tilt % TILTS.length]}deg)`, order: 10 + tilt }}>
-      <section className={`nb-paper nb-note ${torn ? 'nb-note-torn' : 'nb-note-plain'}`}>
+      <section
+        className={`nb-paper nb-note nb-wear nb-wear-${tilt % 3} ${torn ? 'nb-note-torn' : `nb-note-plain ${tilt % 2 ? 'nb-ragged-tear' : 'nb-ragged'}`}`}
+      >
         <span className="nb-nail nb-nail-c" aria-hidden />
         {n.picture && (
           <figure className="nb-note-figure">
