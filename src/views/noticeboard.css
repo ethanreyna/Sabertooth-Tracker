@@ -605,6 +605,31 @@
   color: var(--nb-ink) !important;
 }
 
+.nb-sections {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 0 16px;
+}
+.nb-section-pick {
+  padding: 4px 12px;
+  border: 1px solid var(--nb-rule);
+  border-radius: 999px;
+  background: none;
+  cursor: pointer;
+  font-size: 16px;
+  font-style: italic;
+  color: var(--nb-ink-soft) !important;
+}
+.nb-section-pick:hover { border-color: rgba(92, 62, 32, 0.6); color: var(--nb-ink) !important; }
+.nb-section-pick[aria-pressed='true'] {
+  border-color: var(--nb-blood);
+  background: rgba(125, 26, 26, 0.09);
+  font-style: normal;
+  color: var(--nb-blood) !important;
+}
+
 .nb-search {
   display: block;
   width: 100%;

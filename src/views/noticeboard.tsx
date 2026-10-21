@@ -301,11 +301,19 @@ function PriceList({ board, items, tabs, onClose }: {
   // shouldn't have to guess which tab it's under. Each heading then says
   // which tab its section came from.
   const term = q.trim().toLowerCase();
+  const inTab = bySection(active?.items ?? []);
+
+  // Within a tab, one section can be picked out; '' is all of them. Reset on
+  // a change of tab, since the sections differ from tab to tab.
+  const [sectionKey, setSectionKey] = useState('');
+  const picked = inTab.some(([sec]) => sec === sectionKey) ? sectionKey : '';
+  const showSections = !term && inTab.length > 1;
+
   const groups: Array<[string, CatalogueItem[]]> = term
     ? tabbed.flatMap((g) => bySection(
       g.items.filter((i) => `${g.name} ${i.section} ${i.name} ${i.note}`.toLowerCase().includes(term)),
     ).map(([section, list]): [string, CatalogueItem[]] => [showTabs ? `${g.name} · ${section}` : section, list]))
-    : bySection(active?.items ?? []);
+    : inTab.filter(([sec]) => !picked || sec === picked);
 
   return (
     <Overlay onClose={onClose} label="Price list" className="nb-overlay-list">
@@ -324,9 +332,22 @@ function PriceList({ board, items, tabs, onClose }: {
                   key={g.id || 'other'} type="button" role="tab"
                   aria-selected={!term && g.id === active?.id}
                   className="nb-tab"
-                  onClick={() => { setTabId(g.id); setQ(''); }}
+                  onClick={() => { setTabId(g.id); setQ(''); setSectionKey(''); }}
                 >
                   {g.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {showSections && (
+            <div className="nb-sections" role="group" aria-label="Sections">
+              {[['', 'All'] as const, ...inTab.map(([sec]) => [sec, sec] as const)].map(([key, label]) => (
+                <button
+                  key={key || 'all'} type="button" className="nb-section-pick"
+                  aria-pressed={picked === key} onClick={() => setSectionKey(key)}
+                >
+                  {label}
                 </button>
               ))}
             </div>
