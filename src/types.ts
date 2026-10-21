@@ -308,7 +308,13 @@ export interface Member {
 export interface Settings {
   /** Percent of a job's septim reward the guild keeps. 0-100. */
   guildCutPct: number;
+  /** Sidebar sections the guild has switched off, by view id. Hidden from the
+   *  sidebar only — nothing in them is deleted. */
+  hiddenSections: string[];
 }
+
+/** Off until someone turns them back on in Settings. */
+export const DEFAULT_HIDDEN_SECTIONS = ['skills', 'jobs', 'storage', 'projects'];
 
 export const DEFAULT_GUILD_CUT_PCT = 20;
 
@@ -511,32 +517,59 @@ export interface CatalogueItem {
   hidden: boolean;
 }
 
+/** One notice pinned to the board: any mix of a picture, a heading, words
+ *  and a list. Whatever is left blank simply isn't drawn. */
+export interface Notice {
+  id: string;
+  /** Small capitals over the heading: "From the forge-table". */
+  label: string;
+  heading: string;
+  picture: string;
+  /** The italic line under the picture. */
+  caption: string;
+  /** A blank line starts a new paragraph. */
+  body: string;
+  list: string[];
+  /** 01, 02, 03 down the side, or plain rules between the lines. */
+  numbered: boolean;
+  /** The italic red line at the foot. */
+  sign: string;
+  /** Clean parchment, or an older sheet with a torn foot. */
+  paper: 'plain' | 'torn';
+  /** Taken down without being thrown away. */
+  hidden: boolean;
+}
+
 /**
- * What the public noticeboard says. Every field is the clan's own words; a
- * blank one simply isn't pinned up, so the board never shows filler.
+ * Every word on the public noticeboard. Each is the clan's own; a blank one
+ * isn't pinned up, so the board never shows filler.
  */
 export interface Noticeboard {
-  /** The big name on the main poster. */
-  name: string;
-  /** Small capitals over the name. */
+  /** The board's own top corners. */
+  boardTitle: string;
+  where: string;
+  /** The main poster. */
   motto: string;
-  /** The italic line under it. */
+  /** The crossed axes and tusks over the name. */
+  showMark: boolean;
+  name: string;
   tagline: string;
-  /** The poster's body. A blank line starts a new paragraph. */
+  /** A blank line starts a new paragraph. */
   welcome: string;
   signedBy: string;
   signedAs: string;
-  /** Where to find the clan, set in the board's top corner. */
-  where: string;
-  /** A picture pinned beside the poster, and the words under it. */
-  picture: string;
-  pictureCaption: string;
-  pictureNote: string;
+  posterFoot: string;
+  /** The hanging tag that opens the price list, and the list itself. */
+  tagSmall: string;
+  tagTitle: string;
+  tagHint: string;
+  listTitle: string;
+  listFoot: string;
+  /** The plaque at the foot of the board, and the entrance it opens. */
+  doorSmall: string;
+  doorTitle: string;
+  doorText: string;
   /** The scene behind the board. */
   backdrop: string;
-  /** The note of what the clan trades in. */
-  offersHeading: string;
-  offersIntro: string;
-  offers: string[];
-  offersSign: string;
+  notices: Notice[];
 }
