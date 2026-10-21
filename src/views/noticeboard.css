@@ -27,8 +27,10 @@
   font-family: var(--nb-body);
   background:
     radial-gradient(120% 70% at 50% 110%, rgba(226, 120, 50, 0.22), transparent 60%),
-    linear-gradient(180deg, rgba(12, 10, 8, 0.5), rgba(12, 10, 8, 0.82)),
-    var(--nb-backdrop, linear-gradient(160deg, #1d211d 0%, #141311 55%, #1c1410 100%));
+    linear-gradient(180deg, rgba(12, 10, 8, 0.35), rgba(12, 10, 8, 0.72)),
+    /* With no scene chosen, the stronghold itself, from above. */
+    var(--nb-backdrop, url('/stronghold.webp')),
+    #141311;
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
