@@ -40,6 +40,8 @@ export const DEFAULT_BOARD: Noticeboard = {
     list: ['Spell tomes', 'Forged weapons & armour', 'Ingots & ore', 'Pelts & hides', 'Commissions — ask at the hall'],
     numbered: true,
     sign: 'Good steel. A fair price.',
+    linkUrl: '',
+    linkLabel: '',
     paper: 'torn',
     hidden: false,
   }],

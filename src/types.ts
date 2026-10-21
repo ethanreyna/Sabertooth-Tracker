@@ -544,6 +544,10 @@ export interface Notice {
   numbered: boolean;
   /** The italic red line at the foot. */
   sign: string;
+  /** Somewhere the notice points to, opened in a new tab; '' for none. */
+  linkUrl: string;
+  /** What the link says; the site's own name when left blank. */
+  linkLabel: string;
   /** Clean parchment, or an older sheet with a torn foot. */
   paper: 'plain' | 'torn';
   /** Taken down without being thrown away. */
