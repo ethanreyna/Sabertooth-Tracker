@@ -6,48 +6,56 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Field } from '@/components/bits';
-import { DEFAULT_BOARD } from '@/data';
+import { defaultBoard } from '@/data';
 import { catalogue as itemCatalogue } from '@/items';
 import { uid } from '@/lib/format';
 import { parseCatalogueText } from '@/lib/parse-catalogue';
 import { uploadImage } from '@/sync';
 import { cn } from '@/lib/utils';
-import type { CatalogueItem, DB, Noticeboard, SyncCfg } from '@/types';
+import type { CatalogueItem, DB, Notice, Noticeboard, PosterBackground, SyncCfg } from '@/types';
 
-export type CatalogueTab = 'list' | 'board';
+export type BoardTab = 'notices' | 'board' | 'list';
 
 /**
- * Where the clan keeps its shop window: the price list strangers read off the
- * noticeboard, and the noticeboard's own words. Members only — what is saved
- * here is public the moment it lands.
+ * Everything on the public noticeboard: the notices pinned to it, every other
+ * word on it, and the price list strangers open from it. Members only — what
+ * is saved here is public the moment it lands.
  */
-export function Catalogue({ db, update, cfg, tab, onTabChange }: {
+export function BoardSection({ db, update, cfg, tab, onTabChange }: {
   db: DB;
   update: (fn: (d: DB) => void) => void;
   cfg: SyncCfg | null;
-  tab: CatalogueTab;
-  onTabChange: (t: CatalogueTab) => void;
+  tab: BoardTab;
+  onTabChange: (t: BoardTab) => void;
 }) {
   const shown = db.catalogue.filter((c) => !c.hidden).length;
+  const pinned = db.board.notices.filter((n) => !n.hidden).length;
   return (
-    <Tabs value={tab} onValueChange={(v) => onTabChange(v as CatalogueTab)}>
+    <Tabs value={tab} onValueChange={(v) => onTabChange(v as BoardTab)}>
       <TabsList>
+        <TabsTrigger value="notices">
+          Notices{db.board.notices.length > 0 && <span className="ml-1.5 text-muted-foreground">{pinned}</span>}
+        </TabsTrigger>
+        <TabsTrigger value="board">Board</TabsTrigger>
         <TabsTrigger value="list">
           Price list{db.catalogue.length > 0 && <span className="ml-1.5 text-muted-foreground">{shown}</span>}
         </TabsTrigger>
-        <TabsTrigger value="board">Noticeboard</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="list" className="mt-4">
-        <PriceListEditor db={db} update={update} />
+      <TabsContent value="notices" className="mt-4">
+        <NoticesEditor db={db} update={update} cfg={cfg} />
       </TabsContent>
       <TabsContent value="board" className="mt-4">
         <BoardEditor db={db} update={update} cfg={cfg} />
+      </TabsContent>
+      <TabsContent value="list" className="mt-4">
+        <PriceListEditor db={db} update={update} />
       </TabsContent>
     </Tabs>
   );
@@ -413,52 +421,216 @@ function PasteDialog({ hasList, close, onUse }: {
 }
 
 /* ------------------------------------------------------------------------- */
-/* The noticeboard's words                                                    */
+/* Notices                                                                    */
 /* ------------------------------------------------------------------------- */
 
-type BoardDraft = Omit<Noticeboard, 'offers'> & { offers: string };
-
-const toDraft = (b: Noticeboard): BoardDraft => ({ ...b, offers: b.offers.join('\n') });
-const fromDraft = (d: BoardDraft): Noticeboard => ({
-  ...d,
-  offers: d.offers.split('\n').map((l) => l.trim()).filter(Boolean),
+const blankNotice = (): Notice => ({
+  id: uid(), label: '', heading: '', picture: '', caption: '', body: '', list: [],
+  numbered: true, sign: '', paper: 'torn', hidden: false,
 });
 
-/**
- * Edited as a draft and saved in one go, rather than live: half a sentence
- * shouldn't reach strangers while someone is still typing it.
- */
-function BoardEditor({ db, update, cfg }: {
+/** What a notice is called in the list, from whatever it has. */
+const noticeTitle = (n: Notice) =>
+  n.heading || n.label || n.caption || n.body.split('\n')[0] || (n.picture ? 'A picture' : 'An empty notice');
+
+function NoticesEditor({ db, update, cfg }: {
   db: DB;
   update: (fn: (d: DB) => void) => void;
   cfg: SyncCfg | null;
 }) {
-  const [draft, setDraft] = useState<BoardDraft>(() => toDraft(db.board));
-  const [busy, setBusy] = useState<'' | 'picture' | 'backdrop'>('');
-  const [err, setErr] = useState('');
-  const [saved, setSaved] = useState(false);
+  const [editing, setEditing] = useState<Notice | null>(null);
+  const notices = db.board.notices;
 
-  const dirty = JSON.stringify(fromDraft(draft)) !== JSON.stringify(db.board);
-  const set = <K extends keyof BoardDraft>(k: K, v: BoardDraft[K]) => {
-    setDraft((d) => ({ ...d, [k]: v }));
-    setSaved(false);
-  };
+  const move = (id: string, dir: -1 | 1) => update((d) => {
+    const i = d.board.notices.findIndex((n) => n.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= d.board.notices.length) return;
+    [d.board.notices[i], d.board.notices[j]] = [d.board.notices[j], d.board.notices[i]];
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" onClick={() => setEditing(blankNotice())}><Plus />New notice</Button>
+        <p className="text-xs text-muted-foreground">
+          The first two sit beside the poster; the rest are pinned in a row beneath it.
+        </p>
+      </div>
+
+      {notices.length === 0 ? (
+        <Card>
+          <CardContent className="p-6 text-center text-sm text-muted-foreground">
+            Nothing is pinned up beside the poster. Add a notice — a picture, a heading, a few words, a list,
+            any mix of them.
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <ul className="divide-y">
+              {notices.map((n, i) => (
+                <li key={n.id} className={cn('flex items-center gap-3 px-4 py-2.5', n.hidden && 'bg-muted/50')}>
+                  <div className="flex h-12 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
+                    {n.picture
+                      ? <img src={n.picture} alt="" className="size-full object-cover" />
+                      : <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{n.paper}</span>}
+                  </div>
+                  <div className={cn('min-w-0 flex-1', n.hidden && 'opacity-55')}>
+                    <p className="truncate text-sm font-medium">{noticeTitle(n)}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {n.hidden ? 'Taken down — not on the board' : [
+                        i < 2 ? 'Beside the poster' : 'Beneath the poster',
+                        n.list.length ? `${n.list.length} in the list` : '',
+                        n.picture ? 'picture' : '',
+                      ].filter(Boolean).join(' · ')}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center">
+                    <Button
+                      size="icon-xs" variant="ghost" aria-label={n.hidden ? 'Pin it back up' : 'Take it down'}
+                      onClick={() => update((d) => { const t = d.board.notices.find((x) => x.id === n.id); if (t) t.hidden = !t.hidden; })}
+                    >
+                      {n.hidden ? <EyeOff /> : <Eye />}
+                    </Button>
+                    <Button size="icon-xs" variant="ghost" aria-label="Move up" disabled={i === 0} onClick={() => move(n.id, -1)}><ArrowUp /></Button>
+                    <Button size="icon-xs" variant="ghost" aria-label="Move down" disabled={i === notices.length - 1} onClick={() => move(n.id, 1)}><ArrowDown /></Button>
+                    <Button size="icon-xs" variant="ghost" aria-label="Edit" onClick={() => setEditing(n)}><Pencil /></Button>
+                    <Button
+                      size="icon-xs" variant="ghost" aria-label="Remove"
+                      onClick={() => {
+                        if (confirm(`Take “${noticeTitle(n)}” off the board for good?`)) {
+                          update((d) => { d.board.notices = d.board.notices.filter((x) => x.id !== n.id); });
+                        }
+                      }}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {editing && (
+        <NoticeDialog
+          initial={editing} db={db} update={update} cfg={cfg}
+          isNew={!notices.some((n) => n.id === editing.id)}
+          close={() => setEditing(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** A notice is written as a draft and pinned up in one go. */
+function NoticeDialog({ initial, isNew, db, update, cfg, close }: {
+  initial: Notice;
+  isNew: boolean;
+  db: DB;
+  update: (fn: (d: DB) => void) => void;
+  cfg: SyncCfg | null;
+  close: () => void;
+}) {
+  const [n, setN] = useState<Notice>(initial);
+  const [list, setList] = useState(initial.list.join('\n'));
+  const set = <K extends keyof Notice>(k: K, v: Notice[K]) => setN((x) => ({ ...x, [k]: v }));
+  const upload = useUpload(cfg, update);
 
   const save = () => {
-    const next = fromDraft(draft);
-    update((d) => { d.board = next; });
-    setSaved(true);
+    const next: Notice = { ...n, list: list.split('\n').map((l) => l.trim()).filter(Boolean) };
+    update((d) => {
+      const i = d.board.notices.findIndex((x) => x.id === next.id);
+      if (i >= 0) d.board.notices[i] = next;
+      else d.board.notices.push(next);
+    });
+    close();
   };
 
-  const upload = async (which: 'picture' | 'backdrop', file: File) => {
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) close(); }}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{isNew ? 'A new notice' : 'Edit the notice'}</DialogTitle>
+          <DialogDescription>Fill in only what this notice needs — anything left blank isn’t drawn.</DialogDescription>
+        </DialogHeader>
+
+        {upload.err && <Alert variant="destructive"><AlertDescription>{upload.err}</AlertDescription></Alert>}
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Small capitals over the heading" htmlFor="nt-label">
+            <Input id="nt-label" value={n.label} onChange={(e) => set('label', e.target.value)} placeholder="From the forge-table" />
+          </Field>
+          <Field label="Heading" htmlFor="nt-heading">
+            <Input id="nt-heading" value={n.heading} onChange={(e) => set('heading', e.target.value)} placeholder="For blade, book & hearth." />
+          </Field>
+        </div>
+
+        <PicturePick
+          label="Picture" url={n.picture} busy={upload.busy}
+          onFile={(f) => void upload.run(f, (url) => set('picture', url))}
+          onClear={() => set('picture', '')}
+          shelf={db.backgrounds} onPick={(url) => set('picture', url)}
+        />
+        {n.picture && (
+          <Field label="Under the picture" htmlFor="nt-caption">
+            <Input id="nt-caption" value={n.caption} onChange={(e) => set('caption', e.target.value)} placeholder="A little corner of the stronghold." />
+          </Field>
+        )}
+
+        <Field label="Words — a blank line starts a new paragraph" htmlFor="nt-body">
+          <Textarea id="nt-body" rows={4} value={n.body} onChange={(e) => set('body', e.target.value)} />
+        </Field>
+
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <Field label="A list — one per line" htmlFor="nt-list">
+            <Textarea id="nt-list" rows={4} value={list} onChange={(e) => setList(e.target.value)} placeholder={'Spell tomes\nForged weapons & armour'} />
+          </Field>
+          <label className="flex items-center gap-2 pb-2 text-sm">
+            <Checkbox checked={n.numbered} onCheckedChange={(v) => set('numbered', v === true)} />
+            Number it
+          </label>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <Field label="Signed off with" htmlFor="nt-sign">
+            <Input id="nt-sign" value={n.sign} onChange={(e) => set('sign', e.target.value)} placeholder="Good steel. A fair price." />
+          </Field>
+          <div className="flex gap-1">
+            {(['torn', 'plain'] as const).map((p) => (
+              <Button
+                key={p} type="button" size="sm" variant={n.paper === p ? 'default' : 'outline'}
+                onClick={() => set('paper', p)}
+              >
+                {p === 'torn' ? 'Old, torn foot' : 'Clean sheet'}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={close}>Cancel</Button>
+          <Button onClick={save} disabled={upload.busy}>{isNew ? 'Pin it up' : 'Save'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Uploads a picture to the guild's store; the url goes to `use`. */
+function useUpload(cfg: SyncCfg | null, update: (fn: (d: DB) => void) => void) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const run = async (file: File, use: (url: string) => void, keep = false) => {
     if (!cfg) { setErr('Sign in before uploading a picture.'); return; }
-    setBusy(which);
+    setBusy(true);
     setErr('');
     try {
       const url = await uploadImage(cfg, file);
       if (!url) throw new Error('The upload came back empty.');
-      if (which === 'backdrop') {
-        // Kept with the poster backgrounds, so the same scene can be used for both.
+      // Scenes are kept with the poster backgrounds, so either can use them.
+      if (keep) {
         update((d) => {
           d.backgrounds.push({
             id: uid(), url, at: new Date().toISOString(),
@@ -466,12 +638,46 @@ function BoardEditor({ db, update, cfg }: {
           });
         });
       }
-      set(which, url);
+      use(url);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'That picture could not be uploaded.');
     } finally {
-      setBusy('');
+      setBusy(false);
     }
+  };
+  return { busy, err, run };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Every other word on the board                                              */
+/* ------------------------------------------------------------------------- */
+
+type BoardDraft = Omit<Noticeboard, 'notices'>;
+const toDraft = ({ notices: _notices, ...rest }: Noticeboard): BoardDraft => rest;
+
+/**
+ * Edited as a draft and saved in one go, rather than live: half a sentence
+ * shouldn't reach strangers while someone is still typing it. Notices have
+ * their own tab and are left alone by a save here.
+ */
+function BoardEditor({ db, update, cfg }: {
+  db: DB;
+  update: (fn: (d: DB) => void) => void;
+  cfg: SyncCfg | null;
+}) {
+  const [draft, setDraft] = useState<BoardDraft>(() => toDraft(db.board));
+  const [saved, setSaved] = useState(false);
+  const upload = useUpload(cfg, update);
+
+  const dirty = JSON.stringify(draft) !== JSON.stringify(toDraft(db.board));
+  const set = <K extends keyof BoardDraft>(k: K, v: BoardDraft[K]) => {
+    setDraft((d) => ({ ...d, [k]: v }));
+    setSaved(false);
+  };
+
+  const save = () => {
+    update((d) => { d.board = { ...draft, notices: d.board.notices }; });
+    setSaved(true);
   };
 
   const text = (k: keyof BoardDraft, label: string, placeholder = '') => (
@@ -492,7 +698,7 @@ function BoardEditor({ db, update, cfg }: {
         </Button>
         <Button
           size="sm" variant="ghost" className="ml-auto"
-          onClick={() => { if (confirm('Put the starting words back? Save afterwards to make it stick.')) setDraft(toDraft(DEFAULT_BOARD)); }}
+          onClick={() => { if (confirm('Put the starting words back? Save afterwards to make it stick.')) setDraft(toDraft(defaultBoard())); }}
         >
           <RotateCcw />Starting words
         </Button>
@@ -500,7 +706,7 @@ function BoardEditor({ db, update, cfg }: {
         {dirty && <span className="text-xs text-amber-700 dark:text-amber-400">Not saved yet</span>}
       </div>
 
-      {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
+      {upload.err && <Alert variant="destructive"><AlertDescription>{upload.err}</AlertDescription></Alert>}
 
       <p className="text-xs text-muted-foreground">Leave a field blank to take it off the board.</p>
 
@@ -509,6 +715,10 @@ function BoardEditor({ db, update, cfg }: {
           <CardContent className="space-y-3 p-4">
             <p className="text-sm font-medium">The poster</p>
             {text('motto', 'Over the name', 'Stronghold of Clan Orgrimm')}
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={draft.showMark} onCheckedChange={(v) => set('showMark', v === true)} />
+              Show the crossed axes and tusks
+            </label>
             {text('name', 'Name', 'Gol-Razhkbur')}
             {text('tagline', 'Under the name', 'Strong steel. Honest coin.')}
             <Field label="Welcome — a blank line starts a new paragraph" htmlFor="board-welcome">
@@ -518,61 +728,52 @@ function BoardEditor({ db, update, cfg }: {
               {text('signedBy', 'Signed by')}
               {text('signedAs', 'Signed as')}
             </div>
-            {text('where', 'Where to find us — top corner of the board')}
+            {text('posterFoot', 'Along the foot of the poster', 'Forged in fire ✦ Paid in septims')}
           </CardContent>
         </Card>
 
         <div className="space-y-4">
           <Card>
             <CardContent className="space-y-3 p-4">
-              <p className="text-sm font-medium">What we trade in</p>
-              {text('offersHeading', 'Heading', 'For blade, book & hearth.')}
-              <Field label="A line under it" htmlFor="board-offersIntro">
-                <Textarea id="board-offersIntro" rows={2} value={draft.offersIntro} onChange={(e) => set('offersIntro', e.target.value)} />
-              </Field>
-              <Field label="The list — one per line" htmlFor="board-offers">
-                <Textarea id="board-offers" rows={5} value={draft.offers} onChange={(e) => set('offers', e.target.value)} />
-              </Field>
-              {text('offersSign', 'Signed off with')}
+              <p className="text-sm font-medium">The board itself</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {text('boardTitle', 'Top left corner', 'The Gol-Razhkbur noticeboard')}
+                {text('where', 'Top right corner', 'Halted Stream Camp · North of Whiterun')}
+              </div>
+              <PicturePick
+                label="The scene behind the board" url={draft.backdrop} busy={upload.busy}
+                onFile={(f) => void upload.run(f, (url) => set('backdrop', url), true)}
+                onClear={() => set('backdrop', '')}
+                shelf={db.backgrounds} onPick={(url) => set('backdrop', url)}
+              />
             </CardContent>
           </Card>
 
           <Card>
             <CardContent className="space-y-3 p-4">
-              <p className="text-sm font-medium">Pictures</p>
-              <PicturePick
-                label="Pinned beside the poster" url={draft.picture} busy={busy === 'picture'}
-                onFile={(f) => void upload('picture', f)} onClear={() => set('picture', '')}
-              />
-              {draft.picture && (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {text('pictureCaption', 'Caption')}
-                  {text('pictureNote', 'Small print under it')}
-                </div>
-              )}
-              <PicturePick
-                label="The scene behind the board" url={draft.backdrop} busy={busy === 'backdrop'}
-                onFile={(f) => void upload('backdrop', f)} onClear={() => set('backdrop', '')}
-              />
-              {db.backgrounds.length > 0 && (
-                <div className="space-y-1.5">
-                  <p className="text-xs text-muted-foreground">Or use one of the poster backgrounds</p>
-                  <div className="flex flex-wrap gap-2">
-                    {db.backgrounds.map((b) => (
-                      <button
-                        key={b.id} type="button" onClick={() => set('backdrop', b.url)}
-                        className={cn(
-                          'h-14 w-24 overflow-hidden rounded-md border-2 transition-colors',
-                          draft.backdrop === b.url ? 'border-primary' : 'border-transparent hover:border-border',
-                        )}
-                        aria-label={`Use ${b.name || 'this background'} behind the board`}
-                      >
-                        <img src={b.url} alt="" className="size-full object-cover" loading="lazy" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <p className="text-sm font-medium">The price-list tag</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {text('tagSmall', 'Over the title', 'Gol-Razhkbur')}
+                {text('tagTitle', 'On the tag', 'Price list')}
+              </div>
+              {text('tagHint', 'Under the title', 'Untie & peruse our wares')}
+              <div className="grid gap-3 sm:grid-cols-2">
+                {text('listTitle', 'Over the opened list', 'Price list')}
+                {text('listFoot', 'Under the opened list', 'Prices in septims…')}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="space-y-3 p-4">
+              <p className="text-sm font-medium">The clan entrance</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {text('doorSmall', 'Over it', 'Of the clan?')}
+                {text('doorTitle', 'On the plaque', 'Clan entrance')}
+              </div>
+              <Field label="Inside, over the password" htmlFor="board-doorText">
+                <Textarea id="board-doorText" rows={2} value={draft.doorText} onChange={(e) => set('doorText', e.target.value)} />
+              </Field>
             </CardContent>
           </Card>
         </div>
@@ -581,28 +782,53 @@ function BoardEditor({ db, update, cfg }: {
   );
 }
 
-function PicturePick({ label, url, busy, onFile, onClear }: {
-  label: string; url: string; busy: boolean; onFile: (f: File) => void; onClear: () => void;
+function PicturePick({ label, url, busy, onFile, onClear, shelf = [], onPick }: {
+  label: string;
+  url: string;
+  busy: boolean;
+  onFile: (f: File) => void;
+  onClear: () => void;
+  /** Pictures already uploaded, to choose from instead of uploading again. */
+  shelf?: PosterBackground[];
+  onPick?: (url: string) => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex h-14 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
-        {url ? <img src={url} alt="" className="size-full object-cover" /> : <ImageUp className="size-4 text-muted-foreground" />}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium">{label}</p>
-        <div className="mt-1 flex gap-1">
-          <Button type="button" size="xs" variant="outline" disabled={busy} onClick={() => ref.current?.click()}>
-            {busy ? 'Uploading…' : url ? 'Replace' : 'Upload'}
-          </Button>
-          {url && <Button type="button" size="xs" variant="ghost" onClick={onClear}>Remove</Button>}
+    <div className="space-y-2">
+      <div className="flex items-center gap-3">
+        <div className="flex h-14 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
+          {url ? <img src={url} alt="" className="size-full object-cover" /> : <ImageUp className="size-4 text-muted-foreground" />}
         </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium">{label}</p>
+          <div className="mt-1 flex gap-1">
+            <Button type="button" size="xs" variant="outline" disabled={busy} onClick={() => ref.current?.click()}>
+              {busy ? 'Uploading…' : url ? 'Replace' : 'Upload'}
+            </Button>
+            {url && <Button type="button" size="xs" variant="ghost" onClick={onClear}>Remove</Button>}
+          </div>
+        </div>
+        <input
+          ref={ref} type="file" accept="image/*" className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }}
+        />
       </div>
-      <input
-        ref={ref} type="file" accept="image/*" className="hidden"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }}
-      />
+      {onPick && shelf.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {shelf.map((b) => (
+            <button
+              key={b.id} type="button" onClick={() => onPick(b.url)}
+              className={cn(
+                'h-10 w-16 overflow-hidden rounded border-2 transition-colors',
+                url === b.url ? 'border-primary' : 'border-transparent hover:border-border',
+              )}
+              aria-label={`Use ${b.name || 'this picture'}`}
+            >
+              <img src={b.url} alt="" className="size-full object-cover" loading="lazy" />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

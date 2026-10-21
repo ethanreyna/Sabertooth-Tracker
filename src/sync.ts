@@ -1,7 +1,7 @@
-import { DEFAULT_GUILD_CUT_PCT, SKILL_TIERS } from './types';
+import { DEFAULT_GUILD_CUT_PCT, DEFAULT_HIDDEN_SECTIONS, SKILL_TIERS } from './types';
 import { coordOrEmpty, httpUrlOrEmpty } from './lib/maps';
-import { DEFAULT_BOARD } from './data';
-import type { AccessRole, Barrel, CatalogueItem, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, EnchantmentRecord, Job, ItemRecord, LedgerEntry, BankItem, Member, Noticeboard, MemberEntry, Price, Project, ProjectContribution, ProjectRequirement, ProjectStage, PosterBackground, Role, Sale, SaleLine, SavedPoster, SkillEntry, Spot, Suggestion, SyncCfg } from './types';
+import { defaultBoard } from './data';
+import type { AccessRole, Barrel, CatalogueItem, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, EnchantmentRecord, Job, ItemRecord, LedgerEntry, BankItem, Member, Notice, Noticeboard, MemberEntry, Price, Project, ProjectContribution, ProjectRequirement, ProjectStage, PosterBackground, Role, Sale, SaleLine, SavedPoster, SkillEntry, Spot, Suggestion, SyncCfg } from './types';
 
 /**
  * A picture this app will actually load: one of our own uploads, or a plain
@@ -297,25 +297,65 @@ const s = (v: unknown, fallback = '') => (typeof v === 'string' ? v : fallback);
 const n = (v: unknown, fallback = 0) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 
+const BOARD_TEXT = [
+  'boardTitle', 'where', 'motto', 'name', 'tagline', 'welcome', 'signedBy', 'signedAs', 'posterFoot',
+  'tagSmall', 'tagTitle', 'tagHint', 'listTitle', 'listFoot', 'doorSmall', 'doorTitle', 'doorText',
+] as const;
+
+function normalizeNotice(raw: unknown): Notice {
+  const x = (raw || {}) as Record<string, unknown>;
+  return {
+    id: s(x.id) || Math.random().toString(36).slice(2, 10),
+    label: s(x.label), heading: s(x.heading),
+    picture: imageUrlOrEmpty(s(x.picture)), caption: s(x.caption),
+    body: s(x.body),
+    list: arr(x.list).map((l) => s(l).trim()).filter(Boolean),
+    numbered: x.numbered !== false,
+    sign: s(x.sign),
+    paper: x.paper === 'plain' ? 'plain' : 'torn',
+    hidden: x.hidden === true,
+  };
+}
+
 /**
- * The noticeboard's words. A board saved before the noticeboard existed gets
- * the starting text; a field a member has since cleared stays cleared, since
- * blank is how they take something down.
+ * The first noticeboard had one pinned picture and one trade note as fixed
+ * fields. A board saved then comes forward as those two notices, so nothing
+ * anyone wrote on it is lost.
+ */
+function legacyNotices(o: Record<string, unknown>): Notice[] {
+  const out: Notice[] = [];
+  const picture = imageUrlOrEmpty(s(o.picture));
+  if (picture) {
+    out.push(normalizeNotice({
+      id: 'picture', picture, caption: s(o.pictureCaption), body: s(o.pictureNote), paper: 'plain',
+    }));
+  }
+  const offers = arr(o.offers).map((l) => s(l).trim()).filter(Boolean);
+  if (s(o.offersHeading) || s(o.offersIntro) || offers.length || s(o.offersSign)) {
+    out.push(normalizeNotice({
+      id: 'trade', label: 'From the forge-table', heading: s(o.offersHeading), body: s(o.offersIntro),
+      list: offers, numbered: true, sign: s(o.offersSign), paper: 'torn',
+    }));
+  }
+  return out;
+}
+
+/**
+ * The noticeboard's words. A board saved before a field existed gets that
+ * field's starting text; a field a member has since cleared stays cleared,
+ * since blank is how they take something down.
  */
 export function normalizeBoard(raw: unknown): Noticeboard {
-  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-  const text = (key: keyof Noticeboard) => (key in o ? s(o[key]) : s(DEFAULT_BOARD[key]));
-  return {
-    name: text('name'), motto: text('motto'), tagline: text('tagline'), welcome: text('welcome'),
-    signedBy: text('signedBy'), signedAs: text('signedAs'), where: text('where'),
-    picture: imageUrlOrEmpty(text('picture')),
-    pictureCaption: text('pictureCaption'), pictureNote: text('pictureNote'),
-    backdrop: imageUrlOrEmpty(text('backdrop')),
-    offersHeading: text('offersHeading'), offersIntro: text('offersIntro'),
-    offers: ('offers' in o ? arr(o.offers) : DEFAULT_BOARD.offers)
-      .map((x) => s(x).trim()).filter(Boolean),
-    offersSign: text('offersSign'),
-  };
+  if (!raw || typeof raw !== 'object') return defaultBoard();
+  const o = raw as Record<string, unknown>;
+  const out = defaultBoard();
+  for (const key of BOARD_TEXT) if (key in o) out[key] = s(o[key]);
+  // The first version wrote no boardTitle and built it from the name.
+  if (!('boardTitle' in o) && 'name' in o) out.boardTitle = s(o.name) ? `The ${s(o.name)} noticeboard` : '';
+  if ('showMark' in o) out.showMark = o.showMark !== false;
+  out.backdrop = imageUrlOrEmpty(s(o.backdrop));
+  out.notices = 'notices' in o ? arr(o.notices).map(normalizeNotice) : legacyNotices(o);
+  return out;
 }
 
 export function normalizeCatalogue(raw: unknown): CatalogueItem[] {
@@ -384,6 +424,10 @@ export function normalizeDb(raw: unknown): DB {
       guildCutPct: st.guildCutPct === undefined || st.guildCutPct === null
         ? DEFAULT_GUILD_CUT_PCT
         : Math.min(100, Math.max(0, n(st.guildCutPct, DEFAULT_GUILD_CUT_PCT))),
+      // Saved before the setting existed: start with the guild's chosen few off.
+      hiddenSections: Array.isArray(st.hiddenSections)
+        ? st.hiddenSections.filter((x): x is string => typeof x === 'string')
+        : [...DEFAULT_HIDDEN_SECTIONS],
     },
     members: arr(o.members).map((m): Member => {
       const x = (m || {}) as Record<string, unknown>;

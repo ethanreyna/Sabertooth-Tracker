@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { ClanMark } from '@/components/clan-mark';
 import { Input } from '@/components/ui/input';
 import { Noticeboard } from '@/views/noticeboard';
-import { Catalogue } from '@/views/catalogue';
-import type { CatalogueTab } from '@/views/catalogue';
+import { BoardSection } from '@/views/board-section';
+import type { BoardTab } from '@/views/board-section';
 import { Modals } from '@/components/modals';
 import type { ModalKind } from '@/components/modals';
 import { Dashboard } from '@/views/dashboard';
@@ -46,7 +46,7 @@ import {
 import { cn } from '@/lib/utils';
 import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
-type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'enchants' | 'projects' | 'recipes' | 'skills' | 'poster' | 'catalogue' | 'settings' | 'suggestions' | 'suggest';
+type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'enchants' | 'projects' | 'recipes' | 'skills' | 'poster' | 'noticeboard' | 'settings' | 'suggestions' | 'suggest';
 
 /** What a read-only guest is allowed to see. `ledger` is the market price list,
  *  which comes from the public sheet; `bank` (the guild's septims) stays hidden,
@@ -65,7 +65,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'dungeons', label: 'Dungeons', icon: <Skull /> },
   { id: 'recipes', label: 'Recipes', icon: <Hammer /> },
   { id: 'bank', label: 'Bank', icon: <Coins /> },
-  { id: 'catalogue', label: 'Catalogue', icon: <Store /> },
+  { id: 'noticeboard', label: 'Noticeboard', icon: <Store /> },
   { id: 'skills', label: 'Skills', icon: <GraduationCap /> },
   { id: 'poster', label: 'Poster', icon: <ScrollText /> },
   { id: 'jobs', label: 'Jobs', icon: <Briefcase /> },
@@ -84,7 +84,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
 const TITLES: Record<View, string> = {
   dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', map: 'Map',
   bank: 'Bank', ledger: 'Ledger', items: 'Database', enchants: 'Enchanting waitlist',
-  projects: 'Projects', recipes: 'Recipes', skills: 'Skills', poster: 'Poster', catalogue: 'Catalogue',
+  projects: 'Projects', recipes: 'Recipes', skills: 'Skills', poster: 'Poster', noticeboard: 'Noticeboard',
   settings: 'Settings', suggestions: 'Guest suggestions', suggest: 'Suggest a change',
 };
 
@@ -119,7 +119,11 @@ const DATABASE_ACTIONS: Record<DatabaseTab, Action[]> = {
 const SETTINGS_ACTIONS: Record<SettingsTab, Action[]> = {
   roster: [{ label: 'Add member', modal: 'member' }],
   roles: [{ label: 'New role', modal: 'role' }],
+  sidebar: [],
 };
+
+/** Settings can't be switched off: it is where you switch things back on. */
+const ALWAYS_SHOWN: View[] = ['settings'];
 
 export default function App() {
   const [view, setView] = useState<View>('dash');
@@ -138,7 +142,7 @@ export default function App() {
   const [dbTab, setDbTab] = useState<DatabaseTab>('items');
   const [dungeonsTab, setDungeonsTab] = useState<DungeonsTab>('database');
   const [skillsTab, setSkillsTab] = useState<SkillsTab>('tracker');
-  const [catalogueTab, setCatalogueTab] = useState<CatalogueTab>('list');
+  const [boardTab, setBoardTab] = useState<BoardTab>('notices');
   // A member looking at the public noticeboard from inside the tracker.
   const [showBoard, setShowBoard] = useState(false);
   // A job or storage record read off a pasted board post, waiting to be
@@ -388,9 +392,17 @@ export default function App() {
   const readOnly = access !== 'member';
   // 'suggest' is the guest's write path and 'suggestions' the members' inbox
   // for it, so each side sees exactly one of the pair.
-  const nav = readOnly
+  const hiddenSections = new Set(db.settings.hiddenSections);
+  const shown = (id: View) => ALWAYS_SHOWN.includes(id) || !hiddenSections.has(id);
+  const nav = (readOnly
     ? NAV.filter((n) => GUEST_VIEWS.includes(n.id))
-    : NAV.filter((n) => n.id !== 'suggest');
+    : NAV.filter((n) => n.id !== 'suggest')
+  ).filter((n) => shown(n.id));
+  // The page in view was just switched off: land on the first one still shown.
+  // (Setting state while rendering is React's own pattern for this: it re-renders
+  // straight away, before anything is drawn.)
+  const landing: View = nav.some((n) => n.id === view) || view === 'enchants' ? view : (nav[0]?.id ?? 'settings');
+  if (landing !== view) setView(landing);
   const actions = readOnly
     ? undefined
     : view === 'settings' ? SETTINGS_ACTIONS[settingsTab]
@@ -476,7 +488,7 @@ export default function App() {
                 className="h-8 w-56 max-sm:w-32"
               />
             )}
-            {view === 'catalogue' && (
+            {view === 'noticeboard' && (
               <Button size="sm" variant="outline" onClick={() => setShowBoard(true)}>
                 <Signpost />View the noticeboard
               </Button>
@@ -615,8 +627,8 @@ export default function App() {
             />
           )}
           {view === 'poster' && <PosterMaker db={db} update={update} cfg={cfg} />}
-          {view === 'catalogue' && !readOnly && (
-            <Catalogue db={db} update={update} cfg={cfg} tab={catalogueTab} onTabChange={setCatalogueTab} />
+          {view === 'noticeboard' && !readOnly && (
+            <BoardSection db={db} update={update} cfg={cfg} tab={boardTab} onTabChange={setBoardTab} />
           )}
           {view === 'recipes' && <Recipes />}
           {view === 'settings' && (
@@ -624,6 +636,7 @@ export default function App() {
               db={db} update={update} readOnly={readOnly}
               tab={settingsTab} onTabChange={setSettingsTab}
               onEditRole={(id) => { setEditRoleId(id); setModal('role'); }}
+              sections={NAV.filter((n) => n.id !== 'suggest' && !ALWAYS_SHOWN.includes(n.id))}
             />
           )}
         </div>

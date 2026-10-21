@@ -3,8 +3,8 @@ import type { FormEvent, ReactNode } from 'react';
 import { AuthError, fetchBoard, loadBoard } from '@/sync';
 import type { PublicBoard } from '@/sync';
 import { ClanMark } from '@/components/clan-mark';
-import { DEFAULT_BOARD } from '@/data';
-import type { CatalogueItem, Noticeboard as Board } from '@/types';
+import { defaultBoard } from '@/data';
+import type { CatalogueItem, Notice, Noticeboard as Board } from '@/types';
 import './noticeboard.css';
 
 /** How often an open board checks for a changed price list. */
@@ -55,6 +55,8 @@ export function Noticeboard({ live, onEnter, onGuest, onBack, notice }: {
   }, []);
 
   const visible = useMemo(() => catalogue.filter((c) => !c.hidden), [catalogue]);
+  const notices = board.notices.filter((n) => !n.hidden && !noticeIsEmpty(n));
+  const { left, right } = balanceColumns(board, notices);
 
   return (
     <div className="nb-scene" style={board.backdrop ? { ['--nb-backdrop' as string]: `url("${board.backdrop}")` } : undefined}>
@@ -65,18 +67,24 @@ export function Noticeboard({ live, onEnter, onGuest, onBack, notice }: {
           <span className="nb-rivet nb-rivet-bl" aria-hidden />
           <span className="nb-rivet nb-rivet-br" aria-hidden />
 
-          <header className="nb-boardhead">
-            <span>{board.name ? `The ${board.name} noticeboard` : 'The clan noticeboard'}</span>
-            {board.where && <span>{board.where}</span>}
-          </header>
+          {(board.boardTitle || board.where) && (
+            <header className="nb-boardhead">
+              <span>{board.boardTitle}</span>
+              {board.where && <span>{board.where}</span>}
+            </header>
+          )}
 
+          {/* Two columns on a wide screen. On a phone the columns dissolve
+              and `order` puts the poster first, the price tag second, and
+              the notices after in the order the clan set them. */}
           <div className="nb-grid">
-            <MainPoster board={board} />
-
-            <div className="nb-side">
+            <div className="nb-col">
+              <MainPoster board={board} />
+              {left.map((n) => <NoticeSheet key={n.id} notice={n} tilt={notices.indexOf(n)} />)}
+            </div>
+            <div className="nb-col nb-side">
               <PriceTag board={board} count={visible.length} onOpen={() => openList(true)} />
-              {board.picture && <PinnedPicture board={board} />}
-              <OffersNote board={board} />
+              {right.map((n) => <NoticeSheet key={n.id} notice={n} tilt={notices.indexOf(n)} />)}
             </div>
           </div>
 
@@ -88,8 +96,8 @@ export function Noticeboard({ live, onEnter, onGuest, onBack, notice }: {
               </button>
             ) : (
               <button type="button" className="nb-plaque" onClick={() => openDoor(true)}>
-                <span className="nb-plaque-small">Of the clan?</span>
-                <span className="nb-plaque-big">Clan entrance</span>
+                {board.doorSmall && <span className="nb-plaque-small">{board.doorSmall}</span>}
+                <span className="nb-plaque-big">{board.doorTitle || 'Clan entrance'}</span>
               </button>
             )}
           </footer>
@@ -120,7 +128,7 @@ function writeHash(h: string) {
  *  re-read while the tab is in view. */
 function usePublicBoard(enabled: boolean): PublicBoard {
   const [data, setData] = useState<PublicBoard>(() => loadBoard() ?? {
-    board: { ...DEFAULT_BOARD, offers: [...DEFAULT_BOARD.offers] },
+    board: defaultBoard(),
     catalogue: [],
   });
 
@@ -152,12 +160,12 @@ const paragraphs = (text: string) => text.split(/\n\s*\n/).map((p) => p.trim()).
 
 function MainPoster({ board }: { board: Board }) {
   return (
-    <article className="nb-paper nb-poster">
+    <article className="nb-paper nb-poster" style={{ order: 0 }}>
       <span className="nb-nail nb-nail-l" aria-hidden />
       <span className="nb-nail nb-nail-r" aria-hidden />
       <div className="nb-poster-frame">
         {board.motto && <p className="nb-smallcaps nb-motto">{board.motto}</p>}
-        <Emblem />
+        {board.showMark && <Emblem />}
         {board.name && <h1 className="nb-name">{board.name}</h1>}
         {board.tagline && <p className="nb-tagline">{board.tagline}</p>}
         <Divider />
@@ -166,14 +174,11 @@ function MainPoster({ board }: { board: Board }) {
         </div>
         {(board.signedBy || board.signedAs) && (
           <div className="nb-sign">
-            <div>
-              {board.signedBy && <p className="nb-signature">{board.signedBy}</p>}
-              {board.signedAs && <p className="nb-smallcaps nb-signedas">{board.signedAs}</p>}
-            </div>
-            <WaxSeal />
+            {board.signedBy && <p className="nb-signature">{board.signedBy}</p>}
+            {board.signedAs && <p className="nb-smallcaps nb-signedas">{board.signedAs}</p>}
           </div>
         )}
-        <p className="nb-smallcaps nb-poster-foot">Forged in fire <span aria-hidden>✦</span> Paid in septims</p>
+        {board.posterFoot && <p className="nb-smallcaps nb-poster-foot">{board.posterFoot}</p>}
       </div>
     </article>
   );
@@ -181,56 +186,85 @@ function MainPoster({ board }: { board: Board }) {
 
 function PriceTag({ board, count, onOpen }: { board: Board; count: number; onOpen: () => void }) {
   return (
-    <button type="button" className="nb-tag" onClick={onOpen} aria-haspopup="dialog">
+    <button type="button" className="nb-tag" onClick={onOpen} aria-haspopup="dialog" style={{ order: 1 }}>
       <span className="nb-tag-rod" aria-hidden />
       <span className="nb-tag-cord" aria-hidden />
       <span className="nb-tag-card">
-        {board.name && <span className="nb-smallcaps nb-tag-small">{board.name}</span>}
-        <span className="nb-tag-big">Price list</span>
+        {board.tagSmall && <span className="nb-smallcaps nb-tag-small">{board.tagSmall}</span>}
+        <span className="nb-tag-big">{board.tagTitle || 'Price list'}</span>
         <span className="nb-tag-rule" aria-hidden />
         <span className="nb-tag-hint">
-          {count > 0 ? `Untie & peruse our wares · ${count}` : 'Untie & peruse our wares'}
+          {[board.tagHint, count > 0 ? String(count) : ''].filter(Boolean).join(' · ')}
         </span>
       </span>
     </button>
   );
 }
 
-function PinnedPicture({ board }: { board: Board }) {
-  return (
-    <figure className="nb-paper nb-picture">
-      <span className="nb-nail nb-nail-c" aria-hidden />
-      <img src={board.picture} alt={board.pictureCaption || 'A picture pinned to the board'} loading="lazy" />
-      {(board.pictureCaption || board.pictureNote) && (
-        <figcaption>
-          {board.pictureCaption && <span className="nb-picture-caption">{board.pictureCaption}</span>}
-          {board.pictureNote && <span className="nb-picture-note">{board.pictureNote}</span>}
-        </figcaption>
-      )}
-    </figure>
-  );
+const noticeIsEmpty = (n: Notice) =>
+  !n.label && !n.heading && !n.picture && !n.caption && !n.body.trim() && n.list.length === 0 && !n.sign;
+
+/**
+ * Roughly how tall a notice will stand, in pixels at desktop width. Only good
+ * enough to choose a column by — the board can't measure what it hasn't drawn.
+ */
+const lines = (text: string, perLine: number) =>
+  text.split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / perLine)), 0);
+function noticeHeight(n: Notice): number {
+  return 90
+    + (n.picture ? 320 : 0) + (n.caption ? 36 : 0)
+    + (n.label ? 24 : 0) + (n.heading ? lines(n.heading, 26) * 38 : 0)
+    + (n.body.trim() ? lines(n.body.trim(), 42) * 27 : 0)
+    + n.list.length * 46 + (n.sign ? 44 : 0);
 }
 
-function OffersNote({ board }: { board: Board }) {
-  if (!board.offersHeading && !board.offersIntro && board.offers.length === 0) return null;
+/** Each notice goes to whichever column is shorter so far, keeping the two
+ *  roughly level instead of leaving a gap under the poster. */
+function balanceColumns(board: Board, notices: Notice[]): { left: Notice[]; right: Notice[] } {
+  let leftH = 260 + (board.showMark ? 80 : 0) + lines(board.welcome, 48) * 30 + (board.signedBy || board.signedAs ? 90 : 0);
+  let rightH = 220; // the hanging price tag
+  const left: Notice[] = [];
+  const right: Notice[] = [];
+  for (const n of notices) {
+    const h = noticeHeight(n) + 30;
+    if (rightH <= leftH) { right.push(n); rightH += h; } else { left.push(n); leftH += h; }
+  }
+  return { left, right };
+}
+
+/** Small turns either way, so a row of notices looks pinned up by hand. */
+const TILTS = [0.6, -0.9, 1.3, -0.5, 0.9, -1.2];
+
+/** One notice: picture, words and list, in that order, each only if given. */
+function NoticeSheet({ notice: n, tilt }: { notice: Notice; tilt: number }) {
+  const torn = n.paper === 'torn';
   return (
     // The shadow sits on a wrapper: the torn edge is a clip-path, and a clip
     // takes the paper's own shadow off with everything else outside it.
-    <div className="nb-shadow">
-    <section className="nb-paper nb-note">
-      <span className="nb-nail nb-nail-c" aria-hidden />
-      <p className="nb-smallcaps nb-note-small">From the forge-table</p>
-      {board.offersHeading && <h2 className="nb-note-heading">{board.offersHeading}</h2>}
-      {board.offersIntro && <p className="nb-note-intro">{board.offersIntro}</p>}
-      {board.offers.length > 0 && (
-        <ol className="nb-offers">
-          {board.offers.map((o, i) => (
-            <li key={i}><span className="nb-offer-n">{String(i + 1).padStart(2, '0')}</span>{o}</li>
-          ))}
-        </ol>
-      )}
-      {board.offersSign && <p className="nb-note-sign">{board.offersSign}</p>}
-    </section>
+    <div className="nb-shadow" style={{ transform: `rotate(${TILTS[tilt % TILTS.length]}deg)`, order: 10 + tilt }}>
+      <section className={`nb-paper nb-note ${torn ? 'nb-note-torn' : 'nb-note-plain'}`}>
+        <span className="nb-nail nb-nail-c" aria-hidden />
+        {n.picture && (
+          <figure className="nb-note-figure">
+            <img src={n.picture} alt={n.caption || n.heading || 'A picture pinned to the board'} loading="lazy" />
+            {n.caption && <figcaption className="nb-picture-caption">{n.caption}</figcaption>}
+          </figure>
+        )}
+        {n.label && <p className="nb-smallcaps nb-note-small">{n.label}</p>}
+        {n.heading && <h2 className="nb-note-heading">{n.heading}</h2>}
+        {paragraphs(n.body).map((p, i) => <p key={i} className="nb-note-intro">{p}</p>)}
+        {n.list.length > 0 && (
+          <ol className={`nb-offers ${n.numbered ? '' : 'nb-offers-plain'}`}>
+            {n.list.map((o, i) => (
+              <li key={i}>
+                {n.numbered && <span className="nb-offer-n">{String(i + 1).padStart(2, '0')}</span>}
+                {o}
+              </li>
+            ))}
+          </ol>
+        )}
+        {n.sign && <p className="nb-note-sign">{n.sign}</p>}
+      </section>
     </div>
   );
 }
@@ -262,8 +296,8 @@ function PriceList({ board, items, onClose }: { board: Board; items: CatalogueIt
         <span className="nb-scroll-rod" aria-hidden />
         <div className="nb-paper nb-scroll-sheet">
           <button type="button" className="nb-close" onClick={onClose} aria-label="Roll the list back up">×</button>
-          {board.name && <p className="nb-smallcaps nb-list-small">{board.name}</p>}
-          <h2 className="nb-list-title">Price list</h2>
+          {board.tagSmall && <p className="nb-smallcaps nb-list-small">{board.tagSmall}</p>}
+          <h2 className="nb-list-title">{board.listTitle || 'Price list'}</h2>
           <Divider />
 
           {items.length > 0 && (
@@ -301,10 +335,7 @@ function PriceList({ board, items, onClose }: { board: Board; items: CatalogueIt
             ))
           )}
 
-          <p className="nb-list-foot">
-            Prices in septims and subject to the forge.
-            {board.where ? ` Find us at ${board.where}.` : ''}
-          </p>
+          {board.listFoot && <p className="nb-list-foot">{board.listFoot}</p>}
         </div>
         <span className="nb-scroll-rod" aria-hidden />
       </div>
@@ -359,8 +390,8 @@ function Entrance({ board, notice, onEnter, onGuest, onClose }: {
         <span className="nb-nail nb-nail-c" aria-hidden />
         <button type="button" className="nb-close" onClick={onClose} aria-label="Close">×</button>
         <p className="nb-smallcaps nb-list-small">{board.name || 'Clan Orgrimm'}</p>
-        <h2 className="nb-door-title">Clan entrance</h2>
-        <p className="nb-door-text">For the clan only. Speak the word and the war room opens: the ledger, the map, the stores and the rest.</p>
+        <h2 className="nb-door-title">{board.doorTitle || 'Clan entrance'}</h2>
+        {board.doorText && <p className="nb-door-text">{board.doorText}</p>}
 
         {err && <p className="nb-door-err" role="alert">{err}</p>}
 
@@ -434,35 +465,5 @@ function Emblem() {
       <ClanMark />
       <span className="nb-emblem-rule" />
     </div>
-  );
-}
-
-/** A blob of red wax, pressed with a tusked jaw. */
-function WaxSeal() {
-  return (
-    <svg className="nb-seal" viewBox="0 0 100 100" width="96" height="96" aria-hidden>
-      <defs>
-        <radialGradient id="nb-wax" cx="40%" cy="35%" r="70%">
-          <stop offset="0%" stopColor="#b3262a" />
-          <stop offset="55%" stopColor="#7d1418" />
-          <stop offset="100%" stopColor="#4a0a0d" />
-        </radialGradient>
-      </defs>
-      <path
-        fill="url(#nb-wax)"
-        d="M50 3 C58 3 61 8 68 8 C76 9 79 15 85 19 C92 25 90 31 95 38 C99 46 95 52 97 59 C98 68 91 71 88 78 C84 86 77 86 70 91 C62 96 56 93 49 97 C41 99 36 93 29 92 C21 90 18 84 12 79 C6 73 8 66 4 59 C1 51 5 45 4 38 C4 29 11 26 15 19 C20 12 27 13 33 8 C39 4 44 3 50 3 Z"
-      />
-      <circle cx="50" cy="50" r="31" fill="none" stroke="#4a0a0d" strokeOpacity="0.55" strokeWidth="2.5" />
-      <circle cx="50" cy="50" r="27" fill="none" stroke="#d65a5a" strokeOpacity="0.25" strokeWidth="1" />
-      <g fill="none" stroke="#f0a59c" strokeOpacity="0.75" strokeLinecap="round">
-        {/* an orc's jaw pressed into the wax: the brow, the jaw, two tusks */}
-        <path d="M35 40 Q50 33 65 40" strokeWidth="3" />
-        <path d="M34 61 Q50 71 66 61" strokeWidth="3" />
-        <path d="M40 63 C36 55 37 47 43 42" strokeWidth="4.2" />
-        <path d="M60 63 C64 55 63 47 57 42" strokeWidth="4.2" />
-        <circle cx="44" cy="50" r="1.8" fill="#f0a59c" stroke="none" />
-        <circle cx="56" cy="50" r="1.8" fill="#f0a59c" stroke="none" />
-      </g>
-    </svg>
   );
 }

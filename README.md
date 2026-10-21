@@ -9,20 +9,29 @@ go in by the clan entrance at the foot of the board, with the guild password.
 
 ## The noticeboard
 
-- What it says lives in the guild database, under **Catalogue** in the tracker:
-  the *Price list* tab is the list the public reads, the *Noticeboard* tab is the
-  poster's words, the trade note and the pictures. A blank field comes off the
-  board.
+- Every word on it lives in the guild database, under **Noticeboard** in the
+  tracker. *Notices* are the sheets pinned up — each any mix of a picture, a
+  heading, words, a list and a sign-off, on clean or torn paper, and they
+  share themselves between the two columns so neither runs long. *Board* is
+  everything else: the poster, the corners, the price-list tag, the entrance.
+  *Price list* is the list the public opens. A blank field comes off the board.
 - Strangers read it from `GET /api/board`, which needs no password and carries
   only the board and the visible price list — nothing else of the guild's. An
   open board re-reads it every 15 seconds, so a price changed in the tracker is
   on every open board within about that.
 - A price list can be pasted in the poster template's own syntax, so a poster
   already written for the spell tomes becomes catalogue lines without retyping.
+- A board saved by the first version (one picture and one trade note as
+  fixed fields) is read forward into two notices, so nothing written on it
+  is lost.
 - The board is a scene, not a page of the app: it has its own palette
   (`src/views/noticeboard.css`) and ignores the light/dark switch.
 
 ## The tracker
+
+Which sections the sidebar shows is a guild-wide choice, under Settings →
+Sidebar. Skills, Jobs, Storage and Projects start switched off; switching a
+section off only hides it, and switching it back on brings everything back.
 
 Guild management behind the password: job board with searchable
 Skyrim item collection lists, barrel storage tracking with location screenshots,

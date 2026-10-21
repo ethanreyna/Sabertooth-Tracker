@@ -1,4 +1,4 @@
-import { DEFAULT_GUILD_CUT_PCT } from './types';
+import { DEFAULT_GUILD_CUT_PCT, DEFAULT_HIDDEN_SECTIONS } from './types';
 import type { DB, Noticeboard } from './types';
 
 const d = (days: number) => new Date(Date.now() - days * 864e5).toISOString();
@@ -10,25 +10,45 @@ const f = (days: number) => new Date(Date.now() + days * 864e5).toISOString();
  * placeholder Latin to the first stranger who opens the link.
  */
 export const DEFAULT_BOARD: Noticeboard = {
-  name: 'Gol-Razhkbur',
+  boardTitle: 'The Gol-Razhkbur noticeboard',
+  where: 'Halted Stream Camp · North of Whiterun',
   motto: 'Stronghold of Clan Orgrimm',
+  showMark: true,
+  name: 'Gol-Razhkbur',
   tagline: 'Strong steel. Honest coin.',
   welcome: 'Tomes, steel and the spoils of the deep places, traded by the clan that went and got them.\n\n'
     + 'Send a pigeon, or come to the stronghold and someone will see to you if any of the clan is awake.',
   signedBy: 'Clan Orgrimm',
   signedAs: 'Gol-Razhkbur',
-  where: 'Halted Stream Camp · North of Whiterun',
-  picture: '',
-  pictureCaption: '',
-  pictureNote: '',
+  posterFoot: 'Forged in fire ✦ Paid in septims',
+  tagSmall: 'Gol-Razhkbur',
+  tagTitle: 'Price list',
+  tagHint: 'Untie & peruse our wares',
+  listTitle: 'Price list',
+  listFoot: 'Prices in septims and subject to the forge.',
+  doorSmall: 'Of the clan?',
+  doorTitle: 'Clan entrance',
+  doorText: 'For the clan only. Speak the word and the war room opens: the ledger, the map, the stores and the rest.',
   backdrop: '',
-  offersHeading: 'For blade, book & hearth.',
-  offersIntro: 'What the clan has to trade, when the forge is hot and the shelves are full.',
-  offers: ['Spell tomes', 'Forged weapons & armour', 'Ingots & ore', 'Pelts & hides', 'Commissions — ask at the hall'],
-  offersSign: 'Good steel. A fair price.',
+  notices: [{
+    id: 'trade',
+    label: 'From the forge-table',
+    heading: 'For blade, book & hearth.',
+    picture: '',
+    caption: '',
+    body: 'What the clan has to trade, when the forge is hot and the shelves are full.',
+    list: ['Spell tomes', 'Forged weapons & armour', 'Ingots & ore', 'Pelts & hides', 'Commissions — ask at the hall'],
+    numbered: true,
+    sign: 'Good steel. A fair price.',
+    paper: 'torn',
+    hidden: false,
+  }],
 };
 
-export const emptyDb = (): DB => ({ settings: { guildCutPct: DEFAULT_GUILD_CUT_PCT }, members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [], ledger: [], bankItems: [], suggestions: [], items: [], enchantments: [], enchants: [], projects: [], sales: [], skills: [], posters: [], backgrounds: [], catalogue: [], board: { ...DEFAULT_BOARD, offers: [...DEFAULT_BOARD.offers] } });
+/** A fresh copy, so nothing that edits a board can reach back into the default. */
+export const defaultBoard = (): Noticeboard => JSON.parse(JSON.stringify(DEFAULT_BOARD));
+
+export const emptyDb = (): DB => ({ settings: { guildCutPct: DEFAULT_GUILD_CUT_PCT, hiddenSections: [...DEFAULT_HIDDEN_SECTIONS] }, members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [], ledger: [], bankItems: [], suggestions: [], items: [], enchantments: [], enchants: [], projects: [], sales: [], skills: [], posters: [], backgrounds: [], catalogue: [], board: defaultBoard() });
 
 /** Sensible starting ranks, offered when the roster has no roles yet. The
  *  Initiate -> Saberblooded track mirrors the guild's blooding process. */
@@ -42,7 +62,7 @@ export const STARTER_ROLES = [
 
 /** Not wired into the app — kept for local testing. See emptyDb() for the real default. */
 export const demoDb = (): DB => ({
-  settings: { guildCutPct: DEFAULT_GUILD_CUT_PCT },
+  settings: { guildCutPct: DEFAULT_GUILD_CUT_PCT, hiddenSections: [...DEFAULT_HIDDEN_SECTIONS] },
   members: [
     { id: 'm1', name: 'Zahir Alazar', role: 'Guildmaster', joined: d(120), log: [] },
     { id: 'm2', name: 'Karina', role: 'Quartermaster', joined: d(95), log: [] },
@@ -151,5 +171,5 @@ export const demoDb = (): DB => ({
   posters: [],
   backgrounds: [],
   catalogue: [],
-  board: { ...DEFAULT_BOARD, offers: [...DEFAULT_BOARD.offers] },
+  board: defaultBoard(),
 });
