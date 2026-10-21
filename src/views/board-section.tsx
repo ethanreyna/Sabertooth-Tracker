@@ -858,7 +858,7 @@ function BoardEditor({ db, update, cfg }: {
                 {text('where', 'Top right corner', 'Halted Stream Camp · North of Whiterun')}
               </div>
               <PicturePick
-                label="The scene behind the board" url={draft.backdrop} busy={upload.busy}
+                label="The scene behind the board — none chosen shows the stronghold" url={draft.backdrop} busy={upload.busy}
                 onFile={(f) => void upload.run(f, (url) => set('backdrop', url), true)}
                 onClear={() => set('backdrop', '')}
                 shelf={db.backgrounds} onPick={(url) => set('backdrop', url)}
