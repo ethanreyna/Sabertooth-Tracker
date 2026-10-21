@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Boxes, Coins, Construction, FileInput, GraduationCap, Hammer, Inbox, LayoutDashboard, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, ScrollText, Settings, Shield, Skull, Sun, Users, Briefcase,
+  Boxes, Coins, Construction, FileInput, GraduationCap, Hammer, Inbox, LayoutDashboard, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, ScrollText, Settings, Signpost, Skull, Store, Sun, Users, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ClanMark } from '@/components/clan-mark';
 import { Input } from '@/components/ui/input';
-import { Login } from '@/components/login';
+import { Noticeboard } from '@/views/noticeboard';
+import { Catalogue } from '@/views/catalogue';
+import type { CatalogueTab } from '@/views/catalogue';
 import { Modals } from '@/components/modals';
 import type { ModalKind } from '@/components/modals';
 import { Dashboard } from '@/views/dashboard';
@@ -43,7 +46,7 @@ import {
 import { cn } from '@/lib/utils';
 import type { AccessRole, DB, SyncCfg, SyncStatus, Theme } from '@/types';
 
-type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'enchants' | 'projects' | 'recipes' | 'skills' | 'poster' | 'settings' | 'suggestions' | 'suggest';
+type View = 'dash' | 'jobs' | 'storage' | 'dungeons' | 'map' | 'bank' | 'ledger' | 'items' | 'enchants' | 'projects' | 'recipes' | 'skills' | 'poster' | 'catalogue' | 'settings' | 'suggestions' | 'suggest';
 
 /** What a read-only guest is allowed to see. `ledger` is the market price list,
  *  which comes from the public sheet; `bank` (the guild's septims) stays hidden,
@@ -62,6 +65,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: 'dungeons', label: 'Dungeons', icon: <Skull /> },
   { id: 'recipes', label: 'Recipes', icon: <Hammer /> },
   { id: 'bank', label: 'Bank', icon: <Coins /> },
+  { id: 'catalogue', label: 'Catalogue', icon: <Store /> },
   { id: 'skills', label: 'Skills', icon: <GraduationCap /> },
   { id: 'poster', label: 'Poster', icon: <ScrollText /> },
   { id: 'jobs', label: 'Jobs', icon: <Briefcase /> },
@@ -80,7 +84,7 @@ const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
 const TITLES: Record<View, string> = {
   dash: 'Dashboard', jobs: 'Jobs', storage: 'Storage', dungeons: 'Dungeons', map: 'Map',
   bank: 'Bank', ledger: 'Ledger', items: 'Database', enchants: 'Enchanting waitlist',
-  projects: 'Projects', recipes: 'Recipes', skills: 'Skills', poster: 'Poster',
+  projects: 'Projects', recipes: 'Recipes', skills: 'Skills', poster: 'Poster', catalogue: 'Catalogue',
   settings: 'Settings', suggestions: 'Guest suggestions', suggest: 'Suggest a change',
 };
 
@@ -134,6 +138,9 @@ export default function App() {
   const [dbTab, setDbTab] = useState<DatabaseTab>('items');
   const [dungeonsTab, setDungeonsTab] = useState<DungeonsTab>('database');
   const [skillsTab, setSkillsTab] = useState<SkillsTab>('tracker');
+  const [catalogueTab, setCatalogueTab] = useState<CatalogueTab>('list');
+  // A member looking at the public noticeboard from inside the tracker.
+  const [showBoard, setShowBoard] = useState(false);
   // A job or storage record read off a pasted board post, waiting to be
   // reviewed in the normal form. Never saved straight from the importer.
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -328,6 +335,7 @@ export default function App() {
     setModal(null);
     setAccess('member');
     setView('dash');
+    setShowBoard(false);
     setSync('syncing');
   }, []);
 
@@ -354,21 +362,26 @@ export default function App() {
     denied: { dot: 'bg-red-500', text: 'Wrong guild password' },
   };
 
-  // Nothing is usable without the guild password: the tracker is the shared
-  // database, not a local notebook that might sync later.
+  // Signed out, the site is the clan's public noticeboard: what they trade,
+  // what it costs, and the door the clan comes in by. The tracker itself is
+  // the shared database, so nothing of it renders without the password.
   if (!cfg) {
-    return (
-      <Login
-        onLogin={login} onGuest={enterAsGuest} notice={authNotice}
-        theme={theme} toggleTheme={toggleTheme}
-      />
-    );
+    return <Noticeboard onEnter={login} onGuest={enterAsGuest} notice={authNotice} />;
   }
   if (!booted) {
     return (
       <div className="flex min-h-svh items-center justify-center text-sm text-muted-foreground">
         Loading the guild database…
       </div>
+    );
+  }
+
+  if (showBoard) {
+    return (
+      <Noticeboard
+        live={{ board: db.board, catalogue: db.catalogue }}
+        onBack={() => setShowBoard(false)}
+      />
     );
   }
 
@@ -390,12 +403,12 @@ export default function App() {
     <div className="flex h-svh overflow-hidden">
       <aside className="flex w-56 shrink-0 flex-col border-r bg-sidebar max-md:hidden">
         <div className="flex items-center gap-2.5 border-b px-3 py-3.5">
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <Shield className="size-3.5" />
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <ClanMark size={22} />
           </div>
           <div className="min-w-0 leading-tight">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Keizaal</p>
-            <p className="truncate text-xs font-bold tracking-tight">Orgimm Tracker</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Clan Orgrimm</p>
+            <p className="font-display truncate text-[17px] leading-none">Orgrimm Tracker</p>
           </div>
         </div>
 
@@ -428,6 +441,12 @@ export default function App() {
           <span className={cn('size-2 shrink-0 rounded-full', SYNC_UI[sync].dot)} />
           <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{SYNC_UI[sync].text}</span>
           <Button
+            variant="ghost" size="icon-xs" onClick={() => setShowBoard(true)}
+            aria-label="Open the public noticeboard" title="Public noticeboard"
+          >
+            <Signpost />
+          </Button>
+          <Button
             variant="ghost" size="icon-xs" onClick={toggleTheme}
             aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           >
@@ -456,6 +475,11 @@ export default function App() {
                 placeholder="Search jobs" value={q} onChange={(e) => setQ(e.target.value)}
                 className="h-8 w-56 max-sm:w-32"
               />
+            )}
+            {view === 'catalogue' && (
+              <Button size="sm" variant="outline" onClick={() => setShowBoard(true)}>
+                <Signpost />View the noticeboard
+              </Button>
             )}
             {actions?.map((a) => (
               <Button key={a.modal} size="sm" variant={a.variant} onClick={() => setModal(a.modal)}>
@@ -591,6 +615,9 @@ export default function App() {
             />
           )}
           {view === 'poster' && <PosterMaker db={db} update={update} cfg={cfg} />}
+          {view === 'catalogue' && !readOnly && (
+            <Catalogue db={db} update={update} cfg={cfg} tab={catalogueTab} onTabChange={setCatalogueTab} />
+          )}
           {view === 'recipes' && <Recipes />}
           {view === 'settings' && (
             <SettingsView

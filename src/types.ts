@@ -468,6 +468,10 @@ export interface DB {
   skills: SkillEntry[];
   posters: SavedPoster[];
   backgrounds: PosterBackground[];
+  /** The public price list, shown on the noticeboard to anyone. */
+  catalogue: CatalogueItem[];
+  /** The public noticeboard's own words. */
+  board: Noticeboard;
 }
 
 /** One row of the market price list, mirrored from the guild's Google Sheet.
@@ -492,3 +496,47 @@ export interface SyncCfg {
 export type AccessRole = 'member' | 'guest';
 
 export type SyncStatus = 'local' | 'syncing' | 'synced' | 'error' | 'denied';
+
+/** One line of the public price list. */
+export interface CatalogueItem {
+  id: string;
+  /** The heading it is listed under: "Spell Tomes", "Smithing". */
+  section: string;
+  name: string;
+  /** Septims. 0 reads as "ask", for the things priced to the job. */
+  price: number;
+  /** A short qualifier set beside the name: "Adept", "per ten", "to order". */
+  note: string;
+  /** Off the public list without being deleted — sold out, or not this week. */
+  hidden: boolean;
+}
+
+/**
+ * What the public noticeboard says. Every field is the clan's own words; a
+ * blank one simply isn't pinned up, so the board never shows filler.
+ */
+export interface Noticeboard {
+  /** The big name on the main poster. */
+  name: string;
+  /** Small capitals over the name. */
+  motto: string;
+  /** The italic line under it. */
+  tagline: string;
+  /** The poster's body. A blank line starts a new paragraph. */
+  welcome: string;
+  signedBy: string;
+  signedAs: string;
+  /** Where to find the clan, set in the board's top corner. */
+  where: string;
+  /** A picture pinned beside the poster, and the words under it. */
+  picture: string;
+  pictureCaption: string;
+  pictureNote: string;
+  /** The scene behind the board. */
+  backdrop: string;
+  /** The note of what the clan trades in. */
+  offersHeading: string;
+  offersIntro: string;
+  offers: string[];
+  offersSign: string;
+}

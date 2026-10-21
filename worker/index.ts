@@ -1,14 +1,15 @@
 /// <reference types="@cloudflare/workers-types" />
 
-// Orgimm Tracker backend.
+// Orgrimm Tracker backend.
 //
 //   GET  /api/db        -> { db, version }
 //   PUT  /api/db        -> { version }        body: { db, version }   409 on stale version
 //   POST /api/upload    -> { url }            body: raw image bytes
 //   POST /api/vision    -> { text }           body: raw image bytes (members only)
 //   GET  /api/img/:key  -> the image          (public: <img src> can't send headers)
+//   GET  /api/board     -> { board, catalogue } (public: the noticeboard)
 //
-// Everything except /api/img/* requires `Authorization: Bearer <guild password>`.
+// Everything except /api/img/* and /api/board requires `Authorization: Bearer <guild password>`.
 // Static assets are served by the [assets] binding; only /api/* runs this Worker
 // (see run_worker_first in wrangler.toml).
 
@@ -35,7 +36,7 @@ const EMPTY_DB = {
   members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [],
   ledger: [], bankItems: [], suggestions: [], items: [],
   enchantments: [], enchants: [], projects: [], sales: [], skills: [],
-  posters: [], backgrounds: [],
+  posters: [], backgrounds: [], catalogue: [],
 };
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_VISION_BYTES = 4 * 1024 * 1024;
@@ -335,7 +336,7 @@ async function handlePrices(env: Env, url: URL): Promise<Response> {
     try {
       const res = await fetch(src, {
         cf: { cacheTtl: bypass ? 0 : PRICES_TTL_SECONDS, cacheEverything: true },
-        headers: { 'User-Agent': 'orgimm-tracker' },
+        headers: { 'User-Agent': 'orgrimm-tracker' },
       });
       if (!res.ok) return { tab, status: res.status, rows: [] as PriceRow[] };
       return { tab, status: 200, rows: parsePriceSheet(tab, await res.text()) };
@@ -421,6 +422,18 @@ async function handleApi(req: Request, env: Env, url: URL): Promise<Response> {
         'ETag': obj.httpEtag,
       },
     });
+  }
+
+  // The noticeboard is the clan's shop window: anyone who has the link may read
+  // it, and nothing else of the guild's comes with it. Answered before the
+  // password check so a stale credential in the browser can't hide the shop.
+  if (req.method === 'GET' && url.pathname === '/api/board') {
+    await ensureSchema(env);
+    const { db } = await readDoc(env);
+    const doc = (db && typeof db === 'object' ? db : {}) as Record<string, unknown>;
+    const catalogue = (Array.isArray(doc.catalogue) ? doc.catalogue : [])
+      .filter((c) => !(c && typeof c === 'object' && (c as { hidden?: unknown }).hidden === true));
+    return json({ board: doc.board ?? null, catalogue });
   }
 
   const role = authRole(req, env);

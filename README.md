@@ -1,6 +1,30 @@
-# Orgimm Tracker
+# Orgrimm Tracker
 
-Guild management app for the Keizaal Skyrim RP server: job board with searchable
+Clan Orgrimm's site for the Keizaal Skyrim RP server, at
+<https://orgrimm-tracker.elthan.net/>.
+
+The front page is public: a **noticeboard** for the stronghold, Gol-Razhkbur, with
+a price list anyone can open. It is the link to post around the server. Members
+go in by the clan entrance at the foot of the board, with the guild password.
+
+## The noticeboard
+
+- What it says lives in the guild database, under **Catalogue** in the tracker:
+  the *Price list* tab is the list the public reads, the *Noticeboard* tab is the
+  poster's words, the trade note and the pictures. A blank field comes off the
+  board.
+- Strangers read it from `GET /api/board`, which needs no password and carries
+  only the board and the visible price list — nothing else of the guild's. An
+  open board re-reads it every 15 seconds, so a price changed in the tracker is
+  on every open board within about that.
+- A price list can be pasted in the poster template's own syntax, so a poster
+  already written for the spell tomes becomes catalogue lines without retyping.
+- The board is a scene, not a page of the app: it has its own palette
+  (`src/views/noticeboard.css`) and ignores the light/dark switch.
+
+## The tracker
+
+Guild management behind the password: job board with searchable
 Skyrim item collection lists, barrel storage tracking with location screenshots,
 septims ledger, and member roster. Any member with the guild password can edit;
 changes sync live to a shared database.
@@ -198,9 +222,13 @@ does with the messy bits:
 
 ## What the names mean
 
-The app is **Orgimm Tracker** everywhere a person reads it. The infrastructure
-still answers to the old name, deliberately: the Worker (`sabretooth-tracker`),
-its domain, the D1 database (`sabertooth`) and the R2 bucket
+The app is **Orgrimm Tracker** everywhere a person reads it, at
+`orgrimm-tracker.elthan.net`. `sabretooth-tracker.elthan.net` still serves the
+same Worker so old links keep working; drop its `[[routes]]` block in
+`wrangler.toml` to retire it.
+
+The infrastructure still answers to the old name, deliberately: the Worker
+(`sabretooth-tracker`), the D1 database (`sabertooth`) and the R2 bucket
 (`sabertooth-images`) are live identifiers, and renaming them in `wrangler.toml`
 doesn't rename anything at Cloudflare — it points the deploy at something that
 doesn't exist yet, abandoning the guild's data and screenshots behind the old
