@@ -873,7 +873,7 @@ function BoardEditor({ db, update, cfg }: {
                 {text('tagSmall', 'Over the title', 'Gol-Razhkbur')}
                 {text('tagTitle', 'On the tag', 'Price list')}
               </div>
-              {text('tagHint', 'Under the title', 'Untie & peruse our wares')}
+              {text('tagHint', 'Under the title — the item count follows it', 'View Prices and Stock')}
               <div className="grid gap-3 sm:grid-cols-2">
                 {text('listTitle', 'Over the opened list', 'Price list')}
                 {text('listFoot', 'Under the opened list', 'Prices in septims…')}

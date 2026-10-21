@@ -55,6 +55,9 @@ const GUEST_VIEWS: View[] = ['jobs', 'storage', 'dungeons', 'map', 'ledger', 'it
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
+/** Addresses that mean "show the public board". */
+const BOARD_HASH = /^#(board|prices)$/i;
+
 // Ordered by how often the guild actually opens them, not by when they were
 // built: the six the day runs on first, then everything else.
 const NAV: Array<{ id: View; label: string; icon: ReactNode }> = [
@@ -143,7 +146,9 @@ export default function App() {
   const [skillsTab, setSkillsTab] = useState<SkillsTab>('tracker');
   const [boardTab, setBoardTab] = useState<BoardTab>('notices');
   // A member looking at the public noticeboard from inside the tracker.
-  const [showBoard, setShowBoard] = useState(false);
+  // #board (or #prices) in the address opens it, so it can be bookmarked and
+  // the browser's Back button steps between it and the tracker.
+  const [showBoard, setShowBoard] = useState(() => BOARD_HASH.test(window.location.hash));
   // A job or storage record read off a pasted board post, waiting to be
   // reviewed in the normal form. Never saved straight from the importer.
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -178,6 +183,26 @@ export default function App() {
   dbRef.current = db;
 
   useEffect(() => { applyTheme(theme); }, [theme]);
+
+  useEffect(() => {
+    const onNav = () => setShowBoard(BOARD_HASH.test(window.location.hash));
+    window.addEventListener('popstate', onNav);
+    window.addEventListener('hashchange', onNav);
+    return () => {
+      window.removeEventListener('popstate', onNav);
+      window.removeEventListener('hashchange', onNav);
+    };
+  }, []);
+
+  /** Pushed, not replaced, so Back from the board lands back in the tracker. */
+  const openBoard = useCallback(() => {
+    setShowBoard(true);
+    if (!BOARD_HASH.test(window.location.hash)) window.history.pushState(null, '', '#board');
+  }, []);
+  const closeBoard = useCallback(() => {
+    setShowBoard(false);
+    if (window.location.hash) window.history.pushState(null, '', window.location.pathname + window.location.search);
+  }, []);
 
   /**
    * Forget a credential the server refuses, and go back to the login screen.
@@ -319,6 +344,10 @@ export default function App() {
     setBooted(true);
     setSync('synced');
     setAuthNotice('');
+    // Coming in by the entrance always means the tracker, even from a link
+    // that pointed at the price list.
+    setShowBoard(false);
+    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search);
   }, [commit]);
 
   const login = useCallback((password: string) => start({ password, guest: false }), [start]);
@@ -384,7 +413,7 @@ export default function App() {
     return (
       <Noticeboard
         live={{ board: db.board, catalogue: db.catalogue, priceTabs: db.priceTabs }}
-        onBack={() => setShowBoard(false)}
+        onBack={closeBoard}
       />
     );
   }
@@ -423,6 +452,14 @@ export default function App() {
         </div>
 
         <nav className="flex flex-col gap-0.5 p-2">
+          {/* The way back out to the public board, from any page. */}
+          <button
+            type="button" onClick={openBoard}
+            className="mb-1.5 flex items-center gap-2.5 rounded-md border border-sidebar-border px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-foreground [&_svg]:size-4"
+          >
+            <Signpost />
+            <span className="min-w-0 flex-1 truncate text-left">Public noticeboard</span>
+          </button>
           {nav.map((n) => (
             <button
               key={n.id}
@@ -450,12 +487,6 @@ export default function App() {
         <div className="mt-auto flex items-center gap-1.5 border-t px-3 py-2.5">
           <span className={cn('size-2 shrink-0 rounded-full', SYNC_UI[sync].dot)} />
           <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{SYNC_UI[sync].text}</span>
-          <Button
-            variant="ghost" size="icon-xs" onClick={() => setShowBoard(true)}
-            aria-label="Open the public noticeboard" title="Public noticeboard"
-          >
-            <Signpost />
-          </Button>
           <Button
             variant="ghost" size="icon-xs" onClick={toggleTheme}
             aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -487,7 +518,7 @@ export default function App() {
               />
             )}
             {view === 'noticeboard' && (
-              <Button size="sm" variant="outline" onClick={() => setShowBoard(true)}>
+              <Button size="sm" variant="outline" onClick={openBoard}>
                 <Signpost />View the noticeboard
               </Button>
             )}
@@ -501,6 +532,12 @@ export default function App() {
 
         {/* Mobile nav: the sidebar is hidden below md. */}
         <nav className="flex shrink-0 gap-1 overflow-x-auto border-b px-2 py-1.5 md:hidden">
+          <button
+            type="button" onClick={openBoard}
+            className="flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs text-muted-foreground [&_svg]:size-3.5"
+          >
+            <Signpost />Board
+          </button>
           {nav.map((n) => (
             <button
               key={n.id}
