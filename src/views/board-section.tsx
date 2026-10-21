@@ -717,7 +717,7 @@ function BoardEditor({ db, update, cfg }: {
             {text('motto', 'Over the name', 'Stronghold of Clan Orgrimm')}
             <label className="flex items-center gap-2 text-sm">
               <Checkbox checked={draft.showMark} onCheckedChange={(v) => set('showMark', v === true)} />
-              Show the crossed axes and tusks
+              Show the clan banner over the name
             </label>
             {text('name', 'Name', 'Gol-Razhkbur')}
             {text('tagline', 'Under the name', 'Strong steel. Honest coin.')}

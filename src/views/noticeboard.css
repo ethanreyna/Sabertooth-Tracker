@@ -191,6 +191,11 @@
   margin: 18px 0 6px;
   color: #4d331d;
 }
+.nb-banner {
+  width: 150px;
+  height: auto;
+  filter: drop-shadow(0 3px 4px rgba(40, 20, 5, 0.35));
+}
 .nb-emblem-rule {
   width: 70px;
   height: 1px;
@@ -656,6 +661,13 @@
   text-align: center;
   transform: rotate(-0.6deg);
 }
+.nb-door-banner {
+  display: block;
+  width: 110px;
+  height: auto;
+  margin: 0 auto 10px;
+  filter: drop-shadow(0 3px 4px rgba(40, 20, 5, 0.35));
+}
 .nb-door-title {
   margin: 4px 0 10px;
   font-family: var(--nb-display);
@@ -737,6 +749,7 @@
   .nb-poster { padding: 12px; transform: none; }
   .nb-poster-frame { padding: 24px 16px 14px; }
   .nb-emblem-rule { width: 36px; }
+  .nb-banner { width: 120px; }
   .nb-welcome { font-size: 18px; }
   .nb-note { padding: 30px 20px 28px; }
   .nb-note-torn { padding-bottom: 36px; }
