@@ -543,8 +543,15 @@ function PasteDialog({ hasList, into, close, onUse }: {
 
 const blankNotice = (): Notice => ({
   id: uid(), label: '', heading: '', picture: '', caption: '', body: '', list: [],
-  numbered: true, sign: '', paper: 'torn', hidden: false,
+  numbered: true, sign: '', linkUrl: '', linkLabel: '', paper: 'torn', hidden: false,
 });
+
+/** A typed address without its https://, so "harmsjournal.com" still works. */
+const asWebAddress = (raw: string) => {
+  const v = raw.trim();
+  if (!v) return '';
+  return /^https?:\/\//i.test(v) ? v : `https://${v}`;
+};
 
 /** What a notice is called in the list, from whatever it has. */
 const noticeTitle = (n: Notice) =>
@@ -656,7 +663,12 @@ function NoticeDialog({ initial, isNew, db, update, cfg, close }: {
   const upload = useUpload(cfg, update);
 
   const save = () => {
-    const next: Notice = { ...n, list: list.split('\n').map((l) => l.trim()).filter(Boolean) };
+    const next: Notice = {
+      ...n,
+      list: list.split('\n').map((l) => l.trim()).filter(Boolean),
+      linkUrl: asWebAddress(n.linkUrl),
+      linkLabel: n.linkLabel.trim(),
+    };
     update((d) => {
       const i = d.board.notices.findIndex((x) => x.id === next.id);
       if (i >= 0) d.board.notices[i] = next;
@@ -708,6 +720,15 @@ function NoticeDialog({ initial, isNew, db, update, cfg, close }: {
             <Checkbox checked={n.numbered} onCheckedChange={(v) => set('numbered', v === true)} />
             Number it
           </label>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="A link — opens in a new tab" htmlFor="nt-link">
+            <Input id="nt-link" value={n.linkUrl} onChange={(e) => set('linkUrl', e.target.value)} placeholder="https://www.harmsjournal.com" inputMode="url" />
+          </Field>
+          <Field label="What the link says" htmlFor="nt-linklabel">
+            <Input id="nt-linklabel" value={n.linkLabel} onChange={(e) => set('linkLabel', e.target.value)} placeholder="the site’s name, if left blank" />
+          </Field>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">

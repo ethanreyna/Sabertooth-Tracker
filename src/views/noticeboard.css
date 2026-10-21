@@ -5,9 +5,9 @@
  */
 
 .nb-scene {
-  --nb-display: 'Grenze Gotisch', 'Cinzel', Georgia, serif;
-  --nb-caps: 'Cinzel', Georgia, serif;
-  --nb-body: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  --nb-display: 'Pirata One', 'Grenze Gotisch', Georgia, serif;
+  --nb-caps: 'IM Fell English SC', Georgia, serif;
+  --nb-body: 'IM Fell English', Georgia, 'Times New Roman', serif;
 
   --nb-ink: #2a1a0e;
   --nb-ink-soft: #5c4128;
@@ -442,10 +442,24 @@
 }
 .nb-offers-plain li { padding-left: 2px; }
 .nb-offer-n {
-  font-family: var(--nb-caps);
-  font-size: 10px;
+  font-size: 14px;
   color: var(--nb-ink-faint);
 }
+.nb-note-link {
+  display: inline-block;
+  margin: 16px 0 2px;
+  padding: 7px 16px 6px;
+  border: 1px solid rgba(125, 26, 26, 0.55);
+  border-radius: 2px;
+  background: rgba(125, 26, 26, 0.07);
+  font-family: var(--nb-caps);
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  color: var(--nb-blood);
+  text-decoration: none;
+  transition: background 0.2s ease;
+}
+.nb-note-link:hover { background: rgba(125, 26, 26, 0.15); }
 .nb-note-sign {
   margin: 18px 0 0;
   font-style: italic;
@@ -684,11 +698,26 @@
   border-bottom: 2px dotted rgba(92, 62, 32, 0.38);
   transform: translateY(-5px);
 }
+/* IM Fell's figures are old-style and wander below the line — charming in a
+   sentence, hard to read in a price. Numbers are set in the blackletter,
+   whose figures stand level. */
+.nb-num,
+.nb-row-price,
+.nb-offer-n {
+  font-family: var(--nb-display);
+  font-style: normal;
+  font-weight: 400;
+}
 .nb-row-price {
-  font-weight: 600;
-  font-variant-numeric: lining-nums tabular-nums;
+  font-size: 22px;
+  letter-spacing: 0.02em;
   color: var(--nb-ink);
   white-space: nowrap;
+}
+.nb-row-price .nb-septims,
+.nb-row-price .nb-ask {
+  font-family: var(--nb-body);
+  letter-spacing: 0;
 }
 .nb-septims {
   font-weight: 400;
@@ -994,6 +1023,30 @@
   mix-blend-mode: multiply;
   background: var(--nb-scorch2) no-repeat right -70px bottom -70px / 150px 150px;
 }
+
+/* --- Gritty ink ----------------------------------------------------------- */
+
+/* The big lettering is run through a fine noise displacement (the SVG filter
+   in the page), which chews its edges the way a worn stamp or a dry quill
+   leaves them. Only on display sizes: at body size it would just blur. */
+.nb-name,
+.nb-list-title,
+.nb-tag-big,
+.nb-door-title,
+.nb-plaque-big,
+.nb-note-heading {
+  filter: url(#nb-rough);
+}
+/* Pirata One has no bold; the browser would smear a fake one. */
+.nb-name,
+.nb-list-title,
+.nb-tag-big,
+.nb-door-title,
+.nb-plaque-big {
+  font-weight: 400;
+}
+/* IM Fell's capitals are its own small caps, so they want less air. */
+.nb-smallcaps { letter-spacing: 0.16em; }
 
 /* --- Smaller screens ----------------------------------------------------- */
 

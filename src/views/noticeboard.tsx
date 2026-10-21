@@ -60,6 +60,13 @@ export function Noticeboard({ live, onEnter, onGuest, onBack, notice }: {
 
   return (
     <div className="nb-scene" style={board.backdrop ? { ['--nb-backdrop' as string]: `url("${board.backdrop}")` } : undefined}>
+      {/* Roughens the big lettering's edges; see .nb-name and friends. */}
+      <svg width="0" height="0" aria-hidden style={{ position: 'absolute' }}>
+        <filter id="nb-rough" x="-5%" y="-5%" width="110%" height="110%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" result="noise" />
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.6" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+      </svg>
       <div className="nb-wrap">
         <div className="nb-board">
           <span className="nb-rivet nb-rivet-tl" aria-hidden />
@@ -197,7 +204,8 @@ function PriceTag({ board, count, onOpen }: { board: Board; count: number; onOpe
         <span className="nb-tag-big">{board.tagTitle || 'Price list'}</span>
         <span className="nb-tag-rule" aria-hidden />
         <span className="nb-tag-hint">
-          {[board.tagHint, count > 0 ? String(count) : ''].filter(Boolean).join(' - ')}
+          {board.tagHint}
+          {count > 0 && <>{board.tagHint ? ' - ' : ''}<span className="nb-num">{count}</span></>}
         </span>
       </span>
     </button>
@@ -205,7 +213,16 @@ function PriceTag({ board, count, onOpen }: { board: Board; count: number; onOpe
 }
 
 const noticeIsEmpty = (n: Notice) =>
-  !n.label && !n.heading && !n.picture && !n.caption && !n.body.trim() && n.list.length === 0 && !n.sign;
+  !n.label && !n.heading && !n.picture && !n.caption && !n.body.trim() && n.list.length === 0 && !n.sign && !n.linkUrl;
+
+/** "https://www.harmsjournal.com/x" -> "harmsjournal.com", for a link with no words of its own. */
+const siteName = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+};
 
 /**
  * Roughly how tall a notice will stand, in pixels at desktop width. Only good
@@ -218,7 +235,7 @@ function noticeHeight(n: Notice): number {
     + (n.picture ? 320 : 0) + (n.caption ? 36 : 0)
     + (n.label ? 24 : 0) + (n.heading ? lines(n.heading, 26) * 38 : 0)
     + (n.body.trim() ? lines(n.body.trim(), 42) * 27 : 0)
-    + n.list.length * 46 + (n.sign ? 44 : 0);
+    + n.list.length * 46 + (n.sign ? 44 : 0) + (n.linkUrl ? 60 : 0);
 }
 
 /** Each notice goes to whichever column is shorter so far, keeping the two
@@ -267,6 +284,11 @@ function NoticeSheet({ notice: n, tilt }: { notice: Notice; tilt: number }) {
               </li>
             ))}
           </ol>
+        )}
+        {n.linkUrl && (
+          <a className="nb-note-link" href={n.linkUrl} target="_blank" rel="noopener noreferrer">
+            {n.linkLabel || siteName(n.linkUrl)}<span aria-hidden> →</span>
+          </a>
         )}
         {n.sign && <p className="nb-note-sign">{n.sign}</p>}
       </section>

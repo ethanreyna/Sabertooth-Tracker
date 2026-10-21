@@ -321,6 +321,10 @@ function normalizeNotice(raw: unknown): Notice {
     list: arr(x.list).map((l) => s(l).trim()).filter(Boolean),
     numbered: x.numbered !== false,
     sign: s(x.sign),
+    // Only a plain web address: a notice is public, and a javascript: or data:
+    // link on it would run for every stranger who clicked.
+    linkUrl: httpUrlOrEmpty(s(x.linkUrl)),
+    linkLabel: s(x.linkLabel),
     paper: x.paper === 'plain' ? 'plain' : 'torn',
     hidden: x.hidden === true,
   };
