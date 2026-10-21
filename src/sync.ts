@@ -1,7 +1,7 @@
 import { DEFAULT_GUILD_CUT_PCT, DEFAULT_HIDDEN_SECTIONS, SKILL_TIERS } from './types';
 import { coordOrEmpty, httpUrlOrEmpty } from './lib/maps';
 import { defaultBoard } from './data';
-import type { AccessRole, Barrel, CatalogueItem, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, EnchantmentRecord, Job, ItemRecord, LedgerEntry, BankItem, Member, Notice, Noticeboard, MemberEntry, Price, Project, ProjectContribution, ProjectRequirement, ProjectStage, PosterBackground, Role, Sale, SaleLine, SavedPoster, SkillEntry, Spot, Suggestion, SyncCfg } from './types';
+import type { AccessRole, Barrel, CatalogueItem, PriceTab, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, EnchantmentRecord, Job, ItemRecord, LedgerEntry, BankItem, Member, Notice, Noticeboard, MemberEntry, Price, Project, ProjectContribution, ProjectRequirement, ProjectStage, PosterBackground, Role, Sale, SaleLine, SavedPoster, SkillEntry, Spot, Suggestion, SyncCfg } from './types';
 
 /**
  * A picture this app will actually load: one of our own uploads, or a plain
@@ -193,6 +193,7 @@ export async function fetchPrices(cfg: SyncCfg, force = false): Promise<{ prices
 export interface PublicBoard {
   board: Noticeboard;
   catalogue: CatalogueItem[];
+  priceTabs: PriceTab[];
 }
 
 const BOARD_KEY = 'orgrimm-board-v1';
@@ -203,7 +204,11 @@ export function loadBoard(): PublicBoard | null {
   try {
     const raw = JSON.parse(localStorage.getItem(BOARD_KEY) || 'null');
     if (!raw) return null;
-    return { board: normalizeBoard(raw.board), catalogue: normalizeCatalogue(raw.catalogue) };
+    return {
+      board: normalizeBoard(raw.board),
+      catalogue: normalizeCatalogue(raw.catalogue),
+      priceTabs: normalizePriceTabs(raw.priceTabs),
+    };
   } catch {
     return null;
   }
@@ -214,7 +219,11 @@ export async function fetchBoard(): Promise<PublicBoard> {
   const r = await fetch('/api/board', { cache: 'no-store' });
   if (!r.ok) throw new Error('board failed: ' + r.status);
   const j = await r.json();
-  const out = { board: normalizeBoard(j.board), catalogue: normalizeCatalogue(j.catalogue) };
+  const out = {
+    board: normalizeBoard(j.board),
+    catalogue: normalizeCatalogue(j.catalogue),
+    priceTabs: normalizePriceTabs(j.priceTabs),
+  };
   try {
     localStorage.setItem(BOARD_KEY, JSON.stringify(out));
   } catch {
@@ -358,11 +367,19 @@ export function normalizeBoard(raw: unknown): Noticeboard {
   return out;
 }
 
+export function normalizePriceTabs(raw: unknown): PriceTab[] {
+  return arr(raw).map((t): PriceTab => {
+    const x = (t || {}) as Record<string, unknown>;
+    return { id: s(x.id) || Math.random().toString(36).slice(2, 10), name: s(x.name).trim() };
+  }).filter((t) => t.name);
+}
+
 export function normalizeCatalogue(raw: unknown): CatalogueItem[] {
   return arr(raw).map((c): CatalogueItem => {
     const x = (c || {}) as Record<string, unknown>;
     return {
       id: s(x.id) || Math.random().toString(36).slice(2, 10),
+      tab: s(x.tab),
       section: s(x.section).trim(),
       name: s(x.name).trim(),
       price: Math.max(0, Math.round(n(x.price))),
@@ -634,6 +651,7 @@ export function normalizeDb(raw: unknown): DB {
       };
     }).filter((b) => b.url),
     catalogue: normalizeCatalogue(o.catalogue),
+    priceTabs: normalizePriceTabs(o.priceTabs),
     board: normalizeBoard(o.board),
   };
 

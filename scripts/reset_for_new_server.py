@@ -39,7 +39,7 @@ new_db = {
     'dungeons': kept['dungeons'], 'spots': kept['spots'],
     'ledger': [], 'bankItems': [], 'suggestions': [],
     'items': [], 'enchantments': [], 'enchants': [], 'sales': [], 'skills': [],
-    'posters': [], 'backgrounds': [], 'catalogue': [],
+    'posters': [], 'backgrounds': [], 'catalogue': [], 'priceTabs': [],
     # No 'board': left out, the noticeboard goes back to its starting words.
 }
 

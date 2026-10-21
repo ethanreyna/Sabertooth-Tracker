@@ -383,7 +383,7 @@ export default function App() {
   if (showBoard) {
     return (
       <Noticeboard
-        live={{ board: db.board, catalogue: db.catalogue }}
+        live={{ board: db.board, catalogue: db.catalogue, priceTabs: db.priceTabs }}
         onBack={() => setShowBoard(false)}
       />
     );
