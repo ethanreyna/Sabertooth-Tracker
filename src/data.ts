@@ -1,10 +1,34 @@
 import { DEFAULT_GUILD_CUT_PCT } from './types';
-import type { DB } from './types';
+import type { DB, Noticeboard } from './types';
 
 const d = (days: number) => new Date(Date.now() - days * 864e5).toISOString();
 const f = (days: number) => new Date(Date.now() + days * 864e5).toISOString();
 
-export const emptyDb = (): DB => ({ settings: { guildCutPct: DEFAULT_GUILD_CUT_PCT }, members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [], ledger: [], bankItems: [], suggestions: [], items: [], enchantments: [], enchants: [], projects: [], sales: [], skills: [], posters: [], backgrounds: [] });
+/**
+ * What the noticeboard says until a member changes it. Written from what the
+ * clan already puts on its posters, so the board is never a page of
+ * placeholder Latin to the first stranger who opens the link.
+ */
+export const DEFAULT_BOARD: Noticeboard = {
+  name: 'Gol-Razhkbur',
+  motto: 'Stronghold of Clan Orgrimm',
+  tagline: 'Strong steel. Honest coin.',
+  welcome: 'Tomes, steel and the spoils of the deep places, traded by the clan that went and got them.\n\n'
+    + 'Send a pigeon, or come to the stronghold and someone will see to you if any of the clan is awake.',
+  signedBy: 'Clan Orgrimm',
+  signedAs: 'Gol-Razhkbur',
+  where: 'Halted Stream Camp · North of Whiterun',
+  picture: '',
+  pictureCaption: '',
+  pictureNote: '',
+  backdrop: '',
+  offersHeading: 'For blade, book & hearth.',
+  offersIntro: 'What the clan has to trade, when the forge is hot and the shelves are full.',
+  offers: ['Spell tomes', 'Forged weapons & armour', 'Ingots & ore', 'Pelts & hides', 'Commissions — ask at the hall'],
+  offersSign: 'Good steel. A fair price.',
+};
+
+export const emptyDb = (): DB => ({ settings: { guildCutPct: DEFAULT_GUILD_CUT_PCT }, members: [], roles: [], jobs: [], barrels: [], dungeons: [], spots: [], ledger: [], bankItems: [], suggestions: [], items: [], enchantments: [], enchants: [], projects: [], sales: [], skills: [], posters: [], backgrounds: [], catalogue: [], board: { ...DEFAULT_BOARD, offers: [...DEFAULT_BOARD.offers] } });
 
 /** Sensible starting ranks, offered when the roster has no roles yet. The
  *  Initiate -> Saberblooded track mirrors the guild's blooding process. */
@@ -27,7 +51,7 @@ export const demoDb = (): DB => ({
     {
       id: 'm5', name: 'Soul in Sap', role: 'Initiate', joined: d(12),
       log: [
-        { id: 'e1', kind: 'credit', text: 'Orgimm Daily: Healing brews', jobId: '', by: 'Karina', at: d(4) },
+        { id: 'e1', kind: 'credit', text: 'Orgrimm Daily: Healing brews', jobId: '', by: 'Karina', at: d(4) },
         { id: 'e2', kind: 'credit', text: 'Escort to Riften', jobId: 'j2', by: 'Zahir Alazar', at: d(1) },
         { id: 'e3', kind: 'note', text: 'Keen tracker — pair with a veteran for the next bounty.', jobId: '', by: 'Karina', at: d(3) },
       ],
@@ -126,4 +150,6 @@ export const demoDb = (): DB => ({
   skills: [],
   posters: [],
   backgrounds: [],
+  catalogue: [],
+  board: { ...DEFAULT_BOARD, offers: [...DEFAULT_BOARD.offers] },
 });

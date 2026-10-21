@@ -1,6 +1,7 @@
 import { DEFAULT_GUILD_CUT_PCT, SKILL_TIERS } from './types';
 import { coordOrEmpty, httpUrlOrEmpty } from './lib/maps';
-import type { AccessRole, Barrel, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, EnchantmentRecord, Job, ItemRecord, LedgerEntry, BankItem, Member, MemberEntry, Price, Project, ProjectContribution, ProjectRequirement, ProjectStage, PosterBackground, Role, Sale, SaleLine, SavedPoster, SkillEntry, Spot, Suggestion, SyncCfg } from './types';
+import { DEFAULT_BOARD } from './data';
+import type { AccessRole, Barrel, CatalogueItem, CollectionEntry, CollectionTarget, DB, Dungeon, EnchantRequest, EnchantmentRecord, Job, ItemRecord, LedgerEntry, BankItem, Member, Noticeboard, MemberEntry, Price, Project, ProjectContribution, ProjectRequirement, ProjectStage, PosterBackground, Role, Sale, SaleLine, SavedPoster, SkillEntry, Spot, Suggestion, SyncCfg } from './types';
 
 /**
  * A picture this app will actually load: one of our own uploads, or a plain
@@ -188,6 +189,40 @@ export async function fetchPrices(cfg: SyncCfg, force = false): Promise<{ prices
  * Proposes a record. This is the one write a guest may make, and the Worker
  * only ever appends it as pending — a member has to approve it.
  */
+/** What the public noticeboard needs, and nothing else of the guild's. */
+export interface PublicBoard {
+  board: Noticeboard;
+  catalogue: CatalogueItem[];
+}
+
+const BOARD_KEY = 'orgrimm-board-v1';
+
+/** The last board this browser saw, so a returning visitor isn't shown an
+ *  empty board while the real one loads. */
+export function loadBoard(): PublicBoard | null {
+  try {
+    const raw = JSON.parse(localStorage.getItem(BOARD_KEY) || 'null');
+    if (!raw) return null;
+    return { board: normalizeBoard(raw.board), catalogue: normalizeCatalogue(raw.catalogue) };
+  } catch {
+    return null;
+  }
+}
+
+/** Anyone may read this, signed in or not; it carries only what is public. */
+export async function fetchBoard(): Promise<PublicBoard> {
+  const r = await fetch('/api/board', { cache: 'no-store' });
+  if (!r.ok) throw new Error('board failed: ' + r.status);
+  const j = await r.json();
+  const out = { board: normalizeBoard(j.board), catalogue: normalizeCatalogue(j.catalogue) };
+  try {
+    localStorage.setItem(BOARD_KEY, JSON.stringify(out));
+  } catch {
+    /* quota — it's only a head start */
+  }
+  return out;
+}
+
 export async function postSuggestion(
   cfg: SyncCfg,
   kind: Suggestion['kind'],
@@ -261,6 +296,41 @@ export async function uploadImage(cfg: SyncCfg, file: File): Promise<string> {
 const s = (v: unknown, fallback = '') => (typeof v === 'string' ? v : fallback);
 const n = (v: unknown, fallback = 0) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+
+/**
+ * The noticeboard's words. A board saved before the noticeboard existed gets
+ * the starting text; a field a member has since cleared stays cleared, since
+ * blank is how they take something down.
+ */
+export function normalizeBoard(raw: unknown): Noticeboard {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const text = (key: keyof Noticeboard) => (key in o ? s(o[key]) : s(DEFAULT_BOARD[key]));
+  return {
+    name: text('name'), motto: text('motto'), tagline: text('tagline'), welcome: text('welcome'),
+    signedBy: text('signedBy'), signedAs: text('signedAs'), where: text('where'),
+    picture: imageUrlOrEmpty(text('picture')),
+    pictureCaption: text('pictureCaption'), pictureNote: text('pictureNote'),
+    backdrop: imageUrlOrEmpty(text('backdrop')),
+    offersHeading: text('offersHeading'), offersIntro: text('offersIntro'),
+    offers: ('offers' in o ? arr(o.offers) : DEFAULT_BOARD.offers)
+      .map((x) => s(x).trim()).filter(Boolean),
+    offersSign: text('offersSign'),
+  };
+}
+
+export function normalizeCatalogue(raw: unknown): CatalogueItem[] {
+  return arr(raw).map((c): CatalogueItem => {
+    const x = (c || {}) as Record<string, unknown>;
+    return {
+      id: s(x.id) || Math.random().toString(36).slice(2, 10),
+      section: s(x.section).trim(),
+      name: s(x.name).trim(),
+      price: Math.max(0, Math.round(n(x.price))),
+      note: s(x.note).trim(),
+      hidden: x.hidden === true,
+    };
+  }).filter((c) => c.name);
+}
 
 /** "40 iron ingots" -> { item: 'iron ingots', qty: 40 } */
 function parseTarget(raw: unknown): CollectionTarget | null {
@@ -519,6 +589,8 @@ export function normalizeDb(raw: unknown): DB {
         name: s(x.name), url: imageUrlOrEmpty(s(x.url)), at: s(x.at),
       };
     }).filter((b) => b.url),
+    catalogue: normalizeCatalogue(o.catalogue),
+    board: normalizeBoard(o.board),
   };
 
 }

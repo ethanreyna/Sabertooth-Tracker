@@ -2,9 +2,15 @@ name = "sabretooth-tracker"
 main = "worker/index.ts"
 compatibility_date = "2025-09-01"
 
-# Served from the guild's own domain. Wrangler creates and manages the DNS
-# record for this hostname on deploy. The <name>.<account>.workers.dev URL stays
+# Served from the clan's own domain. Wrangler creates and manages the DNS
+# record for each hostname on deploy. The <name>.<account>.workers.dev URL stays
 # enabled as a fallback.
+[[routes]]
+pattern = "orgrimm-tracker.elthan.net"
+custom_domain = true
+
+# The address from before the rename. Kept so links already posted around the
+# server still open; remove this block to retire it.
 [[routes]]
 pattern = "sabretooth-tracker.elthan.net"
 custom_domain = true

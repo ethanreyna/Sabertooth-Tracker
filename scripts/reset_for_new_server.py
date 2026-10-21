@@ -39,7 +39,8 @@ new_db = {
     'dungeons': kept['dungeons'], 'spots': kept['spots'],
     'ledger': [], 'bankItems': [], 'suggestions': [],
     'items': [], 'enchantments': [], 'enchants': [], 'sales': [], 'skills': [],
-    'posters': [], 'backgrounds': [],
+    'posters': [], 'backgrounds': [], 'catalogue': [],
+    # No 'board': left out, the noticeboard goes back to its starting words.
 }
 
 print(f'keeping {len(kept["dungeons"])} dungeons, {len(kept["spots"])} points of interest', file=sys.stderr)
