@@ -4,7 +4,6 @@ import {
   Boxes, Coins, Construction, FileInput, GraduationCap, Hammer, Inbox, LayoutDashboard, Map as MapIcon, MessageSquarePlus, Moon, Package, Scale, ScrollText, Settings, Signpost, Skull, Store, Sun, Users, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ClanMark } from '@/components/clan-mark';
 import { Input } from '@/components/ui/input';
 import { Noticeboard } from '@/views/noticeboard';
 import { BoardSection } from '@/views/board-section';
@@ -374,7 +373,8 @@ export default function App() {
   }
   if (!booted) {
     return (
-      <div className="flex min-h-svh items-center justify-center text-sm text-muted-foreground">
+      <div className="flex min-h-svh flex-col items-center justify-center gap-5 text-sm text-muted-foreground">
+        <img src="/clan-banner.webp" alt="Clan Orgrimm" className="w-40 animate-pulse" />
         Loading the guild database…
       </div>
     );
@@ -415,9 +415,7 @@ export default function App() {
     <div className="flex h-svh overflow-hidden">
       <aside className="flex w-56 shrink-0 flex-col border-r bg-sidebar max-md:hidden">
         <div className="flex items-center gap-2.5 border-b px-3 py-3.5">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <ClanMark size={22} />
-          </div>
+          <img src="/clan-mark.png" alt="" className="size-9 shrink-0 object-contain dark:invert" />
           <div className="min-w-0 leading-tight">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Clan Orgrimm</p>
             <p className="font-display truncate text-[17px] leading-none">Orgrimm Tracker</p>

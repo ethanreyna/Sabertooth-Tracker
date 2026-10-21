@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { AuthError, fetchBoard, loadBoard } from '@/sync';
 import type { PublicBoard } from '@/sync';
-import { ClanMark } from '@/components/clan-mark';
 import { defaultBoard } from '@/data';
 import type { CatalogueItem, Notice, Noticeboard as Board } from '@/types';
 import './noticeboard.css';
@@ -389,6 +388,7 @@ function Entrance({ board, notice, onEnter, onGuest, onClose }: {
       <div className="nb-paper nb-door">
         <span className="nb-nail nb-nail-c" aria-hidden />
         <button type="button" className="nb-close" onClick={onClose} aria-label="Close">×</button>
+        <img className="nb-door-banner" src="/clan-banner.webp" alt="" />
         <p className="nb-smallcaps nb-list-small">{board.name || 'Clan Orgrimm'}</p>
         <h2 className="nb-door-title">{board.doorTitle || 'Clan entrance'}</h2>
         {board.doorText && <p className="nb-door-text">{board.doorText}</p>}
@@ -462,7 +462,7 @@ function Emblem() {
   return (
     <div className="nb-emblem" aria-hidden>
       <span className="nb-emblem-rule" />
-      <ClanMark />
+      <img className="nb-banner" src="/clan-banner.webp" alt="The banner of Clan Orgrimm" />
       <span className="nb-emblem-rule" />
     </div>
   );

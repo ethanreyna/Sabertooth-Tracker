@@ -550,7 +550,7 @@ export interface Noticeboard {
   where: string;
   /** The main poster. */
   motto: string;
-  /** The crossed axes and tusks over the name. */
+  /** The clan banner over the name. */
   showMark: boolean;
   name: string;
   tagline: string;
