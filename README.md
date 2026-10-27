@@ -1,6 +1,6 @@
 # Orgrimm Tracker
 
-Clan Orgrimm's site for the Keizaal Skyrim RP server, at
+Clan Orgrimm's site for the Daedric Skyrim RP server, at
 <https://orgrimm-tracker.elthan.net/>.
 
 The front page is public: a **noticeboard** for the stronghold, Gol-Razhkbur, with
